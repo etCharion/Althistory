@@ -1,0 +1,9 @@
+export type PlayerId = 'player1' | 'player2';
+export type SectionId = 'left' | 'center' | 'right';
+export type UnitType = { id: string; name: string; movement: number; shootingRange: number[]; canShootAfterMovingMax: number; maxFigures: number; natoSymbol: string; };
+export type Unit = { id: string; typeId: string; ownerId: PlayerId; figures: number; resources: number; hasMoved: boolean; hasAttacked: boolean; };
+export type TerrainType = { id: string; name: string; blocksLOS: boolean; movementRestriction?: 'stop' | 'no-move' | 'none'; diceModifierDefense: number; diceModifierAttack: number; color?: string; };
+export type Hex = { q: number; r: number; s: number; terrainTypeId: string; unitId?: string; };
+export type Scenario = { id: string; name: string; description: string; boardWidth: number; boardHeight: number; sections: { leftWidth: number; centerWidth: number; rightWidth: number; }; player1: { name: string; income: number; maxSectionResources: number; }; player2: { name: string; income: number; maxSectionResources: number; }; victoryPointsToWin: number; firstPlayerId: PlayerId; initialHexes: Hex[]; initialUnits: Unit[]; };
+export type GamePhase = 'distribution' | 'actions' | 'gameOver';
+export type GameState = { scenario: Scenario; currentTurn: number; activePlayerId: PlayerId; phase: GamePhase; sectionResources: { player1: { left: number; center: number; right: number }; player2: { left: number; center: number; right: number }; }; centralWarehouse: { player1: number; player2: number; }; units: Record<string, Unit>; grid: Record<string, Hex>; winner?: PlayerId; victoryPoints: { player1: number; player2: number; }; };
