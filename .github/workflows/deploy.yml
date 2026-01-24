@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["main", "memoir-44-clone-implementation-v2"]
+    branches: ["**"]
 
 permissions:
   contents: read
