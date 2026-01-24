@@ -116,13 +116,14 @@ export function getTargetableUnits(attackerQ, attackerR, unitType, gameState, te
   const attacker = gameState.grid[`${attackerQ},${attackerR}`];
   if (!attacker?.unitId) return [];
   const attackerUnit = gameState.units[attacker.unitId];
+  if (!attackerUnit) return [];
   const neighbors = getNeighbors(attackerQ, attackerR);
   const adjacentEnemies = [];
   for (const n of neighbors) {
     const hex = gameState.grid[`${n.q},${n.r}`];
     if (hex?.unitId) {
       const unit = gameState.units[hex.unitId];
-      if (unit.ownerId !== attackerUnit.ownerId) adjacentEnemies.push(hex.unitId);
+      if (unit && unit.ownerId !== attackerUnit.ownerId) adjacentEnemies.push(hex.unitId);
     }
   }
   if (adjacentEnemies.length > 0) return adjacentEnemies;
@@ -130,10 +131,10 @@ export function getTargetableUnits(attackerQ, attackerR, unitType, gameState, te
   const maxRange = unitType.shootingRange.length;
   for (const unitId in gameState.units) {
     const unit = gameState.units[unitId];
-    if (unit.ownerId === attackerUnit.ownerId) continue;
-    const targetHex = Object.values(gameState.grid).find(h => h.unitId === unitId);
+    if (!unit || unit.ownerId === attackerUnit.ownerId) continue;
+    const targetHex = Object.values(gameState.grid).find(h => (h as any).unitId === unitId);
     if (!targetHex) continue;
-    const dist = getDistance({ q: attackerQ, r: attackerR }, targetHex);
+    const dist = getDistance({ q: attackerQ, r: attackerR }, targetHex as any);
     if (dist > 1 && dist <= maxRange && checkLOS({ q: attackerQ, r: attackerR }, targetHex, gameState.grid, terrainTypes)) {
       targetable.push(unitId);
     }

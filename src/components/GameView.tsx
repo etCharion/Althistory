@@ -4,7 +4,7 @@ const GameView = ({ scenario, onExit }) => {
   const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none'); const [hovered, setHovered] = useState(null);
   const tTypes = getAllTerrainTypes(); const uTypes = getAllUnitTypes(); const activeP = gameState.activePlayerId; const res = gameState.sectionResources[activeP]; const wh = gameState.centralWarehouse[activeP];
   const highlightedHexes = useMemo(() => {
-    if (!selected) return {};
+    if (!selected || !gameState.units[selected]) return {};
     const h = {};
     if (gameState.phase === 'movement' && (actType === 'move' || !gameState.units[selected].hasMoved)) {
       getSelectedReachable(selected).forEach(k => h[k] = 'move');
