@@ -12,5 +12,5 @@
     "jsx": "react-jsx",
     "strict": false
   },
-  "include": ["src", "main.tsx"]
+  "include": ["src"]
 }
