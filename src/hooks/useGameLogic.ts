@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { getDistance, getLine, axialToOffset, getSection } from '../logic/hexGrid';
+import { getDistance, axialToOffset, getUnitSections, getReachableHexes, getTargetableUnits, checkLOS as calcLOS } from '../logic/hexGrid';
 import { DEFAULT_TERRAIN_TYPES, DEFAULT_UNIT_TYPES } from '../data/defaults';
 import { rollDice } from '../logic/dice';
 export function useGameLogic(scenario) {
@@ -14,11 +14,6 @@ export function useGameLogic(scenario) {
   const [gameState, setGameState] = useState({ scenario, currentTurn: 1, activePlayerId: scenario.firstPlayerId, phase: 'distribution-sections', sectionResources: { player1: { left: 0, center: 0, right: 0 }, player2: { left: 0, center: 0, right: 0 } }, centralWarehouse: { player1: scenario.player1.income, player2: scenario.player2.income }, units: initialUnits, grid: initialGrid, victoryPoints: { player1: 0, player2: 0 } });
   const getUnitHex = (uid) => Object.values(gameState.grid).find(h => h.unitId === uid) || null;
   const getTerrainAt = (q, r) => { const hex = gameState.grid[`${q},${r}`]; return DEFAULT_TERRAIN_TYPES.find(t => t.id === hex?.terrainTypeId) || DEFAULT_TERRAIN_TYPES[0]; };
-  const checkLOS = (from, to) => {
-    const line = getLine(from, to); if (line.length <= 2) return true;
-    for (let i = 1; i < line.length - 1; i++) { const h = gameState.grid[`${line[i].q},${line[i].r}`]; if (h?.unitId || DEFAULT_TERRAIN_TYPES.find(t => t.id === h?.terrainTypeId)?.blocksLOS) return false; }
-    return true;
-  };
   const distributeResource = (pid, sec) => {
     if (gameState.phase !== 'distribution-sections' || gameState.activePlayerId !== pid || gameState.centralWarehouse[pid] <= 0) return;
     setGameState(prev => {
@@ -40,16 +35,20 @@ export function useGameLogic(scenario) {
       return { ...prev, activePlayerId: next, phase: 'distribution-sections', currentTurn: prev.activePlayerId === 'player2' ? prev.currentTurn + 1 : prev.currentTurn, centralWarehouse: { ...prev.centralWarehouse, [next]: prev.scenario[next].income }, units: newUnits };
     });
   };
-  const assignResourceToUnit = (uid) => {
+  const assignResourceToUnit = (uid, sectionId) => {
     const unit = gameState.units[uid]; if (gameState.phase !== 'distribution-units' || !unit || unit.ownerId !== gameState.activePlayerId || unit.resources >= 3) return;
-    const hex = getUnitHex(uid); if (!hex) return; const { col } = axialToOffset(hex.q, hex.r); const sec = getSection(col, gameState.scenario.sections.leftWidth, gameState.scenario.sections.centerWidth);
+    const hex = getUnitHex(uid); if (!hex) return;
+    let sec = sectionId;
+    if (!sec) {
+      const sections = getUnitSections(hex.q, hex.r, gameState.scenario);
+      if (sections.length > 1) return;
+      sec = sections[0];
+    }
     if (gameState.sectionResources[gameState.activePlayerId][sec] <= 0) return;
     setGameState(prev => {
       const newSectionResources = { ...prev.sectionResources[prev.activePlayerId], [sec]: prev.sectionResources[prev.activePlayerId][sec] - 1 };
       const newState = { ...prev, sectionResources: { ...prev.sectionResources, [prev.activePlayerId]: newSectionResources }, units: { ...prev.units, [uid]: { ...unit, resources: unit.resources + 1 } } };
-      if (newSectionResources.left === 0 && newSectionResources.center === 0 && newSectionResources.right === 0) {
-        newState.phase = 'movement';
-      }
+      if (newSectionResources.left === 0 && newSectionResources.center === 0 && newSectionResources.right === 0) newState.phase = 'movement';
       return newState;
     });
   };
@@ -67,8 +66,12 @@ export function useGameLogic(scenario) {
   };
   const attackUnit = (aid, tid) => {
     const att = gameState.units[aid]; const tar = gameState.units[tid]; if (gameState.phase !== 'attack' || !att || !tar || att.ownerId !== gameState.activePlayerId || att.resources <= 0 || att.hasAttacked) return;
-    const fH = getUnitHex(aid); const tH = getUnitHex(tid); if (!fH || !tH) return; const dist = getDistance(fH, tH); const utype = DEFAULT_UNIT_TYPES.find(u => u.id === att.typeId);
-    if (!utype || dist > utype.shootingRange.length || !checkLOS(fH, tH)) return;
+    const fH = getUnitHex(aid); const tH = getUnitHex(tid); if (!fH || !tH) return;
+    const utype = DEFAULT_UNIT_TYPES.find(u => u.id === att.typeId);
+    if (!utype) return;
+    const targetable = getTargetableUnits(fH.q, fH.r, utype, gameState, DEFAULT_TERRAIN_TYPES);
+    if (!targetable.includes(tid)) return;
+    const dist = getDistance(fH, tH);
     let dC = utype.shootingRange[dist-1] - getTerrainAt(tH.q, tH.r).diceModifierDefense;
     const dice = rollDice(Math.max(0, dC)); let h = 0, f = 0; dice.forEach(s => { if (s==='grenade' || s===tar.typeId) h++; if (s==='flag') f++; });
     setCombatResult({ attackerId: aid, targetId: tid, dice, hits: h, flags: f });
@@ -96,5 +99,27 @@ export function useGameLogic(scenario) {
       return prev;
     });
   };
-  return { gameState, combatResult, retreatingUnitId, setCombatResult, setRetreatingUnitId, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit };
+
+  const getSelectedReachable = (uid) => {
+    const unit = gameState.units[uid]; if (!unit) return [];
+    const hex = getUnitHex(uid); if (!hex) return [];
+    const utype = DEFAULT_UNIT_TYPES.find(u => u.id === unit.typeId);
+    const limit = utype.movement - unit.movementUsed;
+    if (limit <= 0 || (!unit.hasMoved && unit.resources <= 0)) return [];
+    return getReachableHexes(hex.q, hex.r, limit, gameState.grid, DEFAULT_TERRAIN_TYPES);
+  };
+
+  const getSelectedTargetable = (uid) => {
+    const unit = gameState.units[uid]; if (!unit) return [];
+    const hex = getUnitHex(uid); if (!hex) return [];
+    const utype = DEFAULT_UNIT_TYPES.find(u => u.id === unit.typeId);
+    if (unit.resources <= 0 || unit.hasAttacked) return [];
+    return getTargetableUnits(hex.q, hex.r, utype, gameState, DEFAULT_TERRAIN_TYPES);
+  };
+
+  return {
+    gameState, combatResult, retreatingUnitId, setCombatResult, setRetreatingUnitId,
+    distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit,
+    getSelectedReachable, getSelectedTargetable, getUnitHex
+  };
 }

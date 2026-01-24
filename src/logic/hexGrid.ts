@@ -17,3 +17,126 @@ export function getLine(a, b) {
   return results;
 }
 export function getSection(col, lW, cW) { if (col < lW) return 'left'; if (col < lW + cW) return 'center'; return 'right'; }
+
+export function getUnitSections(q, r, scenario) {
+  const { col } = axialToOffset(q, r);
+  const lW = scenario.sections.leftWidth;
+  const cW = scenario.sections.centerWidth;
+  if (r % 2 !== 0) {
+    if (col === lW - 1) return ['left', 'center'];
+    if (col === lW + cW - 1) return ['center', 'right'];
+  }
+  if (col < lW) return ['left'];
+  if (col < lW + cW) return ['center'];
+  return ['right'];
+}
+
+export function getHexesAtPoint(p) {
+  const eps = 0.001;
+  const candidates = [
+    cubeRound({ q: p.q + eps, r: p.r + eps, s: p.s - 2 * eps }),
+    cubeRound({ q: p.q - eps, r: p.r - eps, s: p.s + 2 * eps }),
+    cubeRound({ q: p.q + eps, r: p.r - eps, s: p.s }),
+    cubeRound({ q: p.q - eps, r: p.r + eps, s: p.s }),
+  ];
+  const seen = new Set();
+  const result = [];
+  for (const c of candidates) {
+    const key = `${c.q},${c.r}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push({ q: c.q, r: c.r });
+    }
+  }
+  return result;
+}
+
+export function getNeighbors(q, r) {
+  return [
+    { q: q + 1, r: r }, { q: q - 1, r: r },
+    { q: q, r: r + 1 }, { q: q, r: r - 1 },
+    { q: q + 1, r: r - 1 }, { q: q - 1, r: r + 1 }
+  ];
+}
+
+export function cubeLerpFloat(a, b, t) {
+  return { q: lerp(a.q, b.q, t), r: lerp(a.r, b.r, t), s: lerp(a.s, b.s, t) };
+}
+
+export function getReachableHexes(q, r, movementLimit, grid, terrainTypes) {
+  const reachable = new Set();
+  const queue = [{ q, r, dist: 0 }];
+  const visited = new Set();
+  visited.add(`${q},${r}`);
+  while (queue.length > 0) {
+    const { q: cq, r: cr, dist: cd } = queue.shift();
+    if (cd > 0) reachable.add(`${cq},${cr}`);
+    if (cd >= movementLimit) continue;
+    const currentHex = grid[`${cq},${cr}`];
+    const currentTerrain = terrainTypes.find(t => t.id === currentHex?.terrainTypeId);
+    if (cd > 0 && currentTerrain?.movementRestriction === 'stop') continue;
+    const neighbors = getNeighbors(cq, cr);
+    for (const n of neighbors) {
+      const key = `${n.q},${n.r}`;
+      const hex = grid[key];
+      if (!hex || visited.has(key) || hex.unitId) continue;
+      const terrain = terrainTypes.find(t => t.id === hex.terrainTypeId);
+      if (terrain?.movementRestriction === 'no-move') continue;
+      visited.add(key);
+      queue.push({ q: n.q, r: n.r, dist: cd + 1 });
+    }
+  }
+  return Array.from(reachable);
+}
+
+export function isBlocking(q, r, grid, terrainTypes) {
+  const hex = grid[`${q},${r}`];
+  if (!hex) return false;
+  if (hex.unitId) return true;
+  const terrain = terrainTypes.find(t => t.id === hex.terrainTypeId);
+  return terrain?.blocksLOS || false;
+}
+
+export function checkLOS(from, to, grid, terrainTypes) {
+  const dist = getDistance(from, to);
+  if (dist <= 1) return true;
+  const aCube = { q: from.q, r: from.r, s: -from.q - from.r };
+  const bCube = { q: to.q, r: to.r, s: -to.q - to.r };
+  const samples = dist * 10;
+  for (let i = 1; i < samples; i++) {
+    const t = i / samples;
+    const p = cubeLerpFloat(aCube, bCube, t);
+    const nearbyHexes = getHexesAtPoint(p);
+    if (nearbyHexes.length > 0 && nearbyHexes.every(h => isBlocking(h.q, h.r, grid, terrainTypes))) return false;
+  }
+  return true;
+}
+
+export function getTargetableUnits(attackerQ, attackerR, unitType, gameState, terrainTypes) {
+  const attacker = gameState.grid[`${attackerQ},${attackerR}`];
+  if (!attacker?.unitId) return [];
+  const attackerUnit = gameState.units[attacker.unitId];
+  const neighbors = getNeighbors(attackerQ, attackerR);
+  const adjacentEnemies = [];
+  for (const n of neighbors) {
+    const hex = gameState.grid[`${n.q},${n.r}`];
+    if (hex?.unitId) {
+      const unit = gameState.units[hex.unitId];
+      if (unit.ownerId !== attackerUnit.ownerId) adjacentEnemies.push(hex.unitId);
+    }
+  }
+  if (adjacentEnemies.length > 0) return adjacentEnemies;
+  const targetable = [];
+  const maxRange = unitType.shootingRange.length;
+  for (const unitId in gameState.units) {
+    const unit = gameState.units[unitId];
+    if (unit.ownerId === attackerUnit.ownerId) continue;
+    const targetHex = Object.values(gameState.grid).find(h => h.unitId === unitId);
+    if (!targetHex) continue;
+    const dist = getDistance({ q: attackerQ, r: attackerR }, targetHex);
+    if (dist > 1 && dist <= maxRange && checkLOS({ q: attackerQ, r: attackerR }, targetHex, gameState.grid, terrainTypes)) {
+      targetable.push(unitId);
+    }
+  }
+  return targetable;
+}

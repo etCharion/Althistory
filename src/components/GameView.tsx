@@ -1,8 +1,24 @@
-import React, { useState } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes } from '../data/typeUtils';
+import React, { useState, useMemo } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes } from '../data/typeUtils'; import { getUnitSections } from '../logic/hexGrid';
 const GameView = ({ scenario, onExit }) => {
-  const { gameState, combatResult, retreatingUnitId, setCombatResult, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit } = useGameLogic(scenario);
-  const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none');
+  const { gameState, combatResult, retreatingUnitId, setCombatResult, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getUnitHex } = useGameLogic(scenario);
+  const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none'); const [hovered, setHovered] = useState(null);
   const tTypes = getAllTerrainTypes(); const uTypes = getAllUnitTypes(); const activeP = gameState.activePlayerId; const res = gameState.sectionResources[activeP]; const wh = gameState.centralWarehouse[activeP];
+  const highlightedHexes = useMemo(() => {
+    if (!selected) return {};
+    const h = {};
+    if (gameState.phase === 'movement' && (actType === 'move' || !gameState.units[selected].hasMoved)) {
+      getSelectedReachable(selected).forEach(k => h[k] = 'move');
+    } else if (gameState.phase === 'attack' && (actType === 'attack')) {
+      getSelectedTargetable(selected).forEach(uid => { const hex = getUnitHex(uid); if (hex) h[`${hex.q},${hex.r}`] = 'attack'; });
+    }
+    return h;
+  }, [selected, actType, gameState.phase, gameState.units, gameState.grid]);
+  const currentUnitSections = useMemo(() => {
+    if (!selected || gameState.phase !== 'distribution-units') return [];
+    const hex = getUnitHex(selected); if (!hex) return [];
+    return getUnitSections(hex.q, hex.r, gameState.scenario);
+  }, [selected, gameState.phase]);
+
   const handleHexClick = (q, r) => {
     if (retreatingUnitId) { retreatUnit(retreatingUnitId.unitId, q, r); return; }
     const hex = gameState.grid[`${q},${r}`];
@@ -66,7 +82,13 @@ const GameView = ({ scenario, onExit }) => {
            <div className="text-red-800 uppercase">{scenario.player2.name}: {gameState.victoryPoints.player2} VP</div>
         </div>
         <div className="flex-1 relative overflow-auto">
-          <HexGrid width={scenario.boardWidth} height={scenario.boardHeight} hexes={gameState.grid} units={gameState.units} terrainTypes={tTypes} onHexClick={handleHexClick} leftWidth={scenario.sections.leftWidth} centerWidth={scenario.sections.centerWidth} selectedUnitId={selected} />
+          <HexGrid
+            width={scenario.boardWidth} height={scenario.boardHeight} hexes={gameState.grid} units={gameState.units}
+            terrainTypes={tTypes} onHexClick={handleHexClick} onHexMouseEnter={(q,r) => setHovered(`${q},${r}`)} onHexMouseLeave={() => setHovered(null)}
+            leftWidth={scenario.sections.leftWidth} centerWidth={scenario.sections.centerWidth} selectedUnitId={selected}
+            highlightedHexes={highlightedHexes} hoveredHex={hovered} activePhase={gameState.phase}
+            unitSections={currentUnitSections} onSectionSelect={(s) => assignResourceToUnit(selected, s)}
+          />
           {retreatingUnitId && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border-4 border-red-600 p-8 rounded shadow-2xl z-50 text-center uppercase"><h2 className="text-2xl font-bold text-red-600 font-handwriting">Ustupte!</h2><p>Zbývá: {retreatingUnitId.count}</p></div>}
           {selected && !retreatingUnitId && <div className="absolute top-4 right-4 bg-white/90 p-4 border-2 border-map-ink-blue shadow rounded w-48 z-40">
             <h3 className="font-bold mb-2 font-handwriting">{uTypes.find(u => u.id === gameState.units[selected].typeId)?.name}</h3>
