@@ -1,31 +1,54 @@
 import React, { useState } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes } from '../data/typeUtils';
 const GameView = ({ scenario, onExit }) => {
-  const { gameState, combatResult, retreatingUnitId, setCombatResult, distributeResource, startActionPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit } = useGameLogic(scenario);
+  const { gameState, combatResult, retreatingUnitId, setCombatResult, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit } = useGameLogic(scenario);
   const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none');
   const tTypes = getAllTerrainTypes(); const uTypes = getAllUnitTypes(); const activeP = gameState.activePlayerId; const res = gameState.sectionResources[activeP]; const wh = gameState.centralWarehouse[activeP];
   const handleHexClick = (q, r) => {
     if (retreatingUnitId) { retreatUnit(retreatingUnitId.unitId, q, r); return; }
     const hex = gameState.grid[`${q},${r}`];
-    if (gameState.phase === 'actions') {
+    if (gameState.phase === 'movement' || gameState.phase === 'attack' || gameState.phase === 'distribution-units') {
       if (selected) {
-        if (actType === 'move') { moveUnit(selected, q, r); setSelected(null); setActType('none'); }
-        else if (actType === 'attack' && hex?.unitId) { attackUnit(selected, hex.unitId); setSelected(null); setActType('none'); }
-        else if (hex?.unitId && gameState.units[hex.unitId].ownerId === activeP) setSelected(hex.unitId);
-        else setSelected(null);
-      } else if (hex?.unitId && gameState.units[hex.unitId].ownerId === activeP) setSelected(hex.unitId);
+        if (gameState.phase === 'movement' && actType === 'move') {
+          moveUnit(selected, q, r);
+          // Keep selected for multiple moves
+        }
+        else if (gameState.phase === 'attack' && actType === 'attack' && hex?.unitId) {
+          attackUnit(selected, hex.unitId); setSelected(null); setActType('none');
+        }
+        else if (hex?.unitId && gameState.units[hex.unitId].ownerId === activeP) {
+          setSelected(hex.unitId);
+          if (gameState.phase === 'movement') setActType('move');
+          if (gameState.phase === 'attack') setActType('attack');
+        }
+        else { setSelected(null); setActType('none'); }
+      } else if (hex?.unitId && gameState.units[hex.unitId].ownerId === activeP) {
+        setSelected(hex.unitId);
+        if (gameState.phase === 'movement') setActType('move');
+        if (gameState.phase === 'attack') setActType('attack');
+      }
     }
   };
   return (
     <div className="flex h-screen bg-map-paper overflow-hidden font-military">
       <div className="w-64 border-r-2 border-map-ink-blue p-4 flex flex-col bg-white/30">
         <h2 className={`text-xl font-bold font-handwriting mb-2 ${activeP === 'player1' ? 'text-blue-800' : 'text-red-800'}`}>{activeP === 'player1' ? scenario.player1.name : scenario.player2.name}</h2>
+        <div className="mb-2 p-2 border border-black rounded bg-amber-100 text-center font-bold uppercase text-[10px]">
+          {gameState.phase === 'distribution-sections' && 'A) Zdroje do sekcí'}
+          {gameState.phase === 'distribution-units' && 'B) Zdroje jednotkám'}
+          {gameState.phase === 'movement' && 'C) Pohyb jednotek'}
+          {gameState.phase === 'attack' && 'D) Útoky jednotek'}
+        </div>
         <div className="mb-4 p-2 border border-black rounded bg-white/50 text-xs"><p className="font-bold border-b border-black mb-1">SKLAD: {wh}</p>
-          {gameState.phase === 'distribution' && <div className="grid grid-cols-3 gap-1 mt-1">{['left', 'center', 'right'].map(s => <button key={s} onClick={() => distributeResource(activeP, s)} className="border bg-white p-1 uppercase">{s[0]}</button>)}</div>}
+          {gameState.phase === 'distribution-sections' && <div className="grid grid-cols-3 gap-1 mt-1">{['left', 'center', 'right'].map(s => <button key={s} onClick={() => distributeResource(activeP, s)} className="border bg-white p-1 uppercase">{s[0]}</button>)}</div>}
         </div>
         <div className="space-y-1 mb-4 text-xs uppercase">{['left', 'center', 'right'].map(s => <div key={s} className="p-1 border border-black">SEKCE {s}: {res[s]}</div>)}</div>
         <div className="mt-auto space-y-2">
-          {gameState.phase === 'distribution' ? <button onClick={startActionPhase} disabled={wh > 0} className="w-full bg-map-ink-blue text-white py-2 rounded font-bold disabled:opacity-50 uppercase">Akce</button>
-          : <button onClick={endTurn} className="w-full bg-map-ink-red text-white py-2 rounded font-bold uppercase">Konec tahu</button>}
+          <button onClick={() => { if (gameState.phase === 'attack') endTurn(); else nextPhase(); setSelected(null); setActType('none'); }} className={`w-full ${gameState.phase === 'attack' ? 'bg-map-ink-red' : 'bg-map-ink-blue'} text-white py-2 rounded font-bold uppercase`}>
+            {gameState.phase === 'distribution-sections' && 'Rozdělit jednotkám'}
+            {gameState.phase === 'distribution-units' && 'Pohyb'}
+            {gameState.phase === 'movement' && 'Útok'}
+            {gameState.phase === 'attack' && 'Konec tahu'}
+          </button>
           <button onClick={onExit} className="w-full border border-black py-1 rounded text-sm uppercase">Menu</button>
         </div>
       </div>
@@ -40,10 +63,11 @@ const GameView = ({ scenario, onExit }) => {
           {selected && !retreatingUnitId && <div className="absolute top-4 right-4 bg-white/90 p-4 border-2 border-map-ink-blue shadow rounded w-48 z-40">
             <h3 className="font-bold mb-2 font-handwriting">{uTypes.find(u => u.id === gameState.units[selected].typeId)?.name}</h3>
             <div className="flex flex-col gap-2">
-              <button disabled={gameState.units[selected].resources >= 3} onClick={() => assignResourceToUnit(selected)} className="bg-map-ink-blue text-white p-2 rounded text-[10px] font-bold uppercase">Přidat zdroj</button>
-              <div className="grid grid-cols-2 gap-1">
-                <button disabled={gameState.units[selected].resources === 0 || gameState.units[selected].hasMoved} onClick={() => setActType('move')} className={`p-1 rounded border text-[10px] font-bold ${actType === 'move' ? 'bg-yellow-200' : 'bg-white disabled:opacity-50'}`}>POHYB</button>
-                <button disabled={gameState.units[selected].resources === 0 || gameState.units[selected].hasAttacked} onClick={() => setActType('attack')} className={`p-1 rounded border text-[10px] font-bold ${actType === 'attack' ? 'bg-red-200' : 'bg-white disabled:opacity-50'}`}>ÚTOK</button>
+              {gameState.phase === 'distribution-units' && <button disabled={gameState.units[selected].resources >= 3} onClick={() => assignResourceToUnit(selected)} className="bg-map-ink-blue text-white p-2 rounded text-[10px] font-bold uppercase">Přidat zdroj</button>}
+              {gameState.phase === 'movement' && <button disabled={gameState.units[selected].resources === 0 || (gameState.units[selected].movementUsed >= (uTypes.find(ut => ut.id === gameState.units[selected].typeId)?.movement || 0))} onClick={() => setActType('move')} className={`w-full p-2 rounded border text-[10px] font-bold ${actType === 'move' ? 'bg-yellow-200' : 'bg-white disabled:opacity-50 uppercase'}`}>POHYB</button>}
+              {gameState.phase === 'attack' && <button disabled={gameState.units[selected].resources === 0 || gameState.units[selected].hasAttacked} onClick={() => setActType('attack')} className={`w-full p-2 rounded border text-[10px] font-bold ${actType === 'attack' ? 'bg-red-200' : 'bg-white disabled:opacity-50 uppercase'}`}>ÚTOK</button>}
+              <div className="text-[9px] text-gray-600 mt-1 uppercase">
+                Zdroje: {gameState.units[selected].resources} | Pohyb: {gameState.units[selected].movementUsed}/{uTypes.find(ut => ut.id === gameState.units[selected].typeId)?.movement}
               </div>
             </div>
           </div>}
