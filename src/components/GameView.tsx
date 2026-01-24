@@ -6,25 +6,33 @@ const GameView = ({ scenario, onExit }) => {
   const handleHexClick = (q, r) => {
     if (retreatingUnitId) { retreatUnit(retreatingUnitId.unitId, q, r); return; }
     const hex = gameState.grid[`${q},${r}`];
-    if (gameState.phase === 'movement' || gameState.phase === 'attack' || gameState.phase === 'distribution-units') {
-      if (selected) {
-        if (gameState.phase === 'movement' && actType === 'move') {
-          moveUnit(selected, q, r);
-          // Keep selected for multiple moves
-        }
-        else if (gameState.phase === 'attack' && actType === 'attack' && hex?.unitId) {
-          attackUnit(selected, hex.unitId); setSelected(null); setActType('none');
-        }
-        else if (hex?.unitId && gameState.units[hex.unitId].ownerId === activeP) {
-          setSelected(hex.unitId);
-          if (gameState.phase === 'movement') setActType('move');
-          if (gameState.phase === 'attack') setActType('attack');
-        }
-        else { setSelected(null); setActType('none'); }
-      } else if (hex?.unitId && gameState.units[hex.unitId].ownerId === activeP) {
+    const unitAtHex = hex?.unitId ? gameState.units[hex.unitId] : null;
+
+    if (gameState.phase === 'movement') {
+      if (unitAtHex && unitAtHex.ownerId === activeP) {
         setSelected(hex.unitId);
-        if (gameState.phase === 'movement') setActType('move');
-        if (gameState.phase === 'attack') setActType('attack');
+        setActType('move');
+      } else if (selected && !unitAtHex) {
+        moveUnit(selected, q, r);
+      } else {
+        setSelected(null);
+        setActType('none');
+      }
+    } else if (gameState.phase === 'attack') {
+      if (unitAtHex && unitAtHex.ownerId === activeP) {
+        setSelected(hex.unitId);
+        setActType('attack');
+      } else if (selected && unitAtHex && unitAtHex.ownerId !== activeP) {
+        attackUnit(selected, hex.unitId);
+      } else {
+        setSelected(null);
+        setActType('none');
+      }
+    } else if (gameState.phase === 'distribution-units') {
+      if (unitAtHex && unitAtHex.ownerId === activeP) {
+        setSelected(hex.unitId);
+      } else {
+        setSelected(null);
       }
     }
   };
@@ -58,7 +66,7 @@ const GameView = ({ scenario, onExit }) => {
            <div className="text-red-800 uppercase">{scenario.player2.name}: {gameState.victoryPoints.player2} VP</div>
         </div>
         <div className="flex-1 relative overflow-auto">
-          <HexGrid width={scenario.boardWidth} height={scenario.boardHeight} hexes={gameState.grid} units={gameState.units} terrainTypes={tTypes} onHexClick={handleHexClick} leftWidth={scenario.sections.leftWidth} centerWidth={scenario.sections.centerWidth} />
+          <HexGrid width={scenario.boardWidth} height={scenario.boardHeight} hexes={gameState.grid} units={gameState.units} terrainTypes={tTypes} onHexClick={handleHexClick} leftWidth={scenario.sections.leftWidth} centerWidth={scenario.sections.centerWidth} selectedUnitId={selected} />
           {retreatingUnitId && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border-4 border-red-600 p-8 rounded shadow-2xl z-50 text-center uppercase"><h2 className="text-2xl font-bold text-red-600 font-handwriting">Ustupte!</h2><p>Zbývá: {retreatingUnitId.count}</p></div>}
           {selected && !retreatingUnitId && <div className="absolute top-4 right-4 bg-white/90 p-4 border-2 border-map-ink-blue shadow rounded w-48 z-40">
             <h3 className="font-bold mb-2 font-handwriting">{uTypes.find(u => u.id === gameState.units[selected].typeId)?.name}</h3>

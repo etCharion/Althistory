@@ -11,17 +11,19 @@ const NatoSymbol = ({ type, owner }) => {
     </g>
   );
 };
-const HexGrid = ({ width, height, hexes, units, terrainTypes, onHexClick, leftWidth, centerWidth }) => {
+const HexGrid = ({ width, height, hexes, units, terrainTypes, onHexClick, leftWidth, centerWidth, selectedUnitId }) => {
   const getTerrain = (id) => terrainTypes.find(t => t.id === id) || terrainTypes[0];
   const padding = 60; const viewBoxWidth = (width + 0.5) * HEX_SIZE * Math.sqrt(3) + padding; const viewBoxHeight = (height * 1.5 + 0.5) * HEX_SIZE + padding;
   const allHexes = [];
   for (let r = 0; r < height; r++) {
     for (let col = 0; col < width; col++) {
       const q = col - Math.floor(r / 2); const key = `${q},${r}`; const hex = hexes[key]; const unit = hex?.unitId ? units[hex.unitId] : null; const terrain = hex ? getTerrain(hex.terrainTypeId) : getTerrain('grass'); const { x, y } = axialToPixel(q, r);
+      const isSelected = hex?.unitId && hex.unitId === selectedUnitId;
       const pts = []; for (let i = 0; i < 6; i++) { const a = (Math.PI / 180) * (60 * i - 30); pts.push(`${x + HEX_SIZE * Math.cos(a)},${y + HEX_SIZE * Math.sin(a)}`); }
       allHexes.push(
         <g key={key} onClick={() => onHexClick?.(q, r)} className="cursor-pointer">
-          <polygon points={pts.join(' ')} fill={terrain?.color || '#91b94d'} stroke="#444" strokeWidth="0.5" className="hover:filter hover:brightness-110" />
+          <polygon points={pts.join(' ')} fill={terrain?.color || '#91b94d'} stroke={isSelected ? "white" : "#444"} strokeWidth={isSelected ? "4" : "0.5"} className="hover:filter hover:brightness-110" />
+          {isSelected && <polygon points={pts.join(' ')} fill="none" stroke="black" strokeWidth="1" opacity="0.5" />}
           {unit && (
             <g transform={`translate(${x}, ${y})`}>
                <NatoSymbol type={unit.typeId} owner={unit.ownerId} />
