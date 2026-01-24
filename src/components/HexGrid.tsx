@@ -18,12 +18,12 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, onHexClick, onHexM
   for (let r = 0; r < height; r++) {
     for (let col = 0; col < width; col++) {
       const q = col - Math.floor(r / 2); const key = `${q},${r}`; const hex = hexes[key]; const unit = hex?.unitId ? units[hex.unitId] : null; const terrain = hex ? getTerrain(hex.terrainTypeId) : getTerrain('grass'); const { x, y } = axialToPixel(q, r);
-      const isSelected = selectedUnitId && units[selectedUnitId]?.hex.q === q && units[selectedUnitId]?.hex.r === r;
+      const isSelected = hex?.unitId && hex.unitId === selectedUnitId;
       const highlight = highlightedHexes?.[key];
       const isHovered = hoveredHex === key;
       const pts = []; for (let i = 0; i < 6; i++) { const a = (Math.PI / 180) * (60 * i - 30); pts.push(`${x + HEX_SIZE * Math.cos(a)},${y + HEX_SIZE * Math.sin(a)}`); }
       allHexes.push(
-        <g key={key} onClick={() => onHexClick?.(q, r)} onMouseEnter={() => onHexMouseEnter?.(q, r)} onMouseLeave={() => onHexMouseLeave?.(q, r)} className="cursor-pointer">
+        <g key={key} data-testid={`hex-${q}-${r}`} onClick={() => onHexClick?.(q, r)} onMouseEnter={() => onHexMouseEnter?.(q, r)} onMouseLeave={() => onHexMouseLeave?.(q, r)} className="cursor-pointer">
           <polygon points={pts.join(' ')} fill={terrain?.color || '#91b94d'} stroke={isSelected ? "white" : "#444"} strokeWidth={isSelected ? "4" : "0.5"} className="hover:filter hover:brightness-110" />
           {highlight && <polygon points={pts.join(' ')} fill={highlight === 'move' ? "rgba(34, 197, 94, 0.3)" : "rgba(239, 68, 68, 0.3)"} stroke={highlight === 'move' ? "#22c55e" : "#ef4444"} strokeWidth="2" strokeDasharray="4,2" />}
           {isHovered && !highlight && (activePhase === 'movement' || activePhase === 'attack') && selectedUnitId && <polygon points={pts.join(' ')} fill="rgba(239, 68, 68, 0.5)" />}
