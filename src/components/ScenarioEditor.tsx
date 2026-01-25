@@ -57,6 +57,7 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
     const key = `${q},${r}`;
     const ex = hexes[key] || { q, r, s: -q-r, terrainTypeId: 'grass' };
 
+
     if (tool.type === 'terrain') {
       setHexes({ ...hexes, [key]: { ...ex, terrainTypeId: tool.id } });
     } else if (tool.type === 'overlay') {
