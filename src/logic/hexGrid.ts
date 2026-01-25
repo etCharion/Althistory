@@ -100,14 +100,11 @@ export function isBlocking(q, r, grid, terrainTypes) {
 export function checkLOS(from, to, grid, terrainTypes) {
   const dist = getDistance(from, to);
   if (dist <= 1) return true;
-  const aCube = { q: from.q, r: from.r, s: -from.q - from.r };
-  const bCube = { q: to.q, r: to.r, s: -to.q - to.r };
-  const samples = dist * 10;
-  for (let i = 1; i < samples; i++) {
-    const t = i / samples;
-    const p = cubeLerpFloat(aCube, bCube, t);
-    const nearbyHexes = getHexesAtPoint(p);
-    if (nearbyHexes.length > 0 && nearbyHexes.every(h => isBlocking(h.q, h.r, grid, terrainTypes))) return false;
+  const line = getLine(from, to);
+  // getLine returns [start, ..., end]. We check everything in between.
+  for (let i = 1; i < line.length - 1; i++) {
+    const h = line[i];
+    if (isBlocking(h.q, h.r, grid, terrainTypes)) return false;
   }
   return true;
 }
@@ -134,7 +131,8 @@ export function getTargetableUnits(attackerQ, attackerR, unitType, gameState, te
     const targetHex = Object.values(gameState.grid).find(h => h.unitId === unitId);
     if (!targetHex) continue;
     const dist = getDistance({ q: attackerQ, r: attackerR }, targetHex);
-    if (dist > 1 && dist <= maxRange && checkLOS({ q: attackerQ, r: attackerR }, targetHex, gameState.grid, terrainTypes)) {
+    const isArtillery = unitType.id === 'artillery';
+    if (dist > 1 && dist <= maxRange && (isArtillery || checkLOS({ q: attackerQ, r: attackerR }, targetHex, gameState.grid, terrainTypes))) {
       targetable.push(unitId);
     }
   }

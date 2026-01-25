@@ -28,10 +28,16 @@ export const DEFAULT_SCENARIO = {
   firstPlayerId: 'player1',
   initialHexes: [
     { ...q1, s: -q1.q - q1.r, terrainTypeId: 'grass', unitId: 'u1' },
-    { ...q2, s: -q2.q - q2.r, terrainTypeId: 'grass', unitId: 'u2' }
+    { ...q2, s: -q2.q - q2.r, terrainTypeId: 'grass', unitId: 'u2' },
+    { q: 4, r: 4, s: -8, terrainTypeId: 'grass', unitId: 'u3' },
+    { q: 6, r: 4, s: -10, terrainTypeId: 'grass', unitId: 'u4' },
+    { q: 5, r: 4, s: -9, terrainTypeId: 'forest', unitId: 'u5' }
   ],
   initialUnits: [
     { id: 'u1', typeId: 'infantry', ownerId: 'player1', figures: 4, resources: 0, hasMoved: false, hasAttacked: false },
-    { id: 'u2', typeId: 'infantry', ownerId: 'player2', figures: 4, resources: 0, hasMoved: false, hasAttacked: false }
+    { id: 'u2', typeId: 'infantry', ownerId: 'player2', figures: 4, resources: 0, hasMoved: false, hasAttacked: false },
+    { id: 'u3', typeId: 'infantry', ownerId: 'player1', figures: 4, resources: 0, hasMoved: false, hasAttacked: false },
+    { id: 'u4', typeId: 'infantry', ownerId: 'player2', figures: 4, resources: 0, hasMoved: false, hasAttacked: false },
+    { id: 'u5', typeId: 'artillery', ownerId: 'player1', figures: 3, resources: 0, hasMoved: false, hasAttacked: false }
   ]
 };
