@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react'; import { getAllTerrainTypes, getAllUnitTypes } from '../data/typeUtils'; import HexGrid from './HexGrid';
+import React, { useState, useEffect } from 'react'; import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils'; import HexGrid from './HexGrid';
 const ScenarioEditor = ({ onBack }) => {
   const [scenario, setScenario] = useState({ id: '', name: 'Nový scénář', description: '', boardWidth: 13, boardHeight: 9, sections: { leftWidth: 4, centerWidth: 5, rightWidth: 4 }, player1: { name: 'Spojenci', income: 8, maxSectionResources: 10 }, player2: { name: 'Osa', income: 8, maxSectionResources: 10 }, victoryPointsToWin: 6, firstPlayerId: 'player1', initialHexes: [], initialUnits: [] });
-  const [tool, setTool] = useState({ type: 'terrain', id: 'grass' }); const [player, setPlayer] = useState('player1'); const [terrainTypes, setTerrainTypes] = useState([]); const [unitTypes, setUnitTypes] = useState([]); const [hexes, setHexes] = useState({}); const [units, setUnits] = useState({});
-  useEffect(() => { setTerrainTypes(getAllTerrainTypes()); setUnitTypes(getAllUnitTypes()); }, []);
+  const [tool, setTool] = useState({ type: 'terrain', id: 'grass' }); const [player, setPlayer] = useState('player1'); const [terrainTypes, setTerrainTypes] = useState([]); const [unitTypes, setUnitTypes] = useState([]); const [overlayTypes, setOverlayTypes] = useState([]); const [hexes, setHexes] = useState({}); const [units, setUnits] = useState({});
+  const [objSettings, setObjSettings] = useState({ type: 'permanent', timing: 'immediate', points: 1 });
+  useEffect(() => { setTerrainTypes(getAllTerrainTypes()); setUnitTypes(getAllUnitTypes()); setOverlayTypes(getAllOverlayTypes()); }, []);
   const handleHexClick = (q, r) => {
     const key = `${q},${r}`;
-    if (tool.type === 'terrain') { const ex = hexes[key] || { q, r, s: -q-r, terrainTypeId: 'grass' }; setHexes({ ...hexes, [key]: { ...ex, terrainTypeId: tool.id } }); }
-    else if (tool.type === 'unit') { const uid = `unit-${Date.now()}`; const type = unitTypes.find(u => u.id === tool.id); setUnits({ ...units, [uid]: { id: uid, typeId: tool.id, ownerId: player, figures: type?.maxFigures || 4, resources: 0, hasMoved: false, hasAttacked: false } }); const ex = hexes[key] || { q, r, s: -q-r, terrainTypeId: 'grass' }; setHexes({ ...hexes, [key]: { ...ex, unitId: uid } }); }
-    else if (tool.type === 'delete' && hexes[key]) { const { unitId, ...rest } = hexes[key]; setHexes({ ...hexes, [key]: { ...rest, unitId: undefined } }); }
+    const ex = hexes[key] || { q, r, s: -q-r, terrainTypeId: 'grass' };
+    if (tool.type === 'terrain') { setHexes({ ...hexes, [key]: { ...ex, terrainTypeId: tool.id } }); }
+    else if (tool.type === 'overlay') { setHexes({ ...hexes, [key]: { ...ex, overlayTypeId: ex.overlayTypeId === tool.id ? undefined : tool.id } }); }
+    else if (tool.type === 'objective') { setHexes({ ...hexes, [key]: { ...ex, objective: ex.objective ? undefined : { ...objSettings } } }); }
+    else if (tool.type === 'unit') { const uid = `unit-${Date.now()}`; const type = unitTypes.find(u => u.id === tool.id); setUnits({ ...units, [uid]: { id: uid, typeId: tool.id, ownerId: player, figures: type?.maxFigures || 4, resources: 0, hasMoved: false, hasAttacked: false } }); setHexes({ ...hexes, [key]: { ...ex, unitId: uid } }); }
+    else if (tool.type === 'delete' && hexes[key]) { const { unitId, objective, overlayTypeId, ...rest } = hexes[key]; setHexes({ ...hexes, [key]: { ...rest, unitId: undefined, objective: undefined, overlayTypeId: undefined } }); }
   };
   const save = () => {
     const final = { ...scenario, id: scenario.id || `scen-${Date.now()}`, initialHexes: Object.values(hexes), initialUnits: Object.values(units).filter(u => Object.values(hexes).some(h => h.unitId === u.id)) };
@@ -24,8 +28,16 @@ const ScenarioEditor = ({ onBack }) => {
         <div className="w-80 overflow-y-auto bg-white/50 p-4 border border-map-ink-blue rounded">
           <input className="w-full p-2 border mb-2" placeholder="Název" value={scenario.name} onChange={e => setScenario({...scenario, name: e.target.value})} />
           <h3 className="font-bold mb-2 uppercase text-xs">Terén</h3><div className="grid grid-cols-2 gap-2 mb-4">{terrainTypes.map(t => <button key={t.id} onClick={() => setTool({ type: 'terrain', id: t.id })} className={`p-2 border text-[10px] rounded ${tool.id === t.id ? 'bg-map-ink-blue text-white' : 'bg-white'}`}>{t.name}</button>)}</div>
+          <h3 className="font-bold mb-2 uppercase text-xs">Překážky</h3><div className="grid grid-cols-2 gap-2 mb-4">{overlayTypes.map(o => <button key={o.id} onClick={() => setTool({ type: 'overlay', id: o.id })} className={`p-2 border text-[10px] rounded ${tool.type === 'overlay' && tool.id === o.id ? 'bg-map-ink-blue text-white' : 'bg-white'}`}>{o.name}</button>)}</div>
+          <h3 className="font-bold mb-2 uppercase text-xs">Objektivy</h3>
+          <div className="bg-white/80 p-2 border rounded mb-2 text-[10px]">
+             <div className="flex justify-between mb-1"><span>Typ:</span><select value={objSettings.type} onChange={e => setObjSettings({...objSettings, type: e.target.value as any})}>{['permanent', 'temporary'].map(v => <option key={v} value={v}>{v}</option>)}</select></div>
+             <div className="flex justify-between mb-1"><span>Časování:</span><select value={objSettings.timing} onChange={e => setObjSettings({...objSettings, timing: e.target.value as any})}>{['immediate', 'startOfTurn'].map(v => <option key={v} value={v}>{v}</option>)}</select></div>
+             <div className="flex justify-between mb-1"><span>Body:</span><input type="number" className="w-10 border" value={objSettings.points} onChange={e => setObjSettings({...objSettings, points: parseInt(e.target.value)})} /></div>
+             <button onClick={() => setTool({ type: 'objective', id: 'obj' })} className={`w-full mt-1 p-1 border rounded uppercase font-bold ${tool.type === 'objective' ? 'bg-map-ink-blue text-white' : 'bg-white'}`}>Nastavit cíl</button>
+          </div>
           <h3 className="font-bold mb-2 uppercase text-xs">Jednotky</h3><div className="flex gap-1 mb-2"><button onClick={() => setPlayer('player1')} className={`flex-1 p-1 border text-xs ${player === 'player1' ? 'bg-blue-600 text-white' : 'bg-white'}`}>SPOJENCI</button><button onClick={() => setPlayer('player2')} className={`flex-1 p-1 border text-xs ${player === 'player2' ? 'bg-red-600 text-white' : 'bg-white'}`}>OSA</button></div>
-          <div className="grid grid-cols-2 gap-2 mb-4">{unitTypes.map(u => <button key={u.id} onClick={() => setTool({ type: 'unit', id: u.id })} className={`p-2 border text-[10px] rounded ${tool.id === u.id ? 'bg-map-ink-blue text-white' : 'bg-white'}`}>{u.name}</button>)}</div>
+          <div className="grid grid-cols-2 gap-2 mb-4">{unitTypes.map(u => <button key={u.id} onClick={() => setTool({ type: 'unit', id: u.id })} className={`p-2 border text-[10px] rounded ${tool.type === 'unit' && tool.id === u.id ? 'bg-map-ink-blue text-white' : 'bg-white'}`}>{u.name}</button>)}</div>
           <button onClick={() => setTool({ type: 'delete' })} className="w-full p-2 border bg-white text-red-600 font-bold uppercase text-xs">Smazat</button>
         </div>
         <div className="flex-1 bg-white/30 rounded border border-map-ink-blue p-2">

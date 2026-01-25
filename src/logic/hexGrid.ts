@@ -74,14 +74,31 @@ export function getReachableHexes(q, r, movementLimit, grid, terrainTypes) {
     if (cd >= movementLimit) continue;
     const currentHex = grid[`${cq},${cr}`];
     const currentTerrain = terrainTypes.find(t => t.id === currentHex?.terrainTypeId);
-    if (cd > 0 && currentTerrain?.movementRestriction === 'stop') continue;
+    // Wire overlay also stops movement
+    const currentOverlayId = currentHex?.overlayTypeId;
+    const isStopHex = currentTerrain?.movementRestriction === 'stop' || currentOverlayId === 'wire';
+
+    if (cd > 0 && isStopHex) continue;
+
     const neighbors = getNeighbors(cq, cr);
     for (const n of neighbors) {
       const key = `${n.q},${n.r}`;
       const hex = grid[key];
       if (!hex || visited.has(key) || hex.unitId) continue;
+
       const terrain = terrainTypes.find(t => t.id === hex.terrainTypeId);
-      if (terrain?.movementRestriction === 'no-move') continue;
+      // Bridge allows crossing River (no-move)
+      if (terrain?.movementRestriction === 'no-move' && terrain.id === 'river') {
+        if (hex.terrainTypeId !== 'bridge' && hex.terrainTypeId !== 'bridge') { // wait
+           // actually if the hex IS river, it's no-move unless it's also a bridge
+        }
+      }
+
+      const isImpassable = terrain?.movementRestriction === 'no-move' && terrain.id === 'river';
+      const isBridge = terrain.id === 'bridge';
+
+      if (isImpassable && !isBridge) continue;
+
       visited.add(key);
       queue.push({ q: n.q, r: n.r, dist: cd + 1 });
     }

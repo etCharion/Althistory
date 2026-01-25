@@ -29,6 +29,24 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, onHexClick, onHexM
           {isHovered && !highlight && (activePhase === 'movement' || activePhase === 'attack') && selectedUnitId && <polygon points={pts.join(' ')} fill="rgba(239, 68, 68, 0.5)" />}
           {isHovered && highlight && <polygon points={pts.join(' ')} fill={highlight === 'move' ? "rgba(34, 197, 94, 0.5)" : "rgba(239, 68, 68, 0.5)"} />}
           {isSelected && <polygon points={pts.join(' ')} fill="none" stroke="black" strokeWidth="1" opacity="0.5" />}
+          {hex?.overlayTypeId === 'sandbags' && (
+            <g transform={`translate(${x}, ${y})`}>
+              <path d="M-20,10 Q0,0 20,10" stroke="#8b4513" strokeWidth="6" fill="none" strokeLinecap="round" />
+              <path d="M-15,5 Q0,-5 15,5" stroke="#a0522d" strokeWidth="5" fill="none" strokeLinecap="round" />
+            </g>
+          )}
+          {hex?.overlayTypeId === 'wire' && (
+            <g transform={`translate(${x}, ${y})`}>
+              <path d="M-20,-10 L20,10 M-20,10 L20,-10" stroke="#444" strokeWidth="1" />
+              <circle cx="0" cy="0" r="10" fill="none" stroke="#444" strokeWidth="1" strokeDasharray="2,2" />
+            </g>
+          )}
+          {hex?.objective && (
+            <g transform={`translate(${x}, ${y-35})`}>
+               <polygon points="0,-8 2,-2 8,-2 3,1 5,7 0,3 -5,7 -3,1 -8,-2 -2,-2" fill={hex.objective.controllingPlayerId === 'player1' ? '#1e40af' : (hex.objective.controllingPlayerId === 'player2' ? '#b91c1c' : '#ffd700')} stroke="black" strokeWidth="0.5" />
+               <text y="15" textAnchor="middle" fontSize="8" fontWeight="bold" fill="black" className="bg-white/50">{hex.objective.points} VP</text>
+            </g>
+          )}
           {unit && (
             <g transform={`translate(${x}, ${y})`}>
                <NatoSymbol type={unit.typeId} owner={unit.ownerId} />
