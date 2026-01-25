@@ -98,8 +98,9 @@ export function useGameLogic(scenario) {
       const totalDist = unit.movementUsed + dist;
       const newResources = unit.hasMoved ? unit.resources : unit.resources - 1;
       const targetTerrain = DEFAULT_TERRAIN_TYPES.find(t => t.id === prev.grid[`${tq},${tr}`]?.terrainTypeId);
-      const forcedHasAttacked = targetTerrain?.movementRestriction === 'stop';
-      return { ...prev, grid: nGrid, units: { ...prev.units, [uid]: { ...unit, resources: newResources, hasMoved: true, movementUsed: totalDist, hasAttacked: forcedHasAttacked || (totalDist > utype.canShootAfterMovingMax ? true : unit.hasAttacked) } } };
+      const isStopTerrain = targetTerrain?.movementRestriction === 'stop';
+      const finalMovementUsed = isStopTerrain ? utype.movement : totalDist;
+      return { ...prev, grid: nGrid, units: { ...prev.units, [uid]: { ...unit, resources: newResources, hasMoved: true, movementUsed: finalMovementUsed, hasAttacked: isStopTerrain || (totalDist > utype.canShootAfterMovingMax ? true : unit.hasAttacked) } } };
     });
   };
   const attackUnit = (aid, tid) => {
