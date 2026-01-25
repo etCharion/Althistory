@@ -10,7 +10,13 @@ export function useGameLogic(scenario) {
     for (let r = 0; r < scenario.boardHeight; r++) { for (let col = 0; col < scenario.boardWidth; col++) { const q = col - Math.floor(r / 2); const key = `${q},${r}`; if (!grid[key]) grid[key] = { q, r, s: -q - r, terrainTypeId: 'grass' }; } }
     return grid;
   }, [scenario]);
-  const initialUnits = useMemo(() => { const units = {}; scenario.initialUnits.forEach(u => { units[u.id] = { ...u, movementUsed: 0 }; }); return units; }, [scenario]);
+  const initialUnits = useMemo(() => {
+    const units = {};
+    scenario.initialUnits.forEach(u => {
+      units[u.id] = { ...u, movementUsed: 0, resourceOrigins: [] };
+    });
+    return units;
+  }, [scenario]);
   const [gameState, setGameState] = useState({ scenario, currentTurn: 1, activePlayerId: scenario.firstPlayerId, phase: 'distribution-sections', sectionResources: { player1: { left: 0, center: 0, right: 0 }, player2: { left: 0, center: 0, right: 0 } }, centralWarehouse: { player1: scenario.player1.income, player2: scenario.player2.income }, units: initialUnits, grid: initialGrid, victoryPoints: { player1: 0, player2: 0 } });
   const getUnitHex = (uid) => Object.values(gameState.grid).find(h => h.unitId === uid) || null;
   const getTerrainAt = (q, r) => { const hex = gameState.grid[`${q},${r}`]; return DEFAULT_TERRAIN_TYPES.find(t => t.id === hex?.terrainTypeId) || DEFAULT_TERRAIN_TYPES[0]; };
@@ -36,18 +42,48 @@ export function useGameLogic(scenario) {
     });
   };
   const assignResourceToUnit = (uid, sectionId) => {
-    const unit = gameState.units[uid]; if (gameState.phase !== 'distribution-units' || !unit || unit.ownerId !== gameState.activePlayerId || unit.resources >= 3) return;
-    const hex = getUnitHex(uid); if (!hex) return;
+    const unit = gameState.units[uid];
+    if (gameState.phase !== 'distribution-units' || !unit || unit.ownerId !== gameState.activePlayerId) return;
+    const hex = getUnitHex(uid);
+    if (!hex) return;
+
     let sec = sectionId;
     if (!sec) {
       const sections = getUnitSections(hex.q, hex.r, gameState.scenario);
-      if (sections.length > 1) return;
-      sec = sections[0];
+      if (sections.length === 1) sec = sections[0];
     }
-    if (gameState.sectionResources[gameState.activePlayerId][sec] <= 0) return;
+
+    // Toggle logic: If unit has 3 resources OR (section is empty/not specified and unit has resources assigned this turn), return one.
+    const canAdd = sec && gameState.sectionResources[gameState.activePlayerId][sec] > 0 && unit.resources < 3;
+    const hasAssignedThisTurn = unit.resourceOrigins && unit.resourceOrigins.length > 0;
+
+    if (!canAdd && hasAssignedThisTurn) {
+      setGameState(prev => {
+        const origins = [...(prev.units[uid].resourceOrigins || [])];
+        const lastOrigin = origins.pop();
+        const newSectionResources = {
+          ...prev.sectionResources[prev.activePlayerId],
+          [lastOrigin]: prev.sectionResources[prev.activePlayerId][lastOrigin] + 1
+        };
+        return {
+          ...prev,
+          sectionResources: { ...prev.sectionResources, [prev.activePlayerId]: newSectionResources },
+          units: { ...prev.units, [uid]: { ...prev.units[uid], resources: prev.units[uid].resources - 1, resourceOrigins: origins } }
+        };
+      });
+      return;
+    }
+
+    if (!canAdd) return;
+
     setGameState(prev => {
       const newSectionResources = { ...prev.sectionResources[prev.activePlayerId], [sec]: prev.sectionResources[prev.activePlayerId][sec] - 1 };
-      const newState = { ...prev, sectionResources: { ...prev.sectionResources, [prev.activePlayerId]: newSectionResources }, units: { ...prev.units, [uid]: { ...unit, resources: unit.resources + 1 } } };
+      const newOrigins = [...(unit.resourceOrigins || []), sec];
+      const newState = {
+        ...prev,
+        sectionResources: { ...prev.sectionResources, [prev.activePlayerId]: newSectionResources },
+        units: { ...prev.units, [uid]: { ...unit, resources: unit.resources + 1, resourceOrigins: newOrigins } }
+      };
       if (newSectionResources.left === 0 && newSectionResources.center === 0 && newSectionResources.right === 0) newState.phase = 'movement';
       return newState;
     });
@@ -65,14 +101,28 @@ export function useGameLogic(scenario) {
     });
   };
   const attackUnit = (aid, tid) => {
-    const att = gameState.units[aid]; const tar = gameState.units[tid]; if (gameState.phase !== 'attack' || !att || !tar || att.ownerId !== gameState.activePlayerId || att.resources <= 0 || att.hasAttacked) return;
-    const fH = getUnitHex(aid); const tH = getUnitHex(tid); if (!fH || !tH) return;
+    const att = gameState.units[aid];
+    const tar = gameState.units[tid];
+    if (gameState.phase !== 'attack' || !att || !tar || att.ownerId !== gameState.activePlayerId || att.resources <= 0 || att.hasAttacked) return;
+
+    // Artillery cannot shoot if it moved
+    if (att.typeId === 'artillery' && (att.movementUsed > 0 || att.hasMoved)) return;
+
+    const fH = getUnitHex(aid);
+    const tH = getUnitHex(tid);
+    if (!fH || !tH) return;
     const utype = DEFAULT_UNIT_TYPES.find(u => u.id === att.typeId);
     if (!utype) return;
     const targetable = getTargetableUnits(fH.q, fH.r, utype, gameState, DEFAULT_TERRAIN_TYPES);
     if (!targetable.includes(tid)) return;
     const dist = getDistance(fH, tH);
-    let dC = utype.shootingRange[dist-1] - getTerrainAt(tH.q, tH.r).diceModifierDefense;
+    const attTerrain = getTerrainAt(fH.q, fH.r);
+    const tarTerrain = getTerrainAt(tH.q, tH.r);
+    const isArtillery = att.typeId === 'artillery';
+    const diceModifierDefense = isArtillery ? 0 : tarTerrain.diceModifierDefense;
+    // Artillery follows its own terrain attack penalty (REVERSED based on user clarification)
+    const diceModifierAttack = attTerrain.diceModifierAttack;
+    let dC = utype.shootingRange[dist-1] - diceModifierDefense + diceModifierAttack;
     const dice = rollDice(Math.max(0, dC)); let h = 0, f = 0; dice.forEach(s => { if (s==='grenade' || s===tar.typeId) h++; if (s==='flag') f++; });
     setCombatResult({ attackerId: aid, targetId: tid, dice, hits: h, flags: f });
     setGameState(prev => {
@@ -114,12 +164,51 @@ export function useGameLogic(scenario) {
     const hex = getUnitHex(uid); if (!hex) return [];
     const utype = DEFAULT_UNIT_TYPES.find(u => u.id === unit.typeId);
     if (unit.resources <= 0 || unit.hasAttacked) return [];
+    // Artillery cannot shoot if it moved
+    if (unit.typeId === 'artillery' && (unit.movementUsed > 0 || unit.hasMoved)) return [];
     return getTargetableUnits(hex.q, hex.r, utype, gameState, DEFAULT_TERRAIN_TYPES);
   };
+
+  const getUnusedActions = () => {
+    const activeP = gameState.activePlayerId;
+    const reasons = [];
+    if (gameState.phase === 'distribution-sections') {
+      if (gameState.centralWarehouse[activeP] > 0) reasons.push(`Sklad: ${gameState.centralWarehouse[activeP]}`);
+    } else if (gameState.phase === 'distribution-units') {
+      const res = gameState.sectionResources[activeP];
+      const parts = [];
+      if (res.left > 0) parts.push(`L: ${res.left}`);
+      if (res.center > 0) parts.push(`C: ${res.center}`);
+      if (res.right > 0) parts.push(`R: ${res.right}`);
+      if (parts.length > 0) reasons.push(`Sekce: ${parts.join(', ')}`);
+    } else if (gameState.phase === 'movement') {
+      const movable = Object.values(gameState.units).filter(u => {
+        if (u.ownerId !== activeP) return false;
+        const utype = DEFAULT_UNIT_TYPES.find(ut => ut.id === u.typeId);
+        const canStart = !u.hasMoved && u.resources > 0;
+        const canContinue = u.hasMoved && u.movementUsed < (utype?.movement || 0);
+        return canStart || canContinue;
+      });
+      if (movable.length > 0) reasons.push(`Jednotky k pohybu: ${movable.length}`);
+    } else if (gameState.phase === 'attack') {
+      const attackable = Object.values(gameState.units).filter(u => {
+        if (u.ownerId !== activeP || u.resources <= 0 || u.hasAttacked) return false;
+        if (u.typeId === 'artillery' && (u.movementUsed > 0 || u.hasMoved)) return false;
+        const hex = getUnitHex(u.id);
+        if (!hex) return false;
+        const utype = DEFAULT_UNIT_TYPES.find(ut => ut.id === u.typeId);
+        return getTargetableUnits(hex.q, hex.r, utype, gameState, DEFAULT_TERRAIN_TYPES).length > 0;
+      });
+      if (attackable.length > 0) reasons.push(`Jednotky k útoku: ${attackable.length}`);
+    }
+    return reasons;
+  };
+
+  const hasAvailableActions = () => getUnusedActions().length > 0;
 
   return {
     gameState, combatResult, retreatingUnitId, setCombatResult, setRetreatingUnitId,
     distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit,
-    getSelectedReachable, getSelectedTargetable, getUnitHex
+    getSelectedReachable, getSelectedTargetable, getUnitHex, hasAvailableActions, getUnusedActions
   };
 }

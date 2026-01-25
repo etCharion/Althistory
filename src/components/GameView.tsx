@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes } from '../data/typeUtils'; import { getUnitSections } from '../logic/hexGrid';
 const GameView = ({ scenario, onExit }) => {
-  const { gameState, combatResult, retreatingUnitId, setCombatResult, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getUnitHex } = useGameLogic(scenario);
+  const { gameState, combatResult, retreatingUnitId, setCombatResult, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario);
   const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none'); const [hovered, setHovered] = useState(null);
+  const [showConfirm, setShowConfirm] = useState(false);
   const tTypes = getAllTerrainTypes(); const uTypes = getAllUnitTypes(); const activeP = gameState.activePlayerId; const res = gameState.sectionResources[activeP]; const wh = gameState.centralWarehouse[activeP];
   const highlightedHexes = useMemo(() => {
     if (!selected) return {};
@@ -47,6 +48,7 @@ const GameView = ({ scenario, onExit }) => {
     } else if (gameState.phase === 'distribution-units') {
       if (unitAtHex && unitAtHex.ownerId === activeP) {
         setSelected(hex.unitId);
+        assignResourceToUnit(hex.unitId);
       } else {
         setSelected(null);
       }
@@ -67,7 +69,15 @@ const GameView = ({ scenario, onExit }) => {
         </div>
         <div className="space-y-1 mb-4 text-xs uppercase">{['left', 'center', 'right'].map(s => <div key={s} className="p-1 border border-black">SEKCE {s}: {res[s]}</div>)}</div>
         <div className="mt-auto space-y-2">
-          <button onClick={() => { if (gameState.phase === 'attack') endTurn(); else nextPhase(); setSelected(null); setActType('none'); }} className={`w-full ${gameState.phase === 'attack' ? 'bg-map-ink-red' : 'bg-map-ink-blue'} text-white py-2 rounded font-bold uppercase`}>
+          <button onClick={() => {
+            if (hasAvailableActions()) {
+              setShowConfirm(true);
+            } else {
+              if (gameState.phase === 'attack') endTurn(); else nextPhase();
+              setSelected(null);
+              setActType('none');
+            }
+          }} className={`w-full ${gameState.phase === 'attack' ? 'bg-map-ink-red' : 'bg-map-ink-blue'} text-white py-2 rounded font-bold uppercase`}>
             {gameState.phase === 'distribution-sections' && 'Rozdělit jednotkám'}
             {gameState.phase === 'distribution-units' && 'Pohyb'}
             {gameState.phase === 'movement' && 'Útok'}
@@ -93,7 +103,6 @@ const GameView = ({ scenario, onExit }) => {
           {selected && !retreatingUnitId && <div className="absolute top-4 right-4 bg-white/90 p-4 border-2 border-map-ink-blue shadow rounded w-48 z-40">
             <h3 className="font-bold mb-2 font-handwriting">{uTypes.find(u => u.id === gameState.units[selected].typeId)?.name}</h3>
             <div className="flex flex-col gap-2">
-              {gameState.phase === 'distribution-units' && <button disabled={gameState.units[selected].resources >= 3} onClick={() => assignResourceToUnit(selected)} className="bg-map-ink-blue text-white p-2 rounded text-[10px] font-bold uppercase">Přidat zdroj</button>}
               {gameState.phase === 'movement' && <button disabled={gameState.units[selected].resources === 0 || (gameState.units[selected].movementUsed >= (uTypes.find(ut => ut.id === gameState.units[selected].typeId)?.movement || 0))} onClick={() => setActType('move')} className={`w-full p-2 rounded border text-[10px] font-bold ${actType === 'move' ? 'bg-yellow-200' : 'bg-white disabled:opacity-50 uppercase'}`}>POHYB</button>}
               {gameState.phase === 'attack' && <button disabled={gameState.units[selected].resources === 0 || gameState.units[selected].hasAttacked} onClick={() => setActType('attack')} className={`w-full p-2 rounded border text-[10px] font-bold ${actType === 'attack' ? 'bg-red-200' : 'bg-white disabled:opacity-50 uppercase'}`}>ÚTOK</button>}
               <div className="text-[9px] text-gray-600 mt-1 uppercase">
@@ -105,6 +114,19 @@ const GameView = ({ scenario, onExit }) => {
       </div>
       {combatResult && <DiceAnimation dice={combatResult.dice} onComplete={() => setCombatResult(null)} />}
       {gameState.winner && <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100]"><div className="bg-white p-12 rounded-3xl text-center border-8 border-map-paper shadow-2xl"><h1 className="text-5xl font-bold font-handwriting mb-4 text-map-ink-blue uppercase">Vítězství!</h1><p className="mb-8">{gameState.winner === 'player1' ? scenario.player1.name : scenario.player2.name} vyhrál.</p><button onClick={onExit} className="bg-map-ink-red text-white px-8 py-3 rounded text-xl uppercase font-bold">Zpět</button></div></div>}
+      {showConfirm && <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] uppercase">
+        <div className="bg-white p-6 rounded shadow-xl border-4 border-map-ink-blue text-center max-w-sm">
+          <p className="mb-2 font-bold">Nevyužité možnosti:</p>
+          <ul className="list-disc list-inside mb-6 text-left text-[10px] lowercase">
+            {getUnusedActions().map((r, i) => <li key={i}>{r}</li>)}
+          </ul>
+          <p className="mb-6 font-bold uppercase">Opravdu chcete pokračovat?</p>
+          <div className="flex gap-4 justify-center">
+            <button onClick={() => setShowConfirm(false)} className="bg-gray-200 px-4 py-2 rounded font-bold">Zrušit</button>
+            <button onClick={() => { setShowConfirm(false); if (gameState.phase === 'attack') endTurn(); else nextPhase(); setSelected(null); setActType('none'); }} className="bg-map-ink-blue text-white px-4 py-2 rounded font-bold">Pokračovat</button>
+          </div>
+        </div>
+      </div>}
     </div>
   );
 };
