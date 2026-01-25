@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { getDistance, axialToOffset, getUnitSections, getReachableHexes, getTargetableUnits, checkLOS as calcLOS } from '../logic/hexGrid';
+import { getDistance, axialToOffset, getUnitSections, getReachableHexes, getTargetableUnits, areOnSameRidge, checkLOS as calcLOS } from '../logic/hexGrid';
 import { DEFAULT_TERRAIN_TYPES, DEFAULT_UNIT_TYPES } from '../data/defaults';
 import { rollDice } from '../logic/dice';
 export function useGameLogic(scenario) {
@@ -97,7 +97,9 @@ export function useGameLogic(scenario) {
       const nGrid = { ...prev.grid }; nGrid[`${fHex.q},${fHex.r}`].unitId = undefined; nGrid[`${tq},${tr}`].unitId = uid;
       const totalDist = unit.movementUsed + dist;
       const newResources = unit.hasMoved ? unit.resources : unit.resources - 1;
-      return { ...prev, grid: nGrid, units: { ...prev.units, [uid]: { ...unit, resources: newResources, hasMoved: true, movementUsed: totalDist, hasAttacked: totalDist > utype.canShootAfterMovingMax ? true : unit.hasAttacked } } };
+      const targetTerrain = DEFAULT_TERRAIN_TYPES.find(t => t.id === prev.grid[`${tq},${tr}`]?.terrainTypeId);
+      const forcedHasAttacked = targetTerrain?.movementRestriction === 'stop';
+      return { ...prev, grid: nGrid, units: { ...prev.units, [uid]: { ...unit, resources: newResources, hasMoved: true, movementUsed: totalDist, hasAttacked: forcedHasAttacked || (totalDist > utype.canShootAfterMovingMax ? true : unit.hasAttacked) } } };
     });
   };
   const attackUnit = (aid, tid) => {
@@ -118,10 +120,19 @@ export function useGameLogic(scenario) {
     const dist = getDistance(fH, tH);
     const attTerrain = getTerrainAt(fH.q, fH.r);
     const tarTerrain = getTerrainAt(tH.q, tH.r);
+
     const isArtillery = att.typeId === 'artillery';
-    const diceModifierDefense = isArtillery ? 0 : tarTerrain.diceModifierDefense;
-    // Artillery follows its own terrain attack penalty (REVERSED based on user clarification)
-    const diceModifierAttack = attTerrain.diceModifierAttack;
+    const isTank = att.typeId === 'tank';
+
+    let diceModifierDefense = 0;
+    if (!isArtillery) {
+      const onSameRidge = areOnSameRidge(fH, tH, gameState.grid);
+      if (!(tarTerrain.id === 'hill' && onSameRidge)) {
+        diceModifierDefense = isTank ? (tarTerrain.diceModifierDefenseTank ?? 0) : (tarTerrain.diceModifierDefenseInfantry ?? 0);
+      }
+    }
+    const diceModifierAttack = isTank ? (attTerrain.diceModifierAttackTank ?? 0) : (attTerrain.diceModifierAttackInfantry ?? 0);
+
     let dC = utype.shootingRange[dist-1] - diceModifierDefense + diceModifierAttack;
     const dice = rollDice(Math.max(0, dC)); let h = 0, f = 0; dice.forEach(s => { if (s==='grenade' || s===tar.typeId) h++; if (s==='flag') f++; });
     setCombatResult({ attackerId: aid, targetId: tid, dice, hits: h, flags: f });

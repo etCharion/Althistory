@@ -97,14 +97,40 @@ export function isBlocking(q, r, grid, terrainTypes) {
   return terrain?.blocksLOS || false;
 }
 
+export function areOnSameRidge(a, b, grid) {
+  if (grid[`${a.q},${a.r}`]?.terrainTypeId !== 'hill' || grid[`${b.q},${b.r}`]?.terrainTypeId !== 'hill') return false;
+  const visited = new Set();
+  const queue = [{ q: a.q, r: a.r }];
+  visited.add(`${a.q},${a.r}`);
+  while (queue.length > 0) {
+    const curr = queue.shift();
+    if (curr.q === b.q && curr.r === b.r) return true;
+    for (const n of getNeighbors(curr.q, curr.r)) {
+      const key = `${n.q},${n.r}`;
+      if (!visited.has(key) && grid[key]?.terrainTypeId === 'hill') {
+        visited.add(key);
+        queue.push(n);
+      }
+    }
+  }
+  return false;
+}
+
 export function checkLOS(from, to, grid, terrainTypes) {
   const dist = getDistance(from, to);
   if (dist <= 1) return true;
   const line = getLine(from, to);
+  const onSameRidge = areOnSameRidge(from, to, grid);
   // getLine returns [start, ..., end]. We check everything in between.
   for (let i = 1; i < line.length - 1; i++) {
     const h = line[i];
-    if (isBlocking(h.q, h.r, grid, terrainTypes)) return false;
+    const hex = grid[`${h.q},${h.r}`];
+    if (hex?.unitId) return false;
+    const terrain = terrainTypes.find(t => t.id === hex?.terrainTypeId);
+    if (terrain?.blocksLOS) {
+      if (terrain.id === 'hill' && onSameRidge) continue;
+      return false;
+    }
   }
   return true;
 }
@@ -128,7 +154,7 @@ export function getTargetableUnits(attackerQ, attackerR, unitType, gameState, te
   for (const unitId in gameState.units) {
     const unit = gameState.units[unitId];
     if (unit.ownerId === attackerUnit.ownerId) continue;
-    const targetHex = Object.values(gameState.grid).find(h => h.unitId === unitId);
+    const targetHex = Object.values(gameState.grid).find(h => h.unitId === unitId) as any;
     if (!targetHex) continue;
     const dist = getDistance({ q: attackerQ, r: attackerR }, targetHex);
     const isArtillery = unitType.id === 'artillery';
