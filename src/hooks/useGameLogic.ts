@@ -168,12 +168,14 @@ export function useGameLogic(scenario) {
       const finalMovementUsed = isStopTerrain ? utype.movement : totalDist;
 
       const { vpChange1, vpChange2, newGrid: updatedGrid } = checkObjectives(nGrid, prev.units, prev.activePlayerId, 'immediate');
+      const nVP = { player1: prev.victoryPoints.player1 + vpChange1, player2: prev.victoryPoints.player2 + vpChange2 };
 
       return {
         ...prev,
         grid: updatedGrid,
         units: { ...prev.units, [uid]: { ...unit, resources: newResources, hasMoved: true, movementUsed: finalMovementUsed, hasAttacked: isStopTerrain || (totalDist > utype.canShootAfterMovingMax ? true : unit.hasAttacked) } },
-        victoryPoints: { player1: prev.victoryPoints.player1 + vpChange1, player2: prev.victoryPoints.player2 + vpChange2 }
+        victoryPoints: nVP,
+        winner: nVP.player1 >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2 >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
       };
     });
   };
@@ -217,7 +219,10 @@ export function useGameLogic(scenario) {
     const dice = rollDice(Math.max(0, dC)); let h = 0, f = 0; dice.forEach(s => { if (s==='grenade' || s===tar.typeId) h++; if (s==='flag') f++; });
     setCombatResult({ attackerId: aid, targetId: tid, dice, hits: h, flags: f });
     setGameState(prev => {
-      const nU = { ...prev.units }; const nG = { ...prev.grid }; const nVP = { ...prev.victoryPoints }; let upT = { ...nU[tid] };
+      let nU = { ...prev.units };
+      let nG = { ...prev.grid };
+      let nVP = { ...prev.victoryPoints };
+      let upT = { ...nU[tid] };
       for (let i=0; i<h; i++) { if (upT.resources > 0) upT.resources--; else upT.figures--; }
 
       let isEliminated = false;
@@ -233,6 +238,12 @@ export function useGameLogic(scenario) {
       nU[aid] = { ...nU[aid], resources: nU[aid].resources-1, hasAttacked: true };
 
       if (isEliminated) {
+        // Recalculate objectives (e.g. if defender was holding a temporary objective)
+        const { vpChange1, vpChange2, newGrid: updatedGrid } = checkObjectives(nG, nU, prev.activePlayerId, 'immediate');
+        nG = updatedGrid;
+        nVP.player1 += vpChange1;
+        nVP.player2 += vpChange2;
+
         if (dist === 1 && att.typeId !== 'artillery') {
           setTimeout(() => setTakeGroundOption({ unitId: aid, hex: { q: tH.q, r: tH.r } }), 1000);
         }
@@ -240,7 +251,7 @@ export function useGameLogic(scenario) {
         setTimeout(() => setRetreatingUnitId({ unitId: tid, count: f, attackerId: aid, targetHex: { q: tH.q, r: tH.r } }), 1000);
       }
 
-      return { ...prev, units: nU, grid: nG, victoryPoints: nVP, winner: nVP[att.ownerId] >= prev.scenario.victoryPointsToWin ? att.ownerId : undefined };
+      return { ...prev, units: nU, grid: nG, victoryPoints: nVP, winner: nVP.player1 >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2 >= prev.scenario.victoryPointsToWin ? 'player2' : undefined) };
     });
   };
   const retreatUnit = (uid, tq, tr) => {
@@ -324,17 +335,22 @@ export function useGameLogic(scenario) {
       return;
     }
     const fH = getUnitHex(uid);
-    if (!fH) return;
+    if (!fH || gameState.grid[`${q},${r}`]?.unitId) {
+      setTakeGroundOption(null);
+      return;
+    }
     setGameState(prev => {
       const nG = { ...prev.grid };
       nG[`${fH.q},${fH.r}`].unitId = undefined;
       nG[`${q},${r}`].unitId = uid;
 
       const { vpChange1, vpChange2, newGrid: updatedGrid } = checkObjectives(nG, prev.units, prev.activePlayerId, 'immediate');
+      const nVP = { player1: prev.victoryPoints.player1 + vpChange1, player2: prev.victoryPoints.player2 + vpChange2 };
       return {
         ...prev,
         grid: updatedGrid,
-        victoryPoints: { player1: prev.victoryPoints.player1 + vpChange1, player2: prev.victoryPoints.player2 + vpChange2 }
+        victoryPoints: nVP,
+        winner: nVP.player1 >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2 >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
       };
     });
     setTakeGroundOption(null);

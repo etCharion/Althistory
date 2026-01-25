@@ -87,17 +87,9 @@ export function getReachableHexes(q, r, movementLimit, grid, terrainTypes) {
       if (!hex || visited.has(key) || hex.unitId) continue;
 
       const terrain = terrainTypes.find(t => t.id === hex.terrainTypeId);
-      // Bridge allows crossing River (no-move)
-      if (terrain?.movementRestriction === 'no-move' && terrain.id === 'river') {
-        if (hex.terrainTypeId !== 'bridge' && hex.terrainTypeId !== 'bridge') { // wait
-           // actually if the hex IS river, it's no-move unless it's also a bridge
-        }
-      }
+      const isImpassable = terrain?.movementRestriction === 'no-move';
 
-      const isImpassable = terrain?.movementRestriction === 'no-move' && terrain.id === 'river';
-      const isBridge = terrain.id === 'bridge';
-
-      if (isImpassable && !isBridge) continue;
+      if (isImpassable) continue;
 
       visited.add(key);
       queue.push({ q: n.q, r: n.r, dist: cd + 1 });
