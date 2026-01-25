@@ -1,65 +1,170 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Search, Filter, Sword, Settings, Plus, Info, Globe } from 'lucide-react';
 import ScenarioEditor from './components/ScenarioEditor';
 import GameView from './components/GameView';
 import Customization from './components/Customization';
-import { DEFAULT_SCENARIO } from './data/defaultScenario';
+import { getAllScenarios, getAllCountries, getAllCampaigns } from './data/typeUtils';
 
 function App() {
   const [mode, setMode] = useState('menu');
   const [scenarios, setScenarios] = useState([]);
+  const [countries, setCountries] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
   const [currentScenario, setCurrentScenario] = useState(null);
+  const [editingScenario, setEditingScenario] = useState(null);
+
+  // Filter & Sort State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterCountry, setFilterCountry] = useState('all');
+  const [filterCampaign, setFilterCampaign] = useState('all');
+  const [filterReal, setFilterReal] = useState('all');
+  const [sortBy, setSortBy] = useState('name');
 
   useEffect(() => {
-    try {
-      const s = localStorage.getItem('scenarios');
-      if (s) {
-        setScenarios(JSON.parse(s));
-      } else {
-        setScenarios([DEFAULT_SCENARIO]);
-      }
-    } catch (e) {
-      console.error("Failed to load scenarios", e);
-      setScenarios([DEFAULT_SCENARIO]);
-    }
+    setScenarios(getAllScenarios());
+    setCountries(getAllCountries());
+    setCampaigns(getAllCampaigns());
   }, [mode]);
 
-  if (mode === 'editor') return <ScenarioEditor onBack={() => setMode('menu')} />;
-  if (mode === 'custom') return <Customization onBack={() => setMode('menu')} />;
+  const filteredScenarios = useMemo(() => {
+    return scenarios
+      .filter(s => {
+        const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesCountry = filterCountry === 'all' || s.countryId === filterCountry;
+        const matchesCampaign = filterCampaign === 'all' || s.campaignId === filterCampaign;
+        const matchesReal = filterReal === 'all' || (filterReal === 'real' ? s.isRealBattle : !s.isRealBattle);
+        return matchesSearch && matchesCountry && matchesCampaign && matchesReal;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'name') return a.name.localeCompare(b.name);
+        if (sortBy === 'year') return (a.year || 0) - (b.year || 0);
+        if (sortBy === 'campaign') {
+          const campA = a.campaignId || '';
+          const campB = b.campaignId || '';
+          if (campA !== campB) return campA.localeCompare(campB);
+          return (a.campaignNumber || 0) - (b.campaignNumber || 0);
+        }
+        return 0;
+      });
+  }, [scenarios, searchTerm, filterCountry, filterCampaign, filterReal, sortBy]);
+
+  const handleEditScenario = (s) => {
+    setEditingScenario(s);
+    setMode('editor');
+  };
+
+  const handleNewScenario = () => {
+    setEditingScenario(null);
+    setMode('editor');
+  };
+
+  if (mode === 'editor') return <ScenarioEditor onBack={() => setMode('menu')} initialScenario={editingScenario} />;
+  if (mode === 'custom') return <Customization onBack={() => setMode('menu')} onEditScenario={handleEditScenario} />;
   if (mode === 'game' && currentScenario) return <GameView scenario={currentScenario} onExit={() => setMode('menu')} />;
 
   return (
-    <div className="min-h-screen bg-map-paper flex flex-col items-center justify-center p-4 font-military">
-      <div className="max-w-md w-full bg-white/80 p-8 rounded shadow-xl border-2 border-map-ink-blue">
-        <h1 className="text-3xl font-bold text-map-ink-blue mb-8 text-center font-handwriting uppercase tracking-wider">Memoir '44 Clone</h1>
-        <div className="space-y-4">
+    <div className="min-h-screen bg-map-paper flex flex-col items-center justify-center p-4 font-military overflow-y-auto">
+      <div className="max-w-2xl w-full bg-white/90 p-6 md:p-10 rounded-xl shadow-2xl border-2 border-map-ink-blue">
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-bold text-map-ink-blue font-handwriting uppercase tracking-widest flex items-center justify-center gap-3">
+            <Sword size={32} /> Memoir '44 Clone
+          </h1>
+          <p className="text-xs text-gray-500 uppercase tracking-tighter mt-2 font-bold">Generální štáb - Plánování operací</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-8">
           <button
-            onClick={() => setMode('editor')}
-            className="w-full bg-map-ink-blue text-white py-3 rounded font-bold uppercase hover:bg-opacity-90 transition-all shadow-md"
+            onClick={handleNewScenario}
+            className="bg-map-ink-blue text-white py-4 rounded-lg font-bold uppercase hover:bg-opacity-90 transition-all shadow-lg flex items-center justify-center gap-2 group"
           >
-            Nový scénář
+            <Plus className="group-hover:rotate-90 transition-transform" /> Nový scénář
           </button>
           <button
             onClick={() => setMode('custom')}
-            className="w-full border-2 border-map-ink-blue text-map-ink-blue py-3 rounded font-bold uppercase hover:bg-white transition-all shadow-sm"
+            className="border-2 border-map-ink-blue text-map-ink-blue py-4 rounded-lg font-bold uppercase hover:bg-map-ink-blue hover:text-white transition-all shadow-md flex items-center justify-center gap-2"
           >
-            Nastavení
+            <Settings /> Nastavení
           </button>
-          <div className="pt-4 border-t border-map-ink-blue">
-            <h2 className="text-sm font-bold mb-2 uppercase text-map-ink-blue tracking-tighter">Uložené operace:</h2>
-            <div className="space-y-2 max-h-48 overflow-y-auto mt-2 pr-1">
-              {scenarios.map(s => (
-                <div key={s.id} className="flex justify-between items-center p-2 border rounded bg-white text-xs shadow-sm border-gray-200">
-                  <span className="font-bold uppercase text-map-ink-blue">{s.name}</span>
+        </div>
+
+        <div className="pt-6 border-t-2 border-map-ink-blue/20">
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                className="w-full pl-10 pr-4 py-2 border-2 border-gray-100 rounded-lg focus:border-map-ink-blue outline-none font-bold"
+                placeholder="Hledat operaci..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <select className="p-2 border rounded text-[10px] font-bold uppercase outline-none focus:border-map-ink-blue" value={filterCountry} onChange={e => setFilterCountry(e.target.value)}>
+                <option value="all">Všechny země</option>
+                {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <select className="p-2 border rounded text-[10px] font-bold uppercase outline-none focus:border-map-ink-blue" value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)}>
+                <option value="all">Všechny kampaně</option>
+                {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <select className="p-2 border rounded text-[10px] font-bold uppercase outline-none focus:border-map-ink-blue" value={filterReal} onChange={e => setFilterReal(e.target.value)}>
+                <option value="all">Typ bitvy</option>
+                <option value="real">Reálná</option>
+                <option value="fictional">Fiktivní</option>
+              </select>
+              <select className="p-2 border rounded text-[10px] font-bold uppercase outline-none focus:border-map-ink-blue" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+                <option value="name">Podle názvu</option>
+                <option value="year">Podle roku</option>
+                <option value="campaign">Podle kampaně</option>
+              </select>
+            </div>
+          </div>
+
+          <h2 className="text-sm font-bold mb-4 uppercase text-map-ink-blue tracking-widest flex items-center gap-2">
+            <Filter size={14} /> Dostupné operace ({filteredScenarios.length}):
+          </h2>
+
+          <div className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+            {filteredScenarios.map(s => (
+              <div key={s.id} className="p-4 border-2 border-gray-100 rounded-xl bg-white hover:border-map-ink-blue transition-all group shadow-sm">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold uppercase text-map-ink-blue">{s.name}</h3>
+                      {s.isRealBattle && <span className="bg-red-100 text-red-600 text-[8px] px-1 rounded font-bold uppercase">Historická</span>}
+                    </div>
+                    <div className="flex gap-2 text-[9px] text-gray-500 font-bold uppercase mt-1">
+                      <span>{countries.find(c => c.id === s.countryId)?.name || 'Neznámá země'}</span>
+                      <span>•</span>
+                      <span>{s.year || '????'}</span>
+                    </div>
+                  </div>
                   <button
                     onClick={() => { setCurrentScenario(s); setMode('game'); }}
-                    className="bg-map-ink-green text-white px-3 py-1 rounded font-bold uppercase hover:bg-opacity-90 transition-transform active:scale-95"
+                    className="bg-map-ink-green text-white px-6 py-2 rounded-lg font-bold uppercase hover:bg-opacity-90 transition-transform active:scale-95 shadow-md flex items-center gap-2"
                   >
                     Hrát
                   </button>
                 </div>
-              ))}
-              {scenarios.length === 0 && <p className="text-[10px] text-gray-500 italic">Žádné uložené plány.</p>}
-            </div>
+                {s.campaignId && (
+                  <div className="text-[9px] bg-gray-50 p-1 rounded inline-flex items-center gap-1 font-bold text-gray-600 uppercase">
+                    <Globe size={10} /> {campaigns.find(c => c.id === s.campaignId)?.name} (Fáze {s.campaignNumber})
+                  </div>
+                )}
+                {s.description && (
+                  <div className="mt-2 text-[10px] text-gray-400 italic line-clamp-1 group-hover:line-clamp-none transition-all">
+                    {s.description}
+                  </div>
+                )}
+              </div>
+            ))}
+            {filteredScenarios.length === 0 && (
+              <div className="text-center py-10 text-gray-400 italic">
+                <Info className="mx-auto mb-2 opacity-20" size={32} />
+                Žádné operace neodpovídají filtrům.
+              </div>
+            )}
           </div>
         </div>
       </div>

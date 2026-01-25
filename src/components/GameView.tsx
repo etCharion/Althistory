@@ -94,7 +94,7 @@ const GameView = ({ scenario, onExit }) => {
         <div className="flex-1 relative overflow-auto">
           <HexGrid
             width={scenario.boardWidth} height={scenario.boardHeight} hexes={gameState.grid} units={gameState.units}
-            terrainTypes={tTypes} onHexClick={handleHexClick} onHexMouseEnter={(q,r) => setHovered(`${q},${r}`)} onHexMouseLeave={() => setHovered(null)}
+            terrainTypes={tTypes} unitTypes={uTypes} onHexClick={handleHexClick} onHexMouseEnter={(q,r) => setHovered(`${q},${r}`)} onHexMouseLeave={() => setHovered(null)}
             leftWidth={scenario.sections.leftWidth} centerWidth={scenario.sections.centerWidth} selectedUnitId={selected}
             highlightedHexes={highlightedHexes} hoveredHex={hovered} activePhase={gameState.phase}
             unitSections={currentUnitSections} onSectionSelect={(s) => assignResourceToUnit(selected, s)}

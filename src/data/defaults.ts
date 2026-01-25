@@ -10,3 +10,12 @@ export const DEFAULT_TERRAIN_TYPES = [
   { id: 'hill', name: 'Kopec', blocksLOS: true, diceModifierDefenseInfantry: 1, diceModifierDefenseTank: 1, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, color: '#d2b48c', description: 'Při útoku na jednotku na kopci: -1 kostka. Pokud jsou obě jednotky na stejném hřebenu, postih neplatí a vidí na sebe. Blokuje viditelnost.' },
   { id: 'river', name: 'Řeka', blocksLOS: false, movementRestriction: 'no-move', diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, color: '#3b82f6', description: 'Neprůchodný terén. Neomezuje viditelnost.' }
 ];
+
+export const DEFAULT_COUNTRIES = [
+  { id: 'usa', name: 'USA' },
+  { id: 'uk', name: 'Velká Británie' },
+  { id: 'ussr', name: 'SSSR' },
+  { id: 'germany', name: 'Německo' },
+  { id: 'japan', name: 'Japonsko' },
+  { id: 'italy', name: 'Itálie' }
+];

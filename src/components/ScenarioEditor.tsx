@@ -1,35 +1,241 @@
-import React, { useState, useEffect } from 'react'; import { getAllTerrainTypes, getAllUnitTypes } from '../data/typeUtils'; import HexGrid from './HexGrid';
-const ScenarioEditor = ({ onBack }) => {
-  const [scenario, setScenario] = useState({ id: '', name: 'Nový scénář', description: '', boardWidth: 13, boardHeight: 9, sections: { leftWidth: 4, centerWidth: 5, rightWidth: 4 }, player1: { name: 'Spojenci', income: 8, maxSectionResources: 10 }, player2: { name: 'Osa', income: 8, maxSectionResources: 10 }, victoryPointsToWin: 6, firstPlayerId: 'player1', initialHexes: [], initialUnits: [] });
-  const [tool, setTool] = useState({ type: 'terrain', id: 'grass' }); const [player, setPlayer] = useState('player1'); const [terrainTypes, setTerrainTypes] = useState([]); const [unitTypes, setUnitTypes] = useState([]); const [hexes, setHexes] = useState({}); const [units, setUnits] = useState({});
-  useEffect(() => { setTerrainTypes(getAllTerrainTypes()); setUnitTypes(getAllUnitTypes()); }, []);
+import React, { useState, useEffect } from 'react';
+import { Plus, Trash2, Save, X, Globe, Calendar, Flag, BookOpen, Layers } from 'lucide-react';
+import { getAllTerrainTypes, getAllUnitTypes, getAllCountries, getAllCampaigns } from '../data/typeUtils';
+import HexGrid from './HexGrid';
+
+const ScenarioEditor = ({ onBack, initialScenario }) => {
+  const [scenario, setScenario] = useState({
+    id: '',
+    name: 'Nový scénář',
+    description: '',
+    boardWidth: 13,
+    boardHeight: 9,
+    sections: { leftWidth: 4, centerWidth: 5, rightWidth: 4 },
+    player1: { name: 'Spojenci', income: 8, maxSectionResources: 10 },
+    player2: { name: 'Osa', income: 8, maxSectionResources: 10 },
+    victoryPointsToWin: 6,
+    firstPlayerId: 'player1',
+    initialHexes: [],
+    initialUnits: [],
+    isRealBattle: true,
+    year: 1944,
+    countryId: 'usa',
+    campaignId: '',
+    campaignNumber: 1
+  });
+
+  const [tool, setTool] = useState({ type: 'terrain', id: 'grass' });
+  const [player, setPlayer] = useState('player1');
+  const [terrainTypes, setTerrainTypes] = useState([]);
+  const [unitTypes, setUnitTypes] = useState([]);
+  const [countries, setCountries] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
+  const [hexes, setHexes] = useState({});
+  const [units, setUnits] = useState({});
+
+  useEffect(() => {
+    setTerrainTypes(getAllTerrainTypes());
+    setUnitTypes(getAllUnitTypes());
+    setCountries(getAllCountries());
+    setCampaigns(getAllCampaigns());
+
+    if (initialScenario) {
+      setScenario(initialScenario);
+      const hObj = {};
+      initialScenario.initialHexes.forEach(h => { hObj[`${h.q},${h.r}`] = h; });
+      setHexes(hObj);
+      const uObj = {};
+      initialScenario.initialUnits.forEach(u => { uObj[u.id] = u; });
+      setUnits(uObj);
+    }
+  }, [initialScenario]);
+
   const handleHexClick = (q, r) => {
     const key = `${q},${r}`;
-    if (tool.type === 'terrain') { const ex = hexes[key] || { q, r, s: -q-r, terrainTypeId: 'grass' }; setHexes({ ...hexes, [key]: { ...ex, terrainTypeId: tool.id } }); }
-    else if (tool.type === 'unit') { const uid = `unit-${Date.now()}`; const type = unitTypes.find(u => u.id === tool.id); setUnits({ ...units, [uid]: { id: uid, typeId: tool.id, ownerId: player, figures: type?.maxFigures || 4, resources: 0, hasMoved: false, hasAttacked: false } }); const ex = hexes[key] || { q, r, s: -q-r, terrainTypeId: 'grass' }; setHexes({ ...hexes, [key]: { ...ex, unitId: uid } }); }
-    else if (tool.type === 'delete' && hexes[key]) { const { unitId, ...rest } = hexes[key]; setHexes({ ...hexes, [key]: { ...rest, unitId: undefined } }); }
+    if (tool.type === 'terrain') {
+      const ex = hexes[key] || { q, r, s: -q - r, terrainTypeId: 'grass' };
+      setHexes({ ...hexes, [key]: { ...ex, terrainTypeId: tool.id } });
+    } else if (tool.type === 'unit') {
+      const uid = `unit-${Date.now()}`;
+      const type = unitTypes.find(u => u.id === tool.id);
+      setUnits({
+        ...units,
+        [uid]: {
+          id: uid,
+          typeId: tool.id,
+          ownerId: player,
+          figures: type?.maxFigures || 4,
+          resources: 0,
+          hasMoved: false,
+          hasAttacked: false,
+          movementUsed: 0
+        }
+      });
+      const ex = hexes[key] || { q, r, s: -q - r, terrainTypeId: 'grass' };
+      setHexes({ ...hexes, [key]: { ...ex, unitId: uid } });
+    } else if (tool.type === 'delete' && hexes[key]) {
+      const { unitId, ...rest } = hexes[key];
+      setHexes({ ...hexes, [key]: { ...rest, unitId: undefined } });
+    }
   };
+
   const save = () => {
-    const final = { ...scenario, id: scenario.id || `scen-${Date.now()}`, initialHexes: Object.values(hexes), initialUnits: Object.values(units).filter(u => Object.values(hexes).some(h => h.unitId === u.id)) };
-    const saved = localStorage.getItem('scenarios'); const scens = saved ? JSON.parse(saved) : []; const idx = scens.findIndex(s => s.id === final.id); if (idx >= 0) scens[idx] = final; else scens.push(final);
-    localStorage.setItem('scenarios', JSON.stringify(scens)); alert('Uloženo!'); onBack();
+    const final = {
+      ...scenario,
+      id: scenario.id || `scen-${Date.now()}`,
+      initialHexes: Object.values(hexes),
+      initialUnits: Object.values(units).filter(u => Object.values(hexes).some(h => h.unitId === u.id))
+    };
+    const saved = localStorage.getItem('scenarios');
+    const scens = saved ? JSON.parse(saved) : [];
+    const idx = scens.findIndex(s => s.id === final.id);
+    if (idx >= 0) scens[idx] = final; else scens.push(final);
+    localStorage.setItem('scenarios', JSON.stringify(scens));
+    alert('Uloženo!');
+    onBack();
   };
+
+  const addNewItem = (type) => {
+    const name = prompt(`Zadejte název pro novou ${type === 'country' ? 'zemi' : 'kampaň'}:`);
+    if (!name) return;
+    const id = `${type}-${Date.now()}`;
+    const newItem = { id, name };
+    if (type === 'country') {
+      const updated = [...countries, newItem];
+      setCountries(updated);
+      localStorage.setItem('customCountries', JSON.stringify(updated));
+      setScenario({ ...scenario, countryId: id });
+    } else {
+      const updated = [...campaigns, newItem];
+      setCampaigns(updated);
+      localStorage.setItem('customCampaigns', JSON.stringify(updated));
+      setScenario({ ...scenario, campaignId: id });
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen overflow-hidden p-4 bg-map-paper font-military">
-      <div className="flex justify-between mb-4 border-b-2 border-map-ink-blue pb-2">
-        <h2 className="text-2xl font-bold font-handwriting">Editor</h2>
-        <div className="space-x-2"><button onClick={save} className="bg-map-ink-blue text-white px-6 py-2 rounded font-bold uppercase">Uložit</button><button onClick={onBack} className="bg-gray-500 text-white px-6 py-2 rounded font-bold uppercase">Zrušit</button></div>
-      </div>
-      <div className="flex flex-1 overflow-hidden gap-4">
-        <div className="w-80 overflow-y-auto bg-white/50 p-4 border border-map-ink-blue rounded">
-          <input className="w-full p-2 border mb-2" placeholder="Název" value={scenario.name} onChange={e => setScenario({...scenario, name: e.target.value})} />
-          <h3 className="font-bold mb-2 uppercase text-xs">Terén</h3><div className="grid grid-cols-2 gap-2 mb-4">{terrainTypes.map(t => <button key={t.id} onClick={() => setTool({ type: 'terrain', id: t.id })} className={`p-2 border text-[10px] rounded ${tool.id === t.id ? 'bg-map-ink-blue text-white' : 'bg-white'}`}>{t.name}</button>)}</div>
-          <h3 className="font-bold mb-2 uppercase text-xs">Jednotky</h3><div className="flex gap-1 mb-2"><button onClick={() => setPlayer('player1')} className={`flex-1 p-1 border text-xs ${player === 'player1' ? 'bg-blue-600 text-white' : 'bg-white'}`}>SPOJENCI</button><button onClick={() => setPlayer('player2')} className={`flex-1 p-1 border text-xs ${player === 'player2' ? 'bg-red-600 text-white' : 'bg-white'}`}>OSA</button></div>
-          <div className="grid grid-cols-2 gap-2 mb-4">{unitTypes.map(u => <button key={u.id} onClick={() => setTool({ type: 'unit', id: u.id })} className={`p-2 border text-[10px] rounded ${tool.id === u.id ? 'bg-map-ink-blue text-white' : 'bg-white'}`}>{u.name}</button>)}</div>
-          <button onClick={() => setTool({ type: 'delete' })} className="w-full p-2 border bg-white text-red-600 font-bold uppercase text-xs">Smazat</button>
+      <div className="flex justify-between mb-4 border-b-2 border-map-ink-blue pb-2 items-center">
+        <h2 className="text-2xl font-bold font-handwriting uppercase text-map-ink-blue flex items-center gap-2">
+          <Layers /> Editor Scénáře
+        </h2>
+        <div className="flex gap-2">
+          <button onClick={save} className="bg-map-ink-blue text-white px-6 py-2 rounded font-bold uppercase flex items-center gap-2 hover:bg-opacity-90 shadow-md">
+            <Save size={18} /> Uložit
+          </button>
+          <button onClick={onBack} className="bg-gray-500 text-white px-6 py-2 rounded font-bold uppercase flex items-center gap-2 hover:bg-opacity-90 shadow-md">
+            <X size={18} /> Zrušit
+          </button>
         </div>
-        <div className="flex-1 bg-white/30 rounded border border-map-ink-blue p-2">
-          <HexGrid width={scenario.boardWidth} height={scenario.boardHeight} hexes={hexes} units={units} terrainTypes={terrainTypes} onHexClick={handleHexClick} leftWidth={scenario.sections.leftWidth} centerWidth={scenario.sections.centerWidth} />
+      </div>
+
+      <div className="flex flex-1 overflow-hidden gap-4">
+        <div className="w-96 overflow-y-auto bg-white/80 p-4 border-2 border-map-ink-blue rounded shadow-inner space-y-6">
+          <section className="space-y-3">
+            <h3 className="font-bold uppercase text-xs text-map-ink-blue border-b border-map-ink-blue/20 pb-1 flex items-center gap-1"><BookOpen size={12} /> Základní informace</h3>
+            <input className="w-full p-2 border-2 border-gray-100 focus:border-map-ink-blue outline-none rounded font-bold" placeholder="Název scénáře" value={scenario.name} onChange={e => setScenario({ ...scenario, name: e.target.value })} />
+            <textarea className="w-full p-2 border-2 border-gray-100 focus:border-map-ink-blue outline-none rounded text-xs" rows={3} placeholder="Popis scénáře..." value={scenario.description} onChange={e => setScenario({ ...scenario, description: e.target.value })} />
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center gap-2 p-2 border rounded bg-white">
+                <input type="checkbox" id="realBattle" checked={scenario.isRealBattle} onChange={e => setScenario({ ...scenario, isRealBattle: e.target.checked })} />
+                <label htmlFor="realBattle" className="text-[10px] font-bold uppercase cursor-pointer">Reálná bitva</label>
+              </div>
+              <div className="flex items-center gap-1 p-1 border rounded bg-white">
+                <Calendar size={14} className="text-gray-400" />
+                <input type="number" className="w-full text-xs outline-none" placeholder="Rok" value={scenario.year} onChange={e => setScenario({ ...scenario, year: parseInt(e.target.value) || 0 })} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase text-gray-500 flex items-center gap-1"><Flag size={10} /> Země</label>
+              <div className="flex gap-1">
+                <select className="flex-1 p-2 border text-xs rounded outline-none focus:border-map-ink-blue" value={scenario.countryId} onChange={e => setScenario({ ...scenario, countryId: e.target.value })}>
+                  {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <button onClick={() => addNewItem('country')} className="bg-map-ink-green text-white p-2 rounded hover:bg-opacity-90"><Plus size={16} /></button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2 space-y-1">
+                <label className="text-[10px] font-bold uppercase text-gray-500 flex items-center gap-1"><Globe size={10} /> Kampaň</label>
+                <div className="flex gap-1">
+                  <select className="flex-1 p-2 border text-xs rounded outline-none focus:border-map-ink-blue" value={scenario.campaignId} onChange={e => setScenario({ ...scenario, campaignId: e.target.value })}>
+                    <option value="">Žádná</option>
+                    {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <button onClick={() => addNewItem('campaign')} className="bg-map-ink-green text-white p-2 rounded hover:bg-opacity-90"><Plus size={16} /></button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-gray-500">Číslo</label>
+                <input type="number" className="w-full p-2 border text-xs rounded outline-none focus:border-map-ink-blue" value={scenario.campaignNumber} onChange={e => setScenario({ ...scenario, campaignNumber: parseInt(e.target.value) || 0 })} />
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="font-bold mb-2 uppercase text-xs text-map-ink-blue border-b border-map-ink-blue/20 pb-1">Terén</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {terrainTypes.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setTool({ type: 'terrain', id: t.id })}
+                  className={`p-2 border-2 text-[10px] rounded font-bold uppercase transition-all ${tool.id === t.id && tool.type === 'terrain' ? 'bg-map-ink-blue text-white border-map-ink-blue scale-105 shadow-md' : 'bg-white border-gray-100 hover:border-map-ink-blue/50'}`}
+                >
+                  <div className="w-full h-1 mb-1 rounded-full" style={{ backgroundColor: t.color }}></div>
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="font-bold mb-2 uppercase text-xs text-map-ink-blue border-b border-map-ink-blue/20 pb-1">Jednotky</h3>
+            <div className="flex gap-1 mb-3">
+              <button onClick={() => setPlayer('player1')} className={`flex-1 py-2 border-2 text-[10px] font-bold uppercase rounded transition-all ${player === 'player1' ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white border-gray-100'}`}>SPOJENCI</button>
+              <button onClick={() => setPlayer('player2')} className={`flex-1 py-2 border-2 text-[10px] font-bold uppercase rounded transition-all ${player === 'player2' ? 'bg-red-600 text-white border-red-600 shadow-md' : 'bg-white border-gray-100'}`}>OSA</button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {unitTypes.map(u => (
+                <button
+                  key={u.id}
+                  onClick={() => setTool({ type: 'unit', id: u.id })}
+                  className={`p-2 border-2 text-[10px] rounded font-bold uppercase transition-all ${tool.id === u.id && tool.type === 'unit' ? 'bg-map-ink-blue text-white border-map-ink-blue scale-105 shadow-md' : 'bg-white border-gray-100 hover:border-map-ink-blue/50'}`}
+                >
+                  {u.name}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <button
+            onClick={() => setTool({ type: 'delete' })}
+            className={`w-full p-3 border-2 font-bold uppercase text-xs flex items-center justify-center gap-2 transition-all rounded ${tool.type === 'delete' ? 'bg-red-600 text-white border-red-600 shadow-lg' : 'bg-white text-red-600 border-red-600 hover:bg-red-50'}`}
+          >
+            <Trash2 size={16} /> Smazat z mapy
+          </button>
+        </div>
+
+        <div className="flex-1 bg-white/40 rounded-xl border-2 border-map-ink-blue p-4 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-4 right-4 bg-white/80 p-2 rounded text-[10px] font-bold border border-map-ink-blue z-10 shadow-sm">
+            Nástroj: <span className="text-map-ink-blue uppercase">{tool.type === 'delete' ? 'Smazat' : tool.id}</span>
+            {tool.type === 'unit' && <span className={player === 'player1' ? ' text-blue-600' : ' text-red-600'}> ({player === 'player1' ? 'SPOJ' : 'OSA'})</span>}
+          </div>
+          <div className="h-full w-full flex items-center justify-center">
+            <HexGrid
+              width={scenario.boardWidth}
+              height={scenario.boardHeight}
+              hexes={hexes}
+              units={units}
+              terrainTypes={terrainTypes}
+              unitTypes={unitTypes}
+              onHexClick={handleHexClick}
+              leftWidth={scenario.sections.leftWidth}
+              centerWidth={scenario.sections.centerWidth}
+            />
+          </div>
         </div>
       </div>
     </div>
