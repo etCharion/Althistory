@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes } from '../data/typeUtils'; import { getUnitSections } from '../logic/hexGrid';
 const GameView = ({ scenario, onExit }) => {
-  const { gameState, combatResult, retreatingUnitId, setCombatResult, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario);
+  const { gameState, combatResult, retreatingUnitId, setCombatResult, takeGroundOption, setTakeGroundOption, takeGround, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario);
   const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none'); const [hovered, setHovered] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const tTypes = getAllTerrainTypes(); const uTypes = getAllUnitTypes(); const activeP = gameState.activePlayerId; const res = gameState.sectionResources[activeP]; const wh = gameState.centralWarehouse[activeP];
@@ -22,6 +22,7 @@ const GameView = ({ scenario, onExit }) => {
 
   const handleHexClick = (q, r) => {
     if (retreatingUnitId) { retreatUnit(retreatingUnitId.unitId, q, r); return; }
+    if (takeGroundOption) { takeGround(takeGroundOption.unitId, q, r); return; }
     const hex = gameState.grid[`${q},${r}`];
     const unitAtHex = hex?.unitId ? gameState.units[hex.unitId] : null;
 
@@ -99,7 +100,8 @@ const GameView = ({ scenario, onExit }) => {
             highlightedHexes={highlightedHexes} hoveredHex={hovered} activePhase={gameState.phase}
             unitSections={currentUnitSections} onSectionSelect={(s) => assignResourceToUnit(selected, s)}
           />
-          {retreatingUnitId && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border-4 border-red-600 p-8 rounded shadow-2xl z-50 text-center uppercase"><h2 className="text-2xl font-bold text-red-600 font-handwriting">Ustupte!</h2><p>Zbývá: {retreatingUnitId.count}</p></div>}
+          {retreatingUnitId && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border-4 border-red-600 p-8 rounded shadow-2xl z-50 text-center uppercase"><h2 className="text-2xl font-bold text-red-600 font-handwriting">Ustupte!</h2><p>Zbývá: {retreatingUnitId.count}</p><p className="text-[10px] mt-2 text-gray-500">Klikněte na stejné pole pro ztrátu života</p></div>}
+          {takeGroundOption && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border-4 border-blue-600 p-8 rounded shadow-2xl z-50 text-center uppercase"><h2 className="text-2xl font-bold text-blue-600 font-handwriting">Obsadit pozici?</h2><p>Klikněte na pole pro přesun, nebo kamkoliv jinam pro zrušení.</p><button onClick={() => setTakeGroundOption(null)} className="mt-4 bg-gray-200 px-4 py-1 text-xs">Zrušit</button></div>}
           <div className="absolute top-4 right-4 flex flex-col gap-4 w-56 z-40">
             {selected && !retreatingUnitId && (
               <div className="bg-white/95 p-4 border-2 border-map-ink-blue shadow-lg rounded">

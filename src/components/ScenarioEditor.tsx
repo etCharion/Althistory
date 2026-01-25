@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, X, Globe, Calendar, Flag, BookOpen, Layers } from 'lucide-react';
-import { getAllTerrainTypes, getAllUnitTypes, getAllCountries, getAllCampaigns } from '../data/typeUtils';
+import { getAllTerrainTypes, getAllUnitTypes, getAllCountries, getAllCampaigns, getAllOverlayTypes } from '../data/typeUtils';
 import HexGrid from './HexGrid';
 
 const ScenarioEditor = ({ onBack, initialScenario }) => {
@@ -28,14 +28,17 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
   const [player, setPlayer] = useState('player1');
   const [terrainTypes, setTerrainTypes] = useState([]);
   const [unitTypes, setUnitTypes] = useState([]);
+  const [overlayTypes, setOverlayTypes] = useState([]);
   const [countries, setCountries] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [hexes, setHexes] = useState({});
   const [units, setUnits] = useState({});
+  const [objSettings, setObjSettings] = useState({ type: 'permanent', timing: 'immediate', points: 1 });
 
   useEffect(() => {
     setTerrainTypes(getAllTerrainTypes());
     setUnitTypes(getAllUnitTypes());
+    setOverlayTypes(getAllOverlayTypes());
     setCountries(getAllCountries());
     setCampaigns(getAllCampaigns());
 
@@ -52,9 +55,15 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
 
   const handleHexClick = (q, r) => {
     const key = `${q},${r}`;
+    const ex = hexes[key] || { q, r, s: -q-r, terrainTypeId: 'grass' };
+
+
     if (tool.type === 'terrain') {
-      const ex = hexes[key] || { q, r, s: -q - r, terrainTypeId: 'grass' };
       setHexes({ ...hexes, [key]: { ...ex, terrainTypeId: tool.id } });
+    } else if (tool.type === 'overlay') {
+      setHexes({ ...hexes, [key]: { ...ex, overlayTypeId: ex.overlayTypeId === tool.id ? undefined : tool.id } });
+    } else if (tool.type === 'objective') {
+      setHexes({ ...hexes, [key]: { ...ex, objective: ex.objective ? undefined : { ...objSettings } } });
     } else if (tool.type === 'unit') {
       const uid = `unit-${Date.now()}`;
       const type = unitTypes.find(u => u.id === tool.id);
@@ -71,11 +80,10 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
           movementUsed: 0
         }
       });
-      const ex = hexes[key] || { q, r, s: -q - r, terrainTypeId: 'grass' };
       setHexes({ ...hexes, [key]: { ...ex, unitId: uid } });
     } else if (tool.type === 'delete' && hexes[key]) {
-      const { unitId, ...rest } = hexes[key];
-      setHexes({ ...hexes, [key]: { ...rest, unitId: undefined } });
+      const { unitId, objective, overlayTypeId, ...rest } = hexes[key];
+      setHexes({ ...hexes, [key]: { ...rest, unitId: undefined, objective: undefined, overlayTypeId: undefined } });
     }
   };
 
@@ -188,6 +196,51 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
                   {t.name}
                 </button>
               ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="font-bold mb-2 uppercase text-xs text-map-ink-blue border-b border-map-ink-blue/20 pb-1">Překážky</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {overlayTypes.map(o => (
+                <button
+                  key={o.id}
+                  onClick={() => setTool({ type: 'overlay', id: o.id })}
+                  className={`p-2 border-2 text-[10px] rounded font-bold uppercase transition-all ${tool.id === o.id && tool.type === 'overlay' ? 'bg-map-ink-blue text-white border-map-ink-blue scale-105 shadow-md' : 'bg-white border-gray-100 hover:border-map-ink-blue/50'}`}
+                >
+                  {o.name}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="font-bold mb-2 uppercase text-xs text-map-ink-blue border-b border-map-ink-blue/20 pb-1">Objektivy</h3>
+            <div className="bg-white p-2 border rounded space-y-2 text-[10px]">
+               <div className="flex justify-between items-center">
+                 <span className="font-bold uppercase text-gray-500">Typ:</span>
+                 <select className="border rounded p-1" value={objSettings.type} onChange={e => setObjSettings({...objSettings, type: e.target.value as any})}>
+                   <option value="permanent">Trvalý</option>
+                   <option value="temporary">Dočasný</option>
+                 </select>
+               </div>
+               <div className="flex justify-between items-center">
+                 <span className="font-bold uppercase text-gray-500">Časování:</span>
+                 <select className="border rounded p-1" value={objSettings.timing} onChange={e => setObjSettings({...objSettings, timing: e.target.value as any})}>
+                   <option value="immediate">Okamžitý</option>
+                   <option value="startOfTurn">Začátek tahu</option>
+                 </select>
+               </div>
+               <div className="flex justify-between items-center">
+                 <span className="font-bold uppercase text-gray-500">Body:</span>
+                 <input type="number" className="border rounded p-1 w-12" value={objSettings.points} onChange={e => setObjSettings({...objSettings, points: parseInt(e.target.value) || 0})} />
+               </div>
+               <button
+                 onClick={() => setTool({ type: 'objective', id: 'obj' })}
+                 className={`w-full p-2 border-2 font-bold uppercase rounded transition-all ${tool.type === 'objective' ? 'bg-map-ink-blue text-white border-map-ink-blue' : 'bg-white border-gray-100'}`}
+               >
+                 Nastavit cíl
+               </button>
             </div>
           </section>
 
