@@ -16,3 +16,12 @@ export const DEFAULT_OVERLAY_TYPES = [
   { id: 'sandbags', name: 'Pytle s pískem', diceModifierDefense: 1, description: 'Obranný bonus +1 kostka.' },
   { id: 'wire', name: 'Ostnatý drát', movementRestriction: 'stop', description: 'Zastavuje pohyb při vstupu.' }
 ];
+
+export const DEFAULT_COUNTRIES = [
+  { id: 'usa', name: 'USA' },
+  { id: 'uk', name: 'Velká Británie' },
+  { id: 'ussr', name: 'SSSR' },
+  { id: 'germany', name: 'Německo' },
+  { id: 'japan', name: 'Japonsko' },
+  { id: 'italy', name: 'Itálie' }
+];

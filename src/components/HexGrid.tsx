@@ -11,8 +11,9 @@ const NatoSymbol = ({ type, owner }) => {
     </g>
   );
 };
-const HexGrid = ({ width, height, hexes, units, terrainTypes, onHexClick, onHexMouseEnter, onHexMouseLeave, leftWidth, centerWidth, selectedUnitId, highlightedHexes, hoveredHex, activePhase, unitSections, onSectionSelect }) => {
+const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], onHexClick, onHexMouseEnter, onHexMouseLeave, leftWidth, centerWidth, selectedUnitId, highlightedHexes, hoveredHex, activePhase, unitSections, onSectionSelect }) => {
   const getTerrain = (id) => terrainTypes.find(t => t.id === id) || terrainTypes[0];
+  const getUnitSymbol = (typeId) => unitTypes.find(ut => ut.id === typeId)?.natoSymbol || typeId;
   const padding = 60; const viewBoxWidth = (width + 0.5) * HEX_SIZE * Math.sqrt(3) + padding; const viewBoxHeight = (height * 1.5 + 0.5) * HEX_SIZE + padding;
   const allHexes = [];
   for (let r = 0; r < height; r++) {
@@ -49,7 +50,7 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, onHexClick, onHexM
           )}
           {unit && (
             <g transform={`translate(${x}, ${y})`}>
-               <NatoSymbol type={unit.typeId} owner={unit.ownerId} />
+               <NatoSymbol type={getUnitSymbol(unit.typeId)} owner={unit.ownerId} />
                <g transform="translate(0, 18)">{Array.from({ length: unit.figures }).map((_, i) => <circle key={i} cx={(i - (unit.figures-1)/2) * 6} cy="0" r="2" fill="black" />)}</g>
                {unit.resources > 0 && <g transform="translate(0, -20)">{Array.from({ length: unit.resources }).map((_, i) => <circle key={i} cx={(i - (unit.resources-1)/2) * 8} cy="0" r="3" fill="#006400" stroke="white" strokeWidth="0.5" />)}</g>}
             </g>
