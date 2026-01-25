@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { getDistance, axialToOffset, getUnitSections, getReachableHexes, getTargetableUnits, areOnSameRidge, checkLOS as calcLOS } from '../logic/hexGrid';
+import { getDistance, axialToOffset, getUnitSections, getNeighbors, getReachableHexes, getTargetableUnits, areOnSameRidge, checkLOS as calcLOS } from '../logic/hexGrid';
 import { DEFAULT_TERRAIN_TYPES, DEFAULT_UNIT_TYPES, DEFAULT_OVERLAY_TYPES } from '../data/defaults';
 import { rollDice } from '../logic/dice';
 export function useGameLogic(scenario) {
@@ -383,6 +383,22 @@ export function useGameLogic(scenario) {
     return getTargetableUnits(hex.q, hex.r, utype, gameState, DEFAULT_TERRAIN_TYPES);
   };
 
+  const getRetreatHexes = (uid) => {
+    const unit = gameState.units[uid];
+    const fH = getUnitHex(uid);
+    if (!unit || !fH) return [];
+    const neighbors = getNeighbors(fH.q, fH.r);
+    const valid = neighbors.filter(n => {
+      const hex = gameState.grid[`${n.q},${n.r}`];
+      if (!hex || hex.unitId) return false;
+      if (unit.ownerId === 'player1') return n.r > fH.r;
+      if (unit.ownerId === 'player2') return n.r < fH.r;
+      return false;
+    }).map(n => `${n.q},${n.r}`);
+    valid.push(`${fH.q},${fH.r}`); // Option to stay and lose life
+    return valid;
+  };
+
   const getUnusedActions = () => {
     const activeP = gameState.activePlayerId;
     const reasons = [];
@@ -424,6 +440,6 @@ export function useGameLogic(scenario) {
     gameState, combatResult, retreatingUnitId, setCombatResult, setRetreatingUnitId,
     takeGroundOption, setTakeGroundOption, takeGround,
     distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit,
-    getSelectedReachable, getSelectedTargetable, getUnitHex, hasAvailableActions, getUnusedActions
+    getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions
   };
 }
