@@ -26,7 +26,32 @@ export type TerrainType = {
   color?: string;
   description?: string;
 };
-export type Hex = { q: number; r: number; s: number; terrainTypeId: string; unitId?: string; };
+
+export type OverlayType = {
+  id: string;
+  name: string;
+  diceModifierDefense?: number;
+  movementRestriction?: 'stop' | 'no-move' | 'none';
+  blocksLOS?: boolean;
+};
+
+export type Objective = {
+  type: 'permanent' | 'temporary';
+  timing: 'immediate' | 'startOfTurn';
+  points: number;
+  controllingPlayerId?: PlayerId;
+};
+
+export type Hex = {
+  q: number;
+  r: number;
+  s: number;
+  terrainTypeId: string;
+  overlayTypeId?: string;
+  unitId?: string;
+  objective?: Objective;
+};
+
 export type Scenario = {
   id: string;
   name: string;
@@ -47,5 +72,6 @@ export type Scenario = {
   campaignId?: string;
   campaignNumber?: number;
 };
+
 export type GamePhase = 'distribution-sections' | 'distribution-units' | 'movement' | 'attack' | 'gameOver';
 export type GameState = { scenario: Scenario; currentTurn: number; activePlayerId: PlayerId; phase: GamePhase; sectionResources: { player1: { left: number; center: number; right: number }; player2: { left: number; center: number; right: number }; }; centralWarehouse: { player1: number; player2: number; }; units: Record<string, Unit>; grid: Record<string, Hex>; winner?: PlayerId; victoryPoints: { player1: number; player2: number; }; };
