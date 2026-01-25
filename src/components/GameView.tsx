@@ -100,16 +100,53 @@ const GameView = ({ scenario, onExit }) => {
             unitSections={currentUnitSections} onSectionSelect={(s) => assignResourceToUnit(selected, s)}
           />
           {retreatingUnitId && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border-4 border-red-600 p-8 rounded shadow-2xl z-50 text-center uppercase"><h2 className="text-2xl font-bold text-red-600 font-handwriting">Ustupte!</h2><p>Zbývá: {retreatingUnitId.count}</p></div>}
-          {selected && !retreatingUnitId && <div className="absolute top-4 right-4 bg-white/90 p-4 border-2 border-map-ink-blue shadow rounded w-48 z-40">
-            <h3 className="font-bold mb-2 font-handwriting">{uTypes.find(u => u.id === gameState.units[selected].typeId)?.name}</h3>
-            <div className="flex flex-col gap-2">
-              {gameState.phase === 'movement' && <button disabled={gameState.units[selected].resources === 0 || (gameState.units[selected].movementUsed >= (uTypes.find(ut => ut.id === gameState.units[selected].typeId)?.movement || 0))} onClick={() => setActType('move')} className={`w-full p-2 rounded border text-[10px] font-bold ${actType === 'move' ? 'bg-yellow-200' : 'bg-white disabled:opacity-50 uppercase'}`}>POHYB</button>}
-              {gameState.phase === 'attack' && <button disabled={gameState.units[selected].resources === 0 || gameState.units[selected].hasAttacked} onClick={() => setActType('attack')} className={`w-full p-2 rounded border text-[10px] font-bold ${actType === 'attack' ? 'bg-red-200' : 'bg-white disabled:opacity-50 uppercase'}`}>ÚTOK</button>}
-              <div className="text-[9px] text-gray-600 mt-1 uppercase">
-                Zdroje: {gameState.units[selected].resources} | Pohyb: {gameState.units[selected].movementUsed}/{uTypes.find(ut => ut.id === gameState.units[selected].typeId)?.movement}
+          <div className="absolute top-4 right-4 flex flex-col gap-4 w-56 z-40">
+            {selected && !retreatingUnitId && (
+              <div className="bg-white/95 p-4 border-2 border-map-ink-blue shadow-lg rounded">
+                <h3 className="font-bold mb-1 font-handwriting text-lg border-b border-map-ink-blue pb-1">{uTypes.find(u => u.id === gameState.units[selected].typeId)?.name}</h3>
+                <div className="flex flex-col gap-2 mt-2">
+                  <div className="text-[10px] grid grid-cols-2 gap-x-2 gap-y-1 uppercase font-bold text-gray-700 mb-2">
+                    <span>Pohyb:</span> <span>{uTypes.find(u => u.id === gameState.units[selected].typeId)?.movement}</span>
+                    <span>Dostřel:</span> <span>{uTypes.find(u => u.id === gameState.units[selected].typeId)?.shootingRange.join('-')}</span>
+                    {uTypes.find(u => u.id === gameState.units[selected].typeId)?.canShootAfterMovingMax === 0 && <span className="col-span-2 text-[8px] text-red-600">Nelze útočit po pohybu</span>}
+                  </div>
+
+                  <div className="border-t border-gray-200 pt-2 mb-2">
+                    <div className="text-[9px] uppercase flex justify-between">
+                      <span>Zdroje:</span> <span className="font-bold">{gameState.units[selected].resources} / 3</span>
+                    </div>
+                    <div className="text-[9px] uppercase flex justify-between">
+                      <span>Figurky:</span> <span className="font-bold">{gameState.units[selected].figures}</span>
+                    </div>
+                    <div className="text-[9px] uppercase flex justify-between">
+                      <span>Využitý pohyb:</span> <span className="font-bold">{gameState.units[selected].movementUsed}</span>
+                    </div>
+                  </div>
+
+                  {gameState.phase === 'movement' && <button disabled={gameState.units[selected].resources === 0 || (gameState.units[selected].movementUsed >= (uTypes.find(ut => ut.id === gameState.units[selected].typeId)?.movement || 0))} onClick={() => setActType('move')} className={`w-full p-2 rounded border text-[10px] font-bold ${actType === 'move' ? 'bg-yellow-200' : 'bg-white disabled:opacity-50 uppercase'}`}>POHYB</button>}
+                  {gameState.phase === 'attack' && <button disabled={gameState.units[selected].resources === 0 || gameState.units[selected].hasAttacked} onClick={() => setActType('attack')} className={`w-full p-2 rounded border text-[10px] font-bold ${actType === 'attack' ? 'bg-red-200' : 'bg-white disabled:opacity-50 uppercase'}`}>ÚTOK</button>}
+                </div>
               </div>
-            </div>
-          </div>}
+            )}
+
+            {hovered && (
+              <div className="bg-white/95 p-4 border-2 border-gray-400 shadow-lg rounded animate-in fade-in slide-in-from-right-2 duration-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-4 h-4 rounded-full border border-black" style={{ backgroundColor: tTypes.find(t => t.id === gameState.grid[hovered]?.terrainTypeId)?.color || '#91b94d' }}></div>
+                  <h3 className="font-bold font-handwriting text-lg">{tTypes.find(t => t.id === gameState.grid[hovered]?.terrainTypeId)?.name || 'Tráva'}</h3>
+                </div>
+                <p className="text-[10px] text-gray-700 italic">
+                  {tTypes.find(t => t.id === gameState.grid[hovered]?.terrainTypeId)?.description || 'Základní terén bez omezení.'}
+                </p>
+                {gameState.grid[hovered]?.unitId && (
+                  <div className="mt-3 pt-2 border-t border-gray-200">
+                     <p className="text-[9px] font-bold uppercase text-gray-500 mb-1">Jednotka na poli:</p>
+                     <p className="text-[11px] font-bold">{uTypes.find(u => u.id === gameState.units[gameState.grid[hovered].unitId].typeId)?.name} ({gameState.units[gameState.grid[hovered].unitId].ownerId === 'player1' ? scenario.player1.name : scenario.player2.name})</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
       {combatResult && <DiceAnimation dice={combatResult.dice} onComplete={() => setCombatResult(null)} />}
