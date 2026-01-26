@@ -1,4 +1,4 @@
-export const HEX_SIZE = 50;
+export const HEX_SIZE = 55;
 export function axialToPixel(q, r) { return { x: HEX_SIZE * Math.sqrt(3) * (q + r / 2), y: HEX_SIZE * (3 / 2) * r }; }
 export function offsetToAxial(col, row) { return { q: col - Math.floor(row / 2), r: row }; }
 export function axialToOffset(q, r) { return { col: q + Math.floor(r / 2), row: r }; }
