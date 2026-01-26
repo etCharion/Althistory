@@ -90,14 +90,12 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], on
             </g>
           )}
           {isSelected && activePhase === 'distribution-units' && unitSections?.length > 1 && (
-            <g transform={`translate(${x}, ${y})`} zIndex="100">
+            <g transform={`translate(${x}, ${y})`} style={{ zIndex: 100 }}>
                <g onClick={(e) => { e.stopPropagation(); onSectionSelect?.(unitSections[0]); }} className="cursor-pointer hover:scale-110 transition-transform">
-                 <path d="M-45,0 L-30,-10 L-30,10 Z" fill="#1e40af" stroke="white" strokeWidth="1" />
-                 <text x="-38" y="22" fontSize="7" textAnchor="middle" fill="#1e40af" fontWeight="bold" className="uppercase pointer-events-none bg-white/80">{unitSections[0]}</text>
+                 <path d="M-48,0 L-30,-12 L-30,12 Z" fill={units[selectedUnitId]?.ownerId === 'player1' ? "#1e40af" : "#b91c1c"} stroke="white" strokeWidth="1.5" />
                </g>
                <g onClick={(e) => { e.stopPropagation(); onSectionSelect?.(unitSections[1]); }} className="cursor-pointer hover:scale-110 transition-transform">
-                 <path d="M45,0 L30,-10 L30,10 Z" fill="#1e40af" stroke="white" strokeWidth="1" />
-                 <text x="38" y="22" fontSize="7" textAnchor="middle" fill="#1e40af" fontWeight="bold" className="uppercase pointer-events-none bg-white/80">{unitSections[1]}</text>
+                 <path d="M48,0 L30,-12 L30,12 Z" fill={units[selectedUnitId]?.ownerId === 'player1' ? "#1e40af" : "#b91c1c"} stroke="white" strokeWidth="1.5" />
                </g>
             </g>
           )}

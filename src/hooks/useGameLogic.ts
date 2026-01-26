@@ -52,12 +52,28 @@ export function useGameLogic(scenario) {
   };
   const endTurn = () => {
     setGameState(prev => {
-      const next = prev.activePlayerId === 'player1' ? 'player2' : 'player1'; const newUnits = { ...prev.units };
+      const next = prev.activePlayerId === 'player1' ? 'player2' : 'player1';
+      const newUnits = { ...prev.units };
       Object.keys(newUnits).forEach(id => {
-        if (newUnits[id].ownerId === prev.activePlayerId) {
-          newUnits[id] = { ...newUnits[id], resources: Math.min(newUnits[id].resources, 1), hasMoved: false, hasAttacked: false, movementUsed: 0 };
+        const u = newUnits[id];
+        if (u.ownerId === next) {
+          // Reset resources and flags for the player who is about to start their turn
+          newUnits[id] = {
+            ...u,
+            resources: 0,
+            resourceOrigins: [],
+            hasMoved: false,
+            hasAttacked: false,
+            movementUsed: 0
+          };
         } else {
-          newUnits[id] = { ...newUnits[id], movementUsed: 0, hasMoved: false, hasAttacked: false };
+          // Reset flags for the defending player who just finished their turn
+          newUnits[id] = {
+            ...u,
+            hasMoved: false,
+            hasAttacked: false,
+            movementUsed: 0
+          };
         }
       });
 
@@ -78,71 +94,60 @@ export function useGameLogic(scenario) {
     });
   };
   const assignResourceToUnit = (uid, sectionId) => {
-    const unit = gameState.units[uid];
-    if (gameState.phase !== 'distribution-units' || !unit || unit.ownerId !== gameState.activePlayerId) return;
-    const hex = getUnitHex(uid);
-    if (!hex) return;
+    setGameState(prev => {
+      const unit = prev.units[uid];
+      if (prev.phase !== 'distribution-units' || !unit || unit.ownerId !== prev.activePlayerId) return prev;
 
-    let sec = sectionId;
-    if (!sec) {
-      const sections = getUnitSections(hex.q, hex.r, gameState.scenario);
-      if (sections.length === 1) sec = sections[0];
-    }
+      const hex = Object.values(prev.grid).find(h => h.unitId === uid);
+      if (!hex) return prev;
 
-    const hasAssignedThisTurn = unit.resourceOrigins && unit.resourceOrigins.length > 0;
+      const isAtMax = unit.resources >= 3;
+      const clickedUnitBody = !sectionId;
+      const sections = getUnitSections(hex.q, hex.r, prev.scenario);
+      const isBoundaryUnit = sections.length > 1;
 
-    // Reset logic: If already has 3 resources and trying to add another (or toggle), return all assigned this turn
-    if (unit.resources >= 3 && hasAssignedThisTurn) {
-      setGameState(prev => {
-        const pUnit = prev.units[uid];
-        const origins = pUnit.resourceOrigins || [];
+      // Determine section for potential addition
+      let sec = sectionId;
+      if (!sec && !isBoundaryUnit) {
+        sec = sections[0];
+      }
+
+      const canAdd = sec && prev.sectionResources[prev.activePlayerId][sec] > 0 && unit.resources < 3;
+
+      // Reset logic:
+      // 1. Any click when at max resources resets everything.
+      // 2. Clicking unit body of a boundary unit resets everything (as they must use arrows to add).
+      // 3. Clicking unit body of a single-section unit resets everything IF it has resources but we can't add more (e.g. section empty).
+      if (isAtMax || (clickedUnitBody && isBoundaryUnit && unit.resources > 0) || (clickedUnitBody && !isBoundaryUnit && unit.resources > 0 && !canAdd)) {
+        const origins = unit.resourceOrigins || [];
         const newSecRes = { ...prev.sectionResources[prev.activePlayerId] };
-        origins.forEach(o => { newSecRes[o]++; });
+        origins.forEach(o => {
+          if (newSecRes[o] !== undefined) newSecRes[o]++;
+        });
         return {
           ...prev,
           sectionResources: { ...prev.sectionResources, [prev.activePlayerId]: newSecRes },
-          units: { ...prev.units, [uid]: { ...pUnit, resources: pUnit.resources - origins.length, resourceOrigins: [] } }
+          units: { ...prev.units, [uid]: { ...unit, resources: 0, resourceOrigins: [] } }
         };
-      });
-      return;
-    }
+      }
 
-    const canAdd = sec && gameState.sectionResources[gameState.activePlayerId][sec] > 0 && unit.resources < 3;
-
-    if (!canAdd && hasAssignedThisTurn) {
-      setGameState(prev => {
-        const pUnit = prev.units[uid];
-        const origins = [...(pUnit.resourceOrigins || [])];
-        const lastOrigin = origins.pop();
-        if (!lastOrigin) return prev;
-        const newSectionResources = {
-          ...prev.sectionResources[prev.activePlayerId],
-          [lastOrigin]: prev.sectionResources[prev.activePlayerId][lastOrigin] + 1
-        };
-        return {
-          ...prev,
-          sectionResources: { ...prev.sectionResources, [prev.activePlayerId]: newSectionResources },
-          units: { ...prev.units, [uid]: { ...pUnit, resources: pUnit.resources - 1, resourceOrigins: origins } }
-        };
-      });
-      return;
-    }
-
-    if (!canAdd) return;
-
-    setGameState(prev => {
-      const pUnit = prev.units[uid];
-      if (sec && prev.sectionResources[prev.activePlayerId][sec] > 0 && pUnit.resources < 3) {
-        const newSectionResources = { ...prev.sectionResources[prev.activePlayerId], [sec]: prev.sectionResources[prev.activePlayerId][sec] - 1 };
-        const newOrigins = [...(pUnit.resourceOrigins || []), sec];
+      // Add resource if possible
+      if (canAdd) {
+        const newSecRes = { ...prev.sectionResources[prev.activePlayerId], [sec]: prev.sectionResources[prev.activePlayerId][sec] - 1 };
+        const newOrigins = [...(unit.resourceOrigins || []), sec];
         const newState = {
           ...prev,
-          sectionResources: { ...prev.sectionResources, [prev.activePlayerId]: newSectionResources },
-          units: { ...prev.units, [uid]: { ...pUnit, resources: pUnit.resources + 1, resourceOrigins: newOrigins } }
+          sectionResources: { ...prev.sectionResources, [prev.activePlayerId]: newSecRes },
+          units: { ...prev.units, [uid]: { ...unit, resources: unit.resources + 1, resourceOrigins: newOrigins } }
         };
-        if (newSectionResources.left === 0 && newSectionResources.center === 0 && newSectionResources.right === 0) newState.phase = 'movement';
+
+        // Auto-transition phase if all resources spent
+        if (newSecRes.left === 0 && newSecRes.center === 0 && newSecRes.right === 0) {
+          newState.phase = 'movement';
+        }
         return newState;
       }
+
       return prev;
     });
   };
