@@ -24,7 +24,7 @@ const NatoSymbol = ({ type, owner }) => {
 const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], onHexClick, onHexMouseEnter, onHexMouseLeave, leftWidth, centerWidth, selectedUnitId, highlightedHexes, hoveredHex, activePhase, unitSections, onSectionSelect }) => {
   const getTerrain = (id) => terrainTypes.find(t => t.id === id) || terrainTypes[0];
   const getUnitSymbol = (typeId) => unitTypes.find(ut => ut.id === typeId)?.natoSymbol || typeId;
-  const padding = 60; const viewBoxWidth = (width + 0.5) * HEX_SIZE * Math.sqrt(3) + padding; const viewBoxHeight = (height * 1.5 + 0.5) * HEX_SIZE + padding;
+  const padding = 60; const viewBoxWidth = (width + 0.5) * HEX_SIZE * Math.sqrt(3) + padding; const viewBoxHeight = (height * 1.5 - 0.5) * HEX_SIZE + padding;
   const allHexes = [];
   for (let r = 0; r < height; r++) {
     const rowWidth = r % 2 === 0 ? width : width - 1;
