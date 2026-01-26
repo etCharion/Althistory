@@ -115,28 +115,23 @@ export function useGameLogic(scenario) {
       const occupyingUnitId = hex.unitId;
       const occupyingUnit = occupyingUnitId ? units[occupyingUnitId] : null;
       const obj = { ...hex.objective };
+      const isValidForPlayer = (pid) => !obj.validFor || obj.validFor === 'both' || obj.validFor === pid;
 
-      if (timing === 'immediate') {
-        if (occupyingUnit && occupyingUnit.ownerId === playerId && obj.timing === 'immediate') {
+      if (timing === 'immediate' || timing === 'startOfTurn') {
+        if (occupyingUnit && occupyingUnit.ownerId === playerId && obj.timing === timing) {
           if (obj.controllingPlayerId !== playerId) {
             // Player captured objective
             if (obj.controllingPlayerId) {
-              // Other player lost it
-              if (obj.controllingPlayerId === 'player1') vpChange1 -= obj.points; else vpChange2 -= obj.points;
+              // Other player lost it IF it was valid for them
+              if (isValidForPlayer(obj.controllingPlayerId)) {
+                if (obj.controllingPlayerId === 'player1') vpChange1 -= obj.points; else vpChange2 -= obj.points;
+              }
             }
             obj.controllingPlayerId = playerId;
-            if (playerId === 'player1') vpChange1 += obj.points; else vpChange2 += obj.points;
-            newGrid[key] = { ...hex, objective: obj };
-          }
-        }
-      } else if (timing === 'startOfTurn') {
-        if (occupyingUnit && occupyingUnit.ownerId === playerId && obj.timing === 'startOfTurn') {
-          if (obj.controllingPlayerId !== playerId) {
-            if (obj.controllingPlayerId) {
-              if (obj.controllingPlayerId === 'player1') vpChange1 -= obj.points; else vpChange2 -= obj.points;
+            // New controller gains points IF it is valid for them
+            if (isValidForPlayer(playerId)) {
+              if (playerId === 'player1') vpChange1 += obj.points; else vpChange2 += obj.points;
             }
-            obj.controllingPlayerId = playerId;
-            if (playerId === 'player1') vpChange1 += obj.points; else vpChange2 += obj.points;
             newGrid[key] = { ...hex, objective: obj };
           }
         }
@@ -144,7 +139,9 @@ export function useGameLogic(scenario) {
 
       // Handle Temporary Objectives loss when leaving
       if (obj.type === 'temporary' && obj.controllingPlayerId && (!occupyingUnit || occupyingUnit.ownerId !== obj.controllingPlayerId)) {
-        if (obj.controllingPlayerId === 'player1') vpChange1 -= obj.points; else vpChange2 -= obj.points;
+        if (isValidForPlayer(obj.controllingPlayerId)) {
+          if (obj.controllingPlayerId === 'player1') vpChange1 -= obj.points; else vpChange2 -= obj.points;
+        }
         obj.controllingPlayerId = undefined;
         newGrid[key] = { ...hex, objective: obj };
       }

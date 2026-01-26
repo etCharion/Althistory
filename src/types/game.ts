@@ -40,6 +40,7 @@ export type Objective = {
   timing: 'immediate' | 'startOfTurn';
   points: number;
   controllingPlayerId?: PlayerId;
+  validFor?: PlayerId | 'both';
 };
 
 export type Hex = {
