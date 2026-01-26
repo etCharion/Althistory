@@ -63,7 +63,7 @@ export function cubeLerpFloat(a, b, t) {
   return { q: lerp(a.q, b.q, t), r: lerp(a.r, b.r, t), s: lerp(a.s, b.s, t) };
 }
 
-export function getReachableHexes(q, r, movementLimit, grid, terrainTypes) {
+export function getReachableHexes(q, r, movementLimit, grid, terrainTypes, overlayTypes = []) {
   const reachable = new Set();
   const queue = [{ q, r, dist: 0 }];
   const visited = new Set();
@@ -74,9 +74,9 @@ export function getReachableHexes(q, r, movementLimit, grid, terrainTypes) {
     if (cd >= movementLimit) continue;
     const currentHex = grid[`${cq},${cr}`];
     const currentTerrain = terrainTypes.find(t => t.id === currentHex?.terrainTypeId);
-    // Wire overlay also stops movement
-    const currentOverlayId = currentHex?.overlayTypeId;
-    const isStopHex = currentTerrain?.movementRestriction === 'stop' || currentOverlayId === 'wire';
+    const currentOverlay = overlayTypes.find(o => o.id === currentHex?.overlayTypeId);
+
+    const isStopHex = currentTerrain?.movementRestriction === 'stop' || currentOverlay?.movementRestriction === 'stop';
 
     if (cd > 0 && isStopHex) continue;
 
@@ -87,7 +87,9 @@ export function getReachableHexes(q, r, movementLimit, grid, terrainTypes) {
       if (!hex || visited.has(key) || hex.unitId) continue;
 
       const terrain = terrainTypes.find(t => t.id === hex.terrainTypeId);
-      const isImpassable = terrain?.movementRestriction === 'no-move';
+      const overlay = overlayTypes.find(o => o.id === hex.overlayTypeId);
+
+      const isImpassable = terrain?.movementRestriction === 'no-move' || overlay?.movementRestriction === 'no-move';
 
       if (isImpassable) continue;
 
@@ -98,12 +100,17 @@ export function getReachableHexes(q, r, movementLimit, grid, terrainTypes) {
   return Array.from(reachable);
 }
 
-export function isBlocking(q, r, grid, terrainTypes) {
+export function isBlocking(q, r, grid, terrainTypes, overlayTypes = []) {
   const hex = grid[`${q},${r}`];
   if (!hex) return false;
   if (hex.unitId) return true;
   const terrain = terrainTypes.find(t => t.id === hex.terrainTypeId);
-  return terrain?.blocksLOS || false;
+  if (terrain?.blocksLOS) return true;
+  if (hex.overlayTypeId) {
+    const overlay = overlayTypes.find(o => o.id === hex.overlayTypeId);
+    if (overlay?.blocksLOS) return true;
+  }
+  return false;
 }
 
 export function areOnSameRidge(a, b, grid) {
@@ -125,7 +132,7 @@ export function areOnSameRidge(a, b, grid) {
   return false;
 }
 
-export function checkLOS(from, to, grid, terrainTypes) {
+export function checkLOS(from, to, grid, terrainTypes, overlayTypes = []) {
   const dist = getDistance(from, to);
   if (dist <= 1) return true;
   const line = getLine(from, to);
@@ -140,11 +147,15 @@ export function checkLOS(from, to, grid, terrainTypes) {
       if (terrain.id === 'hill' && onSameRidge) continue;
       return false;
     }
+    if (hex?.overlayTypeId) {
+      const overlay = overlayTypes.find(o => o.id === hex.overlayTypeId);
+      if (overlay?.blocksLOS) return false;
+    }
   }
   return true;
 }
 
-export function getTargetableUnits(attackerQ, attackerR, unitType, gameState, terrainTypes) {
+export function getTargetableUnits(attackerQ, attackerR, unitType, gameState, terrainTypes, overlayTypes = []) {
   const attacker = gameState.grid[`${attackerQ},${attackerR}`];
   if (!attacker?.unitId) return [];
   const attackerUnit = gameState.units[attacker.unitId];
@@ -167,7 +178,7 @@ export function getTargetableUnits(attackerQ, attackerR, unitType, gameState, te
     if (!targetHex) continue;
     const dist = getDistance({ q: attackerQ, r: attackerR }, targetHex);
     const isArtillery = unitType.id === 'artillery';
-    if (dist > 1 && dist <= maxRange && (isArtillery || checkLOS({ q: attackerQ, r: attackerR }, targetHex, gameState.grid, terrainTypes))) {
+    if (dist > 1 && dist <= maxRange && (isArtillery || checkLOS({ q: attackerQ, r: attackerR }, targetHex, gameState.grid, terrainTypes, overlayTypes))) {
       targetable.push(unitId);
     }
   }
