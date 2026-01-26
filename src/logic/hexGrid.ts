@@ -135,22 +135,41 @@ export function areOnSameRidge(a, b, grid) {
 export function checkLOS(from, to, grid, terrainTypes, overlayTypes = []) {
   const dist = getDistance(from, to);
   if (dist <= 1) return true;
-  const line = getLine(from, to);
+
+  const fromCube = { q: from.q, r: from.r, s: -from.q - from.r };
+  const toCube = { q: to.q, r: to.r, s: -to.q - to.r };
   const onSameRidge = areOnSameRidge(from, to, grid);
-  // getLine returns [start, ..., end]. We check everything in between.
-  for (let i = 1; i < line.length - 1; i++) {
-    const h = line[i];
-    const hex = grid[`${h.q},${h.r}`];
-    if (hex?.unitId) return false;
-    const terrain = terrainTypes.find(t => t.id === hex?.terrainTypeId);
-    if (terrain?.blocksLOS) {
-      if (terrain.id === 'hill' && onSameRidge) continue;
-      return false;
+
+  // Sample the line to catch transitions. A point blocks ONLY IF all hexes it touches block.
+  // This implements the "half-blocked" rule where sight along an edge is clear.
+  const samples = dist * 5;
+  for (let i = 1; i < samples; i++) {
+    const t = i / samples;
+    const p = cubeLerpFloat(fromCube, toCube, t);
+    const hexes = getHexesAtPoint(p);
+
+    let pointBlocked = true;
+    let hexesToCheck = 0;
+
+    for (const h of hexes) {
+      if ((h.q === from.q && h.r === from.r) || (h.q === to.q && h.r === to.r)) continue;
+      hexesToCheck++;
+      const hex = grid[`${h.q},${h.r}`];
+      if (!hex) { pointBlocked = false; break; }
+
+      let blocks = !!hex.unitId;
+      if (!blocks) {
+        const terrain = terrainTypes.find(tt => tt.id === hex.terrainTypeId);
+        if (terrain?.blocksLOS && !(terrain.id === 'hill' && onSameRidge)) blocks = true;
+        if (!blocks && hex.overlayTypeId) {
+          const overlay = overlayTypes.find(o => o.id === hex.overlayTypeId);
+          if (overlay?.blocksLOS) blocks = true;
+        }
+      }
+
+      if (!blocks) { pointBlocked = false; break; }
     }
-    if (hex?.overlayTypeId) {
-      const overlay = overlayTypes.find(o => o.id === hex.overlayTypeId);
-      if (overlay?.blocksLOS) return false;
-    }
+    if (hexesToCheck > 0 && pointBlocked) return false;
   }
   return true;
 }

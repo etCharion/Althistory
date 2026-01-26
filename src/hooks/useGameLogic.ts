@@ -89,14 +89,32 @@ export function useGameLogic(scenario) {
       if (sections.length === 1) sec = sections[0];
     }
 
-    // Toggle logic: If unit has 3 resources OR (section is empty/not specified and unit has resources assigned this turn), return one.
-    const canAdd = sec && gameState.sectionResources[gameState.activePlayerId][sec] > 0 && unit.resources < 3;
     const hasAssignedThisTurn = unit.resourceOrigins && unit.resourceOrigins.length > 0;
+
+    // Reset logic: If already has 3 resources and trying to add another (or toggle), return all assigned this turn
+    if (unit.resources >= 3 && hasAssignedThisTurn) {
+      setGameState(prev => {
+        const pUnit = prev.units[uid];
+        const origins = pUnit.resourceOrigins || [];
+        const newSecRes = { ...prev.sectionResources[prev.activePlayerId] };
+        origins.forEach(o => { newSecRes[o]++; });
+        return {
+          ...prev,
+          sectionResources: { ...prev.sectionResources, [prev.activePlayerId]: newSecRes },
+          units: { ...prev.units, [uid]: { ...pUnit, resources: pUnit.resources - origins.length, resourceOrigins: [] } }
+        };
+      });
+      return;
+    }
+
+    const canAdd = sec && gameState.sectionResources[gameState.activePlayerId][sec] > 0 && unit.resources < 3;
 
     if (!canAdd && hasAssignedThisTurn) {
       setGameState(prev => {
-        const origins = [...(prev.units[uid].resourceOrigins || [])];
+        const pUnit = prev.units[uid];
+        const origins = [...(pUnit.resourceOrigins || [])];
         const lastOrigin = origins.pop();
+        if (!lastOrigin) return prev;
         const newSectionResources = {
           ...prev.sectionResources[prev.activePlayerId],
           [lastOrigin]: prev.sectionResources[prev.activePlayerId][lastOrigin] + 1
@@ -104,7 +122,7 @@ export function useGameLogic(scenario) {
         return {
           ...prev,
           sectionResources: { ...prev.sectionResources, [prev.activePlayerId]: newSectionResources },
-          units: { ...prev.units, [uid]: { ...prev.units[uid], resources: prev.units[uid].resources - 1, resourceOrigins: origins } }
+          units: { ...prev.units, [uid]: { ...pUnit, resources: pUnit.resources - 1, resourceOrigins: origins } }
         };
       });
       return;
@@ -113,15 +131,19 @@ export function useGameLogic(scenario) {
     if (!canAdd) return;
 
     setGameState(prev => {
-      const newSectionResources = { ...prev.sectionResources[prev.activePlayerId], [sec]: prev.sectionResources[prev.activePlayerId][sec] - 1 };
-      const newOrigins = [...(unit.resourceOrigins || []), sec];
-      const newState = {
-        ...prev,
-        sectionResources: { ...prev.sectionResources, [prev.activePlayerId]: newSectionResources },
-        units: { ...prev.units, [uid]: { ...unit, resources: unit.resources + 1, resourceOrigins: newOrigins } }
-      };
-      if (newSectionResources.left === 0 && newSectionResources.center === 0 && newSectionResources.right === 0) newState.phase = 'movement';
-      return newState;
+      const pUnit = prev.units[uid];
+      if (sec && prev.sectionResources[prev.activePlayerId][sec] > 0 && pUnit.resources < 3) {
+        const newSectionResources = { ...prev.sectionResources[prev.activePlayerId], [sec]: prev.sectionResources[prev.activePlayerId][sec] - 1 };
+        const newOrigins = [...(pUnit.resourceOrigins || []), sec];
+        const newState = {
+          ...prev,
+          sectionResources: { ...prev.sectionResources, [prev.activePlayerId]: newSectionResources },
+          units: { ...prev.units, [uid]: { ...pUnit, resources: pUnit.resources + 1, resourceOrigins: newOrigins } }
+        };
+        if (newSectionResources.left === 0 && newSectionResources.center === 0 && newSectionResources.right === 0) newState.phase = 'movement';
+        return newState;
+      }
+      return prev;
     });
   };
   const checkObjectives = (grid, units, playerId, timing) => {
@@ -289,6 +311,9 @@ export function useGameLogic(scenario) {
       if (upT.figures <= 0) {
         delete nU[tid];
         nG[`${tH.q},${tH.r}`].unitId = undefined;
+        if (nG[`${tH.q},${tH.r}`].overlayTypeId === 'sandbags') {
+          nG[`${tH.q},${tH.r}`].overlayTypeId = undefined;
+        }
         nVP[att.ownerId]++;
         isEliminated = true;
       } else {
@@ -331,6 +356,9 @@ export function useGameLogic(scenario) {
          if (u.figures <= 0) {
            delete nU[uid];
            nG[`${fH.q},${fH.r}`].unitId = undefined;
+           if (nG[`${fH.q},${fH.r}`].overlayTypeId === 'sandbags') {
+             nG[`${fH.q},${fH.r}`].overlayTypeId = undefined;
+           }
            nVP[retreatingUnitId.attackerId === 'player1' ? 'player1' : 'player2']++;
          } else {
            nU[uid] = u;
