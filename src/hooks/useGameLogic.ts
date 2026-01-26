@@ -181,10 +181,11 @@ export function useGameLogic(scenario) {
       let isStopTerrain = targetTerrain?.movementRestriction === 'stop' || targetOverlayId === 'wire';
       let allowAttackAfterStop = false;
 
-      // Special rule: Tank and wire
-      if (unit.typeId === 'tank' && targetOverlayId === 'wire') {
-        targetHex.overlayTypeId = undefined;
-        allowAttackAfterStop = true;
+      if (targetOverlayId === 'wire') {
+        allowAttackAfterStop = true; // All units can attack from wire (with penalty)
+        if (unit.typeId === 'tank') {
+          targetHex.overlayTypeId = undefined;
+        }
       }
 
       const finalMovementUsed = isStopTerrain ? utype.movement : totalDist;
