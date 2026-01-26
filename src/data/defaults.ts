@@ -9,12 +9,12 @@ export const DEFAULT_TERRAIN_TYPES = [
   { id: 'town', name: 'Město', blocksLOS: true, movementRestriction: 'stop', diceModifierDefenseInfantry: 1, diceModifierDefenseTank: 2, diceModifierAttackInfantry: 0, diceModifierAttackTank: -2, color: '#9e9e9e', description: 'Zastavuje pohyb. Útok z města: Tank -2 kostky. Při útoku na jednotku ve městě: Pěchota -1 kostka, Tank -2 kostky. Blokuje viditelnost.' },
   { id: 'hill', name: 'Kopec', blocksLOS: true, diceModifierDefenseInfantry: 1, diceModifierDefenseTank: 1, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, color: '#d2b48c', description: 'Při útoku na jednotku na kopci: -1 kostka. Pokud jsou obě jednotky na stejném hřebenu, postih neplatí a vidí na sebe. Blokuje viditelnost.' },
   { id: 'river', name: 'Řeka', blocksLOS: false, movementRestriction: 'no-move', diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, color: '#3b82f6', description: 'Neprůchodný terén. Neomezuje viditelnost.' },
-  { id: 'bridge', name: 'Most', blocksLOS: false, diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, color: '#a0522d', description: 'Umožňuje přechod přes řeku.' }
+  { id: 'bridge', name: 'Most', blocksLOS: true, diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, color: '#a0522d', description: 'Umožňuje přechod přes řeku. Blokuje viditelnost.' }
 ];
 
 export const DEFAULT_OVERLAY_TYPES = [
-  { id: 'sandbags', name: 'Pytle s pískem', diceModifierDefense: 1, description: 'Obranný bonus +1 kostka.' },
-  { id: 'wire', name: 'Ostnatý drát', movementRestriction: 'stop', description: 'Zastavuje pohyb při vstupu.' }
+  { id: 'sandbags', name: 'Pytle s pískem', diceModifierDefense: 1, ignoreFlags: 1, color: '#8b4513', description: 'Obranný bonus +1 kostka. Ignoruje 1 vlajku. Zničeny při opuštění pole.' },
+  { id: 'wire', name: 'Ostnatý drát', movementRestriction: 'stop', diceModifierAttackInfantry: -1, diceModifierAttackArtillery: -1, color: '#808080', description: 'Zastavuje pohyb. Pěchota a dělostřelectvo: -1 kostka při útoku z tohoto pole. Tanky drát při vstupu zničí.' }
 ];
 
 export const DEFAULT_COUNTRIES = [

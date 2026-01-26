@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Plus, Edit2 } from 'lucide-react';
 import { DEFAULT_UNIT_TYPES, DEFAULT_TERRAIN_TYPES, DEFAULT_COUNTRIES } from '../data/defaults';
-import { getAllUnitTypes, getAllTerrainTypes, getAllCountries, getAllCampaigns, getAllScenarios } from '../data/typeUtils';
+import { getAllUnitTypes, getAllTerrainTypes, getAllCountries, getAllCampaigns, getAllScenarios, getAllOverlayTypes } from '../data/typeUtils';
 
 const Customization = ({ onBack, onEditScenario }) => {
   const [units, setUnits] = useState([]);
   const [terrains, setTerrains] = useState([]);
+  const [overlays, setOverlays] = useState([]);
   const [countries, setCountries] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [scenarios, setScenarios] = useState([]);
@@ -14,6 +15,7 @@ const Customization = ({ onBack, onEditScenario }) => {
   useEffect(() => {
     setUnits(getAllUnitTypes());
     setTerrains(getAllTerrainTypes());
+    setOverlays(getAllOverlayTypes());
     setCountries(getAllCountries());
     setCampaigns(getAllCampaigns());
     setScenarios(getAllScenarios());
@@ -21,6 +23,7 @@ const Customization = ({ onBack, onEditScenario }) => {
 
   const saveUnits = (val) => { setUnits(val); localStorage.setItem('customUnitTypes', JSON.stringify(val)); };
   const saveTerrains = (val) => { setTerrains(val); localStorage.setItem('customTerrainTypes', JSON.stringify(val)); };
+  const saveOverlays = (val) => { setOverlays(val); localStorage.setItem('customOverlayTypes', JSON.stringify(val)); };
   const saveCountries = (val) => { setCountries(val); localStorage.setItem('customCountries', JSON.stringify(val)); };
   const saveCampaigns = (val) => { setCampaigns(val); localStorage.setItem('customCampaigns', JSON.stringify(val)); };
   const saveScenarios = (val) => { setScenarios(val); localStorage.setItem('scenarios', JSON.stringify(val)); };
@@ -31,8 +34,13 @@ const Customization = ({ onBack, onEditScenario }) => {
   };
 
   const addTerrain = () => {
-    const newTerrain = { id: `terrain-${Date.now()}`, name: 'Nový terén', blocksLOS: false, diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, color: '#cccccc', description: '' };
+    const newTerrain = { id: `terrain-${Date.now()}`, name: 'Nový terén', blocksLOS: false, diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, ignoreFlags: 0, color: '#cccccc', description: '' };
     saveTerrains([...terrains, newTerrain]);
+  };
+
+  const addOverlay = () => {
+    const newOverlay = { id: `overlay-${Date.now()}`, name: 'Nová překážka', diceModifierDefense: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, diceModifierAttackArtillery: 0, ignoreFlags: 0, movementRestriction: 'none', blocksLOS: false, color: '#cccccc', description: '' };
+    saveOverlays([...overlays, newOverlay]);
   };
 
   const addCountry = () => {
@@ -65,13 +73,13 @@ const Customization = ({ onBack, onEditScenario }) => {
         </div>
 
         <div className="flex flex-wrap gap-2 mb-8">
-          {['scenarios', 'units', 'terrains', 'countries', 'campaigns'].map(tab => (
+          {['scenarios', 'units', 'terrains', 'overlays', 'countries', 'campaigns'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-4 py-2 rounded font-bold uppercase text-xs transition-all ${activeTab === tab ? 'bg-map-ink-blue text-white shadow-md scale-105' : 'bg-white text-map-ink-blue border border-map-ink-blue hover:bg-map-ink-blue/10'}`}
             >
-              {tab === 'scenarios' ? 'Scénáře' : tab === 'units' ? 'Jednotky' : tab === 'terrains' ? 'Terén' : tab === 'countries' ? 'Země' : 'Kampaně'}
+              {tab === 'scenarios' ? 'Scénáře' : tab === 'units' ? 'Jednotky' : tab === 'terrains' ? 'Terén' : tab === 'overlays' ? 'Překážky' : tab === 'countries' ? 'Země' : 'Kampaně'}
             </button>
           ))}
         </div>
@@ -213,6 +221,13 @@ const Customization = ({ onBack, onEditScenario }) => {
                         <input type="number" className="w-full border p-1 rounded" value={t.diceModifierAttackTank} onChange={e => { const n = [...terrains]; n[idx].diceModifierAttackTank = parseInt(e.target.value) || 0; saveTerrains(n); }} />
                       </div>
                     </div>
+                    <div className="space-y-2 border-l pl-4">
+                      <label className="block text-[10px] font-bold uppercase text-gray-400">Speciální</label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] w-12">Ign. vlajek:</span>
+                        <input type="number" className="w-full border p-1 rounded" value={t.ignoreFlags || 0} onChange={e => { const n = [...terrains]; n[idx].ignoreFlags = parseInt(e.target.value) || 0; saveTerrains(n); }} />
+                      </div>
+                    </div>
                   </div>
 
                   <div>
@@ -222,6 +237,84 @@ const Customization = ({ onBack, onEditScenario }) => {
 
                   <div className="mt-4 flex justify-end">
                     <button onClick={() => deleteItem(setTerrains, terrains, t.id, 'customTerrainTypes')} className="text-red-600 hover:text-red-800 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase"><Trash2 size={12} /> Smazat typ</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'overlays' && (
+          <section className="animate-in fade-in duration-300">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold uppercase text-map-ink-blue">Typy překážek</h2>
+              <button onClick={addOverlay} className="bg-map-ink-green text-white px-4 py-2 rounded flex items-center gap-2 text-xs font-bold uppercase shadow-sm hover:scale-105 transition-transform"><Plus size={16} /> Přidat překážku</button>
+            </div>
+            <div className="space-y-4">
+              {overlays.map((o, idx) => (
+                <div key={o.id} className="p-4 border-2 border-gray-200 rounded bg-white shadow-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                    <div className="md:col-span-2">
+                      <label className="text-[10px] font-bold uppercase text-gray-400">Název překážky</label>
+                      <input className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold text-lg" value={o.name} onChange={e => { const n = [...overlays]; n[idx].name = e.target.value; saveOverlays(n); }} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-gray-400">Barva (HEX)</label>
+                      <div className="flex gap-2 items-center">
+                        <div className="w-6 h-6 rounded border border-gray-300 shadow-inner" style={{ backgroundColor: o.color }}></div>
+                        <input className="flex-1 border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-mono text-xs" value={o.color} onChange={e => { const n = [...overlays]; n[idx].color = e.target.value; saveOverlays(n); }} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 pt-4">
+                      <input type="checkbox" id={`los-o-${o.id}`} checked={o.blocksLOS} onChange={e => { const n = [...overlays]; n[idx].blocksLOS = e.target.checked; saveOverlays(n); }} />
+                      <label htmlFor={`los-o-${o.id}`} className="text-[10px] font-bold uppercase text-gray-600">Blokuje viditelnost</label>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs mb-4">
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase text-gray-400">Omezení pohybu</label>
+                      <select className="w-full border p-1 rounded mt-1" value={o.movementRestriction || 'none'} onChange={e => { const n = [...overlays]; n[idx].movementRestriction = e.target.value; saveOverlays(n); }}>
+                        <option value="none">Žádné</option>
+                        <option value="stop">Zastavit při vstupu</option>
+                        <option value="no-move">Neprůchodné</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2 border-l pl-4">
+                      <label className="block text-[10px] font-bold uppercase text-gray-400">Obranný bonus (kostky)</label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] w-12">Všechny:</span>
+                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierDefense || 0} onChange={e => { const n = [...overlays]; n[idx].diceModifierDefense = parseInt(e.target.value) || 0; saveOverlays(n); }} />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] w-12">Ign. vlajek:</span>
+                        <input type="number" className="w-full border p-1 rounded" value={o.ignoreFlags || 0} onChange={e => { const n = [...overlays]; n[idx].ignoreFlags = parseInt(e.target.value) || 0; saveOverlays(n); }} />
+                      </div>
+                    </div>
+                    <div className="space-y-2 border-l pl-4">
+                      <label className="block text-[10px] font-bold uppercase text-gray-400">Postih k útoku (kostky)</label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] w-12">Inf:</span>
+                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierAttackInfantry || 0} onChange={e => { const n = [...overlays]; n[idx].diceModifierAttackInfantry = parseInt(e.target.value) || 0; saveOverlays(n); }} />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] w-12">Tank:</span>
+                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierAttackTank || 0} onChange={e => { const n = [...overlays]; n[idx].diceModifierAttackTank = parseInt(e.target.value) || 0; saveOverlays(n); }} />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] w-12">Děl:</span>
+                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierAttackArtillery || 0} onChange={e => { const n = [...overlays]; n[idx].diceModifierAttackArtillery = parseInt(e.target.value) || 0; saveOverlays(n); }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-gray-400">Popis</label>
+                    <textarea className="w-full border p-2 rounded mt-1 text-xs" rows={2} value={o.description || ''} onChange={e => { const n = [...overlays]; n[idx].description = e.target.value; saveOverlays(n); }} />
+                  </div>
+
+                  <div className="mt-4 flex justify-end">
+                    <button onClick={() => deleteItem(setOverlays, overlays, o.id, 'customOverlayTypes')} className="text-red-600 hover:text-red-800 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase"><Trash2 size={12} /> Smazat typ</button>
                   </div>
                 </div>
               ))}

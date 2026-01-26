@@ -23,6 +23,7 @@ export type TerrainType = {
   diceModifierDefenseTank: number;
   diceModifierAttackInfantry: number;
   diceModifierAttackTank: number;
+  ignoreFlags?: number;
   color?: string;
   description?: string;
 };
@@ -31,8 +32,14 @@ export type OverlayType = {
   id: string;
   name: string;
   diceModifierDefense?: number;
+  diceModifierAttackInfantry?: number;
+  diceModifierAttackTank?: number;
+  diceModifierAttackArtillery?: number;
+  ignoreFlags?: number;
   movementRestriction?: 'stop' | 'no-move' | 'none';
   blocksLOS?: boolean;
+  color?: string;
+  description?: string;
 };
 
 export type Objective = {

@@ -1,8 +1,12 @@
 import { useState, useMemo } from 'react';
 import { getDistance, axialToOffset, getUnitSections, getNeighbors, getReachableHexes, getTargetableUnits, areOnSameRidge, checkLOS as calcLOS } from '../logic/hexGrid';
-import { DEFAULT_TERRAIN_TYPES, DEFAULT_UNIT_TYPES, DEFAULT_OVERLAY_TYPES } from '../data/defaults';
+import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils';
 import { rollDice } from '../logic/dice';
 export function useGameLogic(scenario) {
+  const terrainTypes = getAllTerrainTypes();
+  const unitTypes = getAllUnitTypes();
+  const overlayTypes = getAllOverlayTypes();
+
   const [combatResult, setCombatResult] = useState(null);
   const [retreatingUnitId, setRetreatingUnitId] = useState(null);
   const [takeGroundOption, setTakeGroundOption] = useState(null);
@@ -20,7 +24,8 @@ export function useGameLogic(scenario) {
   }, [scenario]);
   const [gameState, setGameState] = useState({ scenario, currentTurn: 1, activePlayerId: scenario.firstPlayerId, phase: 'distribution-sections', sectionResources: { player1: { left: 0, center: 0, right: 0 }, player2: { left: 0, center: 0, right: 0 } }, centralWarehouse: { player1: scenario.player1.income, player2: scenario.player2.income }, units: initialUnits, grid: initialGrid, victoryPoints: { player1: 0, player2: 0 } });
   const getUnitHex = (uid) => Object.values(gameState.grid).find(h => h.unitId === uid) || null;
-  const getTerrainAt = (q, r) => { const hex = gameState.grid[`${q},${r}`]; return DEFAULT_TERRAIN_TYPES.find(t => t.id === hex?.terrainTypeId) || DEFAULT_TERRAIN_TYPES[0]; };
+  const getTerrainAt = (q, r) => { const hex = gameState.grid[`${q},${r}`]; return terrainTypes.find(t => t.id === hex?.terrainTypeId) || terrainTypes[0]; };
+  const getOverlayAt = (q, r) => { const hex = gameState.grid[`${q},${r}`]; return overlayTypes.find(o => o.id === hex?.overlayTypeId) || null; };
   const distributeResource = (pid, sec) => {
     if (gameState.phase !== 'distribution-sections' || gameState.activePlayerId !== pid || gameState.centralWarehouse[pid] <= 0) return;
     setGameState(prev => {
@@ -153,16 +158,37 @@ export function useGameLogic(scenario) {
   const moveUnit = (uid, tq, tr) => {
     const unit = gameState.units[uid]; if (gameState.phase !== 'movement' || !unit || unit.ownerId !== gameState.activePlayerId) return;
     if (!unit.hasMoved && unit.resources <= 0) return;
-    const fHex = getUnitHex(uid); if (!fHex) return; const dist = getDistance(fHex, { q: tq, r: tr }); const utype = DEFAULT_UNIT_TYPES.find(ut => ut.id === unit.typeId);
+    const fHex = getUnitHex(uid); if (!fHex) return; const dist = getDistance(fHex, { q: tq, r: tr }); const utype = unitTypes.find(ut => ut.id === unit.typeId);
     if (!utype || (unit.movementUsed + dist) > utype.movement || gameState.grid[`${tq},${tr}`]?.unitId) return;
     setGameState(prev => {
-      const nGrid = { ...prev.grid }; nGrid[`${fHex.q},${fHex.r}`].unitId = undefined; nGrid[`${tq},${tr}`].unitId = uid;
+      const nGrid = { ...prev.grid };
+      const fromHex = nGrid[`${fHex.q},${fHex.r}`];
+      const targetHex = nGrid[`${tq},${tr}`];
+
+      // Sandbags destroyed when leaving
+      if (fromHex.overlayTypeId === 'sandbags') {
+        fromHex.overlayTypeId = undefined;
+      }
+
+      fromHex.unitId = undefined;
+      targetHex.unitId = uid;
+
       const totalDist = unit.movementUsed + dist;
       const newResources = unit.hasMoved ? unit.resources : unit.resources - 1;
-      const targetHex = prev.grid[`${tq},${tr}`];
-      const targetTerrain = DEFAULT_TERRAIN_TYPES.find(t => t.id === targetHex?.terrainTypeId);
-      const isStopTerrain = targetTerrain?.movementRestriction === 'stop' || targetHex?.overlayTypeId === 'wire';
+      const targetTerrain = terrainTypes.find(t => t.id === targetHex?.terrainTypeId);
+      const targetOverlayId = targetHex?.overlayTypeId;
+
+      let isStopTerrain = targetTerrain?.movementRestriction === 'stop' || targetOverlayId === 'wire';
+      let allowAttackAfterStop = false;
+
+      // Special rule: Tank and wire
+      if (unit.typeId === 'tank' && targetOverlayId === 'wire') {
+        targetHex.overlayTypeId = undefined;
+        allowAttackAfterStop = true;
+      }
+
       const finalMovementUsed = isStopTerrain ? utype.movement : totalDist;
+      const hasAttacked = (isStopTerrain && !allowAttackAfterStop) || (totalDist > utype.canShootAfterMovingMax ? true : unit.hasAttacked);
 
       const { vpChange1, vpChange2, newGrid: updatedGrid } = checkObjectives(nGrid, prev.units, prev.activePlayerId, 'immediate');
       const nVP = { player1: prev.victoryPoints.player1 + vpChange1, player2: prev.victoryPoints.player2 + vpChange2 };
@@ -170,7 +196,7 @@ export function useGameLogic(scenario) {
       return {
         ...prev,
         grid: updatedGrid,
-        units: { ...prev.units, [uid]: { ...unit, resources: newResources, hasMoved: true, movementUsed: finalMovementUsed, hasAttacked: isStopTerrain || (totalDist > utype.canShootAfterMovingMax ? true : unit.hasAttacked) } },
+        units: { ...prev.units, [uid]: { ...unit, resources: newResources, hasMoved: true, movementUsed: finalMovementUsed, hasAttacked } },
         victoryPoints: nVP,
         winner: nVP.player1 >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2 >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
       };
@@ -187,33 +213,53 @@ export function useGameLogic(scenario) {
     const fH = getUnitHex(aid);
     const tH = getUnitHex(tid);
     if (!fH || !tH) return;
-    const utype = DEFAULT_UNIT_TYPES.find(u => u.id === att.typeId);
+    const utype = unitTypes.find(u => u.id === att.typeId);
     if (!utype) return;
-    const targetable = getTargetableUnits(fH.q, fH.r, utype, gameState, DEFAULT_TERRAIN_TYPES);
+    const targetable = getTargetableUnits(fH.q, fH.r, utype, gameState, terrainTypes, overlayTypes);
     if (!targetable.includes(tid)) return;
     const dist = getDistance(fH, tH);
     const attTerrain = getTerrainAt(fH.q, fH.r);
+    const attOverlay = getOverlayAt(fH.q, fH.r);
     const tarTerrain = getTerrainAt(tH.q, tH.r);
+    const tarOverlay = getOverlayAt(tH.q, tH.r);
 
     const isArtillery = att.typeId === 'artillery';
     const isTank = att.typeId === 'tank';
+    const isInfantry = att.typeId === 'infantry';
 
     let diceModifierDefense = 0;
+    let ignoreFlags = 0;
     if (!isArtillery) {
       const onSameRidge = areOnSameRidge(fH, tH, gameState.grid);
+      let terrainDef = 0;
       if (!(tarTerrain.id === 'hill' && onSameRidge)) {
-        diceModifierDefense = isTank ? (tarTerrain.diceModifierDefenseTank ?? 0) : (tarTerrain.diceModifierDefenseInfantry ?? 0);
+        terrainDef = isTank ? (tarTerrain.diceModifierDefenseTank ?? 0) : (tarTerrain.diceModifierDefenseInfantry ?? 0);
       }
-      // Add Overlay defense (e.g. Sandbags)
-      const overlay = DEFAULT_OVERLAY_TYPES.find(o => o.id === tH.overlayTypeId);
-      if (overlay?.diceModifierDefense) {
-        diceModifierDefense += overlay.diceModifierDefense;
-      }
+      const overlayDef = tarOverlay?.diceModifierDefense ?? 0;
+      diceModifierDefense = Math.max(terrainDef, overlayDef);
+      ignoreFlags = Math.max(tarTerrain.ignoreFlags ?? 0, tarOverlay?.ignoreFlags ?? 0);
     }
-    const diceModifierAttack = isTank ? (attTerrain.diceModifierAttackTank ?? 0) : (attTerrain.diceModifierAttackInfantry ?? 0);
+
+    let terrainAtt = 0;
+    if (isTank) terrainAtt = attTerrain.diceModifierAttackTank ?? 0;
+    else if (isInfantry) terrainAtt = attTerrain.diceModifierAttackInfantry ?? 0;
+
+    let overlayAtt = 0;
+    if (isTank) overlayAtt = attOverlay?.diceModifierAttackTank ?? 0;
+    else if (isInfantry) overlayAtt = attOverlay?.diceModifierAttackInfantry ?? 0;
+    else if (isArtillery) overlayAtt = attOverlay?.diceModifierAttackArtillery ?? 0;
+
+    const diceModifierAttack = Math.min(terrainAtt, overlayAtt);
 
     let dC = utype.shootingRange[dist-1] - diceModifierDefense + diceModifierAttack;
-    const dice = rollDice(Math.max(0, dC)); let h = 0, f = 0; dice.forEach(s => { if (s==='grenade' || s===tar.typeId) h++; if (s==='flag') f++; });
+    const dice = rollDice(Math.max(0, dC));
+    let h = 0, f = 0;
+    dice.forEach(s => {
+      if (s==='grenade' || s===tar.typeId) h++;
+      if (s==='flag') f++;
+    });
+
+    const finalFlags = Math.max(0, f - ignoreFlags);
     setCombatResult({ attackerId: aid, targetId: tid, dice, hits: h, flags: f });
     setGameState(prev => {
       let nU = { ...prev.units };
@@ -244,8 +290,8 @@ export function useGameLogic(scenario) {
         if (dist === 1 && att.typeId !== 'artillery') {
           setTimeout(() => setTakeGroundOption({ unitId: aid, hex: { q: tH.q, r: tH.r } }), 1000);
         }
-      } else if (f > 0) {
-        setTimeout(() => setRetreatingUnitId({ unitId: tid, count: f, attackerId: aid, targetHex: { q: tH.q, r: tH.r } }), 1000);
+      } else if (finalFlags > 0) {
+        setTimeout(() => setRetreatingUnitId({ unitId: tid, count: finalFlags, attackerId: aid, targetHex: { q: tH.q, r: tH.r } }), 1000);
       }
 
       return { ...prev, units: nU, grid: nG, victoryPoints: nVP, winner: nVP.player1 >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2 >= prev.scenario.victoryPointsToWin ? 'player2' : undefined) };
@@ -304,7 +350,17 @@ export function useGameLogic(scenario) {
     if (unit.ownerId === 'player1' ? tr <= fH.r : tr >= fH.r) return;
 
     setGameState(prev => {
-      const nG = { ...prev.grid }; nG[`${fH.q},${fH.r}`].unitId = undefined; nG[`${tq},${tr}`].unitId = uid;
+      const nG = { ...prev.grid };
+      const fromHex = nG[`${fH.q},${fH.r}`];
+
+      // Sandbags destroyed when leaving
+      if (fromHex.overlayTypeId === 'sandbags') {
+        fromHex.overlayTypeId = undefined;
+      }
+
+      fromHex.unitId = undefined;
+      nG[`${tq},${tr}`].unitId = uid;
+
       const { vpChange1, vpChange2, newGrid: updatedGrid } = checkObjectives(nG, prev.units, prev.activePlayerId, 'immediate');
       return {
         ...prev,
@@ -325,6 +381,22 @@ export function useGameLogic(scenario) {
       setRetreatingUnitId(null);
     }
   };
+  const destroyOverlay = (uid) => {
+    const unit = gameState.units[uid];
+    if (gameState.phase !== 'attack' || !unit || unit.ownerId !== gameState.activePlayerId || unit.resources <= 0 || unit.hasAttacked) return;
+    const hex = getUnitHex(uid);
+    if (!hex || hex.overlayTypeId !== 'wire') return;
+
+    setGameState(prev => {
+      const nG = { ...prev.grid };
+      nG[`${hex.q},${hex.r}`].overlayTypeId = undefined;
+      return {
+        ...prev,
+        grid: nG,
+        units: { ...prev.units, [uid]: { ...unit, resources: unit.resources - 1, hasAttacked: true } }
+      };
+    });
+  };
   const takeGround = (uid, q, r) => {
     if (!takeGroundOption || takeGroundOption.unitId !== uid) return;
     if (takeGroundOption.hex.q !== q || takeGroundOption.hex.r !== r) {
@@ -338,7 +410,14 @@ export function useGameLogic(scenario) {
     }
     setGameState(prev => {
       const nG = { ...prev.grid };
-      nG[`${fH.q},${fH.r}`].unitId = undefined;
+      const fromHex = nG[`${fH.q},${fH.r}`];
+
+      // Sandbags destroyed when leaving
+      if (fromHex.overlayTypeId === 'sandbags') {
+        fromHex.overlayTypeId = undefined;
+      }
+
+      fromHex.unitId = undefined;
       nG[`${q},${r}`].unitId = uid;
 
       const { vpChange1, vpChange2, newGrid: updatedGrid } = checkObjectives(nG, prev.units, prev.activePlayerId, 'immediate');
@@ -364,20 +443,20 @@ export function useGameLogic(scenario) {
   const getSelectedReachable = (uid) => {
     const unit = gameState.units[uid]; if (!unit) return [];
     const hex = getUnitHex(uid); if (!hex) return [];
-    const utype = DEFAULT_UNIT_TYPES.find(u => u.id === unit.typeId);
+    const utype = unitTypes.find(u => u.id === unit.typeId);
     const limit = utype.movement - unit.movementUsed;
     if (limit <= 0 || (!unit.hasMoved && unit.resources <= 0)) return [];
-    return getReachableHexes(hex.q, hex.r, limit, gameState.grid, DEFAULT_TERRAIN_TYPES);
+    return getReachableHexes(hex.q, hex.r, limit, gameState.grid, terrainTypes, overlayTypes);
   };
 
   const getSelectedTargetable = (uid) => {
     const unit = gameState.units[uid]; if (!unit) return [];
     const hex = getUnitHex(uid); if (!hex) return [];
-    const utype = DEFAULT_UNIT_TYPES.find(u => u.id === unit.typeId);
+    const utype = unitTypes.find(u => u.id === unit.typeId);
     if (unit.resources <= 0 || unit.hasAttacked) return [];
     // Artillery cannot shoot if it moved
     if (unit.typeId === 'artillery' && (unit.movementUsed > 0 || unit.hasMoved)) return [];
-    return getTargetableUnits(hex.q, hex.r, utype, gameState, DEFAULT_TERRAIN_TYPES);
+    return getTargetableUnits(hex.q, hex.r, utype, gameState, terrainTypes, overlayTypes);
   };
 
   const getRetreatHexes = (uid) => {
@@ -411,7 +490,7 @@ export function useGameLogic(scenario) {
     } else if (gameState.phase === 'movement') {
       const movable = Object.values(gameState.units).filter(u => {
         if (u.ownerId !== activeP) return false;
-        const utype = DEFAULT_UNIT_TYPES.find(ut => ut.id === u.typeId);
+        const utype = unitTypes.find(ut => ut.id === u.typeId);
         const canStart = !u.hasMoved && u.resources > 0;
         const canContinue = u.hasMoved && u.movementUsed < (utype?.movement || 0);
         return canStart || canContinue;
@@ -423,8 +502,12 @@ export function useGameLogic(scenario) {
         if (u.typeId === 'artillery' && (u.movementUsed > 0 || u.hasMoved)) return false;
         const hex = getUnitHex(u.id);
         if (!hex) return false;
-        const utype = DEFAULT_UNIT_TYPES.find(ut => ut.id === u.typeId);
-        return getTargetableUnits(hex.q, hex.r, utype, gameState, DEFAULT_TERRAIN_TYPES).length > 0;
+
+        // Can attack or destroy wire
+        if (hex.overlayTypeId === 'wire' && u.typeId === 'infantry') return true;
+
+        const utype = unitTypes.find(ut => ut.id === u.typeId);
+        return getTargetableUnits(hex.q, hex.r, utype, gameState, terrainTypes, overlayTypes).length > 0;
       });
       if (attackable.length > 0) reasons.push(`Jednotky k útoku: ${attackable.length}`);
     }
@@ -435,7 +518,7 @@ export function useGameLogic(scenario) {
 
   return {
     gameState, combatResult, retreatingUnitId, setCombatResult, setRetreatingUnitId,
-    takeGroundOption, setTakeGroundOption, takeGround,
+    takeGroundOption, setTakeGroundOption, takeGround, destroyOverlay,
     distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit,
     getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions
   };

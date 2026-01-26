@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils'; import { getUnitSections } from '../logic/hexGrid';
 const GameView = ({ scenario, onExit }) => {
-  const { gameState, combatResult, retreatingUnitId, setCombatResult, takeGroundOption, setTakeGroundOption, takeGround, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario);
+  const { gameState, combatResult, retreatingUnitId, setCombatResult, takeGroundOption, setTakeGroundOption, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario);
   const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none'); const [hovered, setHovered] = useState(null);
   const [dismissedOverlay, setDismissedOverlay] = useState(false);
 
@@ -165,7 +165,14 @@ const GameView = ({ scenario, onExit }) => {
                   </div>
 
                   {gameState.phase === 'movement' && <button disabled={gameState.units[selected].resources === 0 || (gameState.units[selected].movementUsed >= (uTypes.find(ut => ut.id === gameState.units[selected].typeId)?.movement || 0))} onClick={() => setActType('move')} className={`w-full p-2 rounded border text-[10px] font-bold ${actType === 'move' ? 'bg-yellow-200' : 'bg-white disabled:opacity-50 uppercase'}`}>POHYB</button>}
-                  {gameState.phase === 'attack' && <button disabled={gameState.units[selected].resources === 0 || gameState.units[selected].hasAttacked} onClick={() => setActType('attack')} className={`w-full p-2 rounded border text-[10px] font-bold ${actType === 'attack' ? 'bg-red-200' : 'bg-white disabled:opacity-50 uppercase'}`}>ÚTOK</button>}
+                  {gameState.phase === 'attack' && (
+                    <>
+                      <button disabled={gameState.units[selected].resources === 0 || gameState.units[selected].hasAttacked} onClick={() => setActType('attack')} className={`w-full p-2 rounded border text-[10px] font-bold ${actType === 'attack' ? 'bg-red-200' : 'bg-white disabled:opacity-50 uppercase'}`}>ÚTOK</button>
+                      {getUnitHex(selected)?.overlayTypeId === 'wire' && gameState.units[selected].typeId === 'infantry' && !gameState.units[selected].hasAttacked && (
+                        <button onClick={() => destroyOverlay(selected)} className="w-full p-2 rounded border text-[10px] font-bold bg-orange-100 hover:bg-orange-200 uppercase mt-2">Zničit ostnatý drát</button>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             )}
