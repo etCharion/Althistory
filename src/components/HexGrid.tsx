@@ -27,7 +27,8 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], on
   const padding = 60; const viewBoxWidth = (width + 0.5) * HEX_SIZE * Math.sqrt(3) + padding; const viewBoxHeight = (height * 1.5 + 0.5) * HEX_SIZE + padding;
   const allHexes = [];
   for (let r = 0; r < height; r++) {
-    for (let col = 0; col < width; col++) {
+    const rowWidth = r % 2 === 0 ? width : width - 1;
+    for (let col = 0; col < rowWidth; col++) {
       const q = col - Math.floor(r / 2); const key = `${q},${r}`; const hex = hexes[key]; const unit = hex?.unitId ? units[hex.unitId] : null; const terrain = hex ? getTerrain(hex.terrainTypeId) : getTerrain('grass'); const { x, y } = axialToPixel(q, r);
       const isSelected = hex?.unitId && hex.unitId === selectedUnitId;
       const highlight = highlightedHexes?.[key];

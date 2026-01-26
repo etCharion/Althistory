@@ -1,8 +1,59 @@
-import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils'; import { getUnitSections } from '../logic/hexGrid';
+import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils'; import { getUnitSections, axialToOffset, getSection } from '../logic/hexGrid';
+import { Menu, Info, ChevronRight, X as CloseIcon } from 'lucide-react';
+
+const ResourceCube = () => (
+  <div className="w-3 h-3 bg-green-600 border border-green-800 rounded-sm shadow-sm animate-in zoom-in duration-300" />
+);
+
+const Misticka = ({ title, count, onAdd, buttons, active, warehouse = false }) => (
+  <div className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${active ? 'scale-105' : 'opacity-40'}`}>
+    {!warehouse && <span className="text-[10px] font-bold uppercase text-map-ink-blue">{title}</span>}
+    <div className={`${warehouse ? 'w-48 h-20' : 'w-24 h-16'} border-2 ${active ? 'border-map-ink-blue' : 'border-gray-400'} rounded-2xl flex flex-wrap gap-1 p-2 items-start content-start overflow-hidden bg-white/40 shadow-inner relative`}>
+       {Array.from({ length: Math.min(count, 50) }).map((_, i) => <ResourceCube key={i} />)}
+       {count > 50 && <span className="absolute bottom-1 right-1 text-[8px] font-bold">+{count-50}</span>}
+       {count === 0 && <span className="absolute inset-0 flex items-center justify-center text-[8px] uppercase opacity-20">Prázdno</span>}
+    </div>
+    {warehouse && <span className="text-[10px] font-bold uppercase text-map-ink-blue mt-1">Sklad: {count}</span>}
+    {buttons && (
+      <div className="flex gap-1 mt-1">
+        {[1, 2, 3, 'Max'].map(v => (
+          <button
+            key={v}
+            onClick={() => onAdd(v === 'Max' ? 'max' : v)}
+            className="px-1.5 py-0.5 bg-white border border-map-ink-blue rounded text-[8px] font-bold hover:bg-map-ink-blue hover:text-white transition-colors uppercase"
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+);
+
+const PHASE_DESCRIPTIONS = {
+  'distribution-sections': {
+    title: 'A) Zdroje do sekcí',
+    text: 'Hráč rozděluje zdroje z centrálního skladu do jednotlivých sekcí (Levá, Střed, Pravá). Tyto zdroje budou v dalším kroku přiděleny konkrétním jednotkám. Kliknutím na sekci nebo použitím tlačítek přidělíte zdroje. Nevyužité zdroje na konci propadají.'
+  },
+  'distribution-units': {
+    title: 'B) Zdroje jednotkám',
+    text: 'Hráč přiděluje zdroje ze sekcí konkrétním jednotkám v těchto sekcích. Každá jednotka může mít max. 3 zdroje. Zdroje slouží pro pohyb, útok a jako "životy".'
+  },
+  'movement': {
+    title: 'C) Pohyb jednotek',
+    text: 'Vybraná jednotka se může pohnout. Každý krok stojí 1 zdroj (pokud jednotka ještě tento tah nestála). Některé terény pohyb zastavují.'
+  },
+  'attack': {
+    title: 'D) Útoky jednotek',
+    text: 'Jednotky mohou útočit na nepřátelské cíle v dostřelu a viditelnosti. Útok stojí 1 zdroj.'
+  }
+};
+
 const GameView = ({ scenario, onExit }) => {
   const { gameState, combatResult, retreatingUnitId, setCombatResult, takeGroundOption, setTakeGroundOption, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario);
   const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none'); const [hovered, setHovered] = useState(null);
   const [dismissedOverlay, setDismissedOverlay] = useState(false);
+  const [showPhaseInfo, setShowPhaseInfo] = useState(false);
 
   useEffect(() => {
     if (retreatingUnitId || takeGroundOption) {
@@ -41,7 +92,11 @@ const GameView = ({ scenario, onExit }) => {
     const hex = gameState.grid[`${q},${r}`];
     const unitAtHex = hex?.unitId ? gameState.units[hex.unitId] : null;
 
-    if (gameState.phase === 'movement') {
+    if (gameState.phase === 'distribution-sections') {
+      const { col } = axialToOffset(q, r);
+      const section = getSection(col, gameState.scenario.sections.leftWidth, gameState.scenario.sections.centerWidth);
+      distributeResource(activeP, section);
+    } else if (gameState.phase === 'movement') {
       if (unitAtHex && unitAtHex.ownerId === activeP) {
         setSelected(hex.unitId);
         setActType('move');
@@ -72,42 +127,14 @@ const GameView = ({ scenario, onExit }) => {
   };
   return (
     <div className="flex h-screen bg-map-paper overflow-hidden font-military">
-      <div className="w-64 border-r-2 border-map-ink-blue p-4 flex flex-col bg-white/30">
-        <h2 className={`text-xl font-bold font-handwriting mb-2 ${activeP === 'player1' ? 'text-blue-800' : 'text-red-800'}`}>{activeP === 'player1' ? scenario.player1.name : scenario.player2.name}</h2>
-        <div className="mb-2 p-2 border border-black rounded bg-amber-100 text-center font-bold uppercase text-[10px]">
-          {gameState.phase === 'distribution-sections' && 'A) Zdroje do sekcí'}
-          {gameState.phase === 'distribution-units' && 'B) Zdroje jednotkám'}
-          {gameState.phase === 'movement' && 'C) Pohyb jednotek'}
-          {gameState.phase === 'attack' && 'D) Útoky jednotek'}
-        </div>
-        <div className="mb-4 p-2 border border-black rounded bg-white/50 text-xs"><p className="font-bold border-b border-black mb-1">SKLAD: {wh}</p>
-          {gameState.phase === 'distribution-sections' && <div className="grid grid-cols-3 gap-1 mt-1">{['left', 'center', 'right'].map(s => <button key={s} onClick={() => distributeResource(activeP, s)} className="border bg-white p-1 uppercase">{s[0]}</button>)}</div>}
-        </div>
-        <div className="space-y-1 mb-4 text-xs uppercase">{['left', 'center', 'right'].map(s => <div key={s} className="p-1 border border-black">SEKCE {s}: {res[s]}</div>)}</div>
-        <div className="mt-auto space-y-2">
-          <button onClick={() => {
-            if (hasAvailableActions()) {
-              setShowConfirm(true);
-            } else {
-              if (gameState.phase === 'attack') endTurn(); else nextPhase();
-              setSelected(null);
-              setActType('none');
-            }
-          }} className={`w-full ${gameState.phase === 'attack' ? 'bg-map-ink-red' : 'bg-map-ink-blue'} text-white py-2 rounded font-bold uppercase`}>
-            {gameState.phase === 'distribution-sections' && 'Rozdělit jednotkám'}
-            {gameState.phase === 'distribution-units' && 'Pohyb'}
-            {gameState.phase === 'movement' && 'Útok'}
-            {gameState.phase === 'attack' && 'Konec tahu'}
-          </button>
-          <button onClick={onExit} className="w-full border border-black py-1 rounded text-sm uppercase">Menu</button>
-        </div>
-      </div>
       <div className="flex-1 relative flex flex-col">
-        <div className="bg-white/70 p-2 flex justify-center gap-8 font-bold border-b border-map-ink-blue">
+        <div className="bg-white/70 p-2 flex justify-center gap-8 font-bold border-b border-map-ink-blue z-20">
            <div className="text-blue-800 uppercase">{scenario.player1.name}: {gameState.victoryPoints.player1} VP</div>
            <div className="text-red-800 uppercase">{scenario.player2.name}: {gameState.victoryPoints.player2} VP</div>
+           <div className="absolute right-4 top-2 text-[10px] uppercase opacity-50">Turn {gameState.currentTurn}</div>
         </div>
-        <div className="flex-1 relative overflow-auto">
+        <div className="flex-1 relative flex flex-col overflow-hidden">
+          <div className="flex-1 relative overflow-auto">
           <HexGrid
             width={scenario.boardWidth} height={scenario.boardHeight} hexes={gameState.grid} units={gameState.units}
             terrainTypes={tTypes} unitTypes={uTypes} onHexClick={handleHexClick} onHexMouseEnter={(q,r) => setHovered(`${q},${r}`)} onHexMouseLeave={() => setHovered(null)}
@@ -206,6 +233,72 @@ const GameView = ({ scenario, onExit }) => {
           </div>
         </div>
       </div>
+
+        {/* Bottom controls */}
+        <div className="absolute bottom-6 left-6 z-50 flex flex-col gap-2 pointer-events-none">
+           <div className="flex gap-2 pointer-events-auto">
+              <button onClick={onExit} title="Menu" className="p-3 bg-white border-2 border-map-ink-blue rounded-full shadow-lg hover:bg-gray-100 transition-colors">
+                <Menu size={24} className="text-map-ink-blue" />
+              </button>
+              <button onClick={() => {
+                  if (hasAvailableActions()) { setShowConfirm(true); }
+                  else { if (gameState.phase === 'attack') endTurn(); else nextPhase(); setSelected(null); setActType('none'); }
+                }} className={`px-6 py-2 rounded-full shadow-lg font-bold uppercase transition-colors border-2 ${gameState.phase === 'attack' ? 'bg-map-ink-red border-red-800 text-white hover:bg-red-700' : 'bg-map-ink-blue border-blue-900 text-white hover:bg-blue-800'}`}>
+                {gameState.phase === 'attack' ? 'Konec tahu' : (gameState.phase === 'distribution-sections' ? 'Ukončit přidělování' : 'Další fáze')}
+              </button>
+           </div>
+
+           <div className="relative pointer-events-auto group">
+              <div
+                onMouseEnter={() => setShowPhaseInfo(true)}
+                onMouseLeave={() => setShowPhaseInfo(false)}
+                className="bg-white/90 border-2 border-map-ink-blue px-4 py-2 rounded-lg shadow-md cursor-help flex items-center gap-2"
+              >
+                <Info size={16} className="text-map-ink-blue" />
+                <span className="font-bold uppercase text-[10px]">
+                  {PHASE_DESCRIPTIONS[gameState.phase].title}
+                </span>
+              </div>
+
+              {showPhaseInfo && (
+                <div className="absolute bottom-full left-0 mb-2 w-64 bg-white border-2 border-map-ink-blue p-4 shadow-xl rounded-xl animate-in fade-in slide-in-from-bottom-2 duration-200 z-50">
+                   <h4 className="font-bold font-handwriting text-lg border-b border-map-ink-blue pb-1 mb-2">{PHASE_DESCRIPTIONS[gameState.phase].title}</h4>
+                   <p className="text-[10px] text-gray-700 leading-relaxed italic">{PHASE_DESCRIPTIONS[gameState.phase].text}</p>
+                </div>
+              )}
+           </div>
+        </div>
+
+        {/* Resource UI */}
+        <div className="h-48 bg-white/30 border-t border-map-ink-blue/20 flex flex-col items-center justify-center relative overflow-visible pt-2">
+            <div className="flex items-center gap-12 relative">
+               {/* Warehouse at the bottom center */}
+               <div className="absolute top-24 left-1/2 -translate-x-1/2">
+                  <Misticka count={wh} active={gameState.phase === 'distribution-sections'} warehouse />
+               </div>
+
+               {/* Section bowls */}
+               <div className="flex gap-4 mb-16">
+                  <div className="relative">
+                    <Misticka title="Levá" count={res.left} active={gameState.phase === 'distribution-sections' || (gameState.phase === 'distribution-units' && res.left > 0)} onAdd={(v) => distributeResource(activeP, 'left', v)} buttons={gameState.phase === 'distribution-sections' && wh > 0} />
+                    {gameState.phase === 'distribution-sections' && wh > 0 && <ChevronRight className="absolute -bottom-4 left-1/2 -translate-x-1/2 rotate-[120deg] text-map-ink-blue/30" size={20} />}
+                  </div>
+                  <div className="relative">
+                    <Misticka title="Střed" count={res.center} active={gameState.phase === 'distribution-sections' || (gameState.phase === 'distribution-units' && res.center > 0)} onAdd={(v) => distributeResource(activeP, 'center', v)} buttons={gameState.phase === 'distribution-sections' && wh > 0} />
+                    {gameState.phase === 'distribution-sections' && wh > 0 && <ChevronRight className="absolute -bottom-6 left-1/2 -translate-x-1/2 -rotate-90 text-map-ink-blue/30" size={20} />}
+                  </div>
+                  <div className="relative">
+                    <Misticka title="Pravá" count={res.right} active={gameState.phase === 'distribution-sections' || (gameState.phase === 'distribution-units' && res.right > 0)} onAdd={(v) => distributeResource(activeP, 'right', v)} buttons={gameState.phase === 'distribution-sections' && wh > 0} />
+                    {gameState.phase === 'distribution-sections' && wh > 0 && <ChevronRight className="absolute -bottom-4 left-1/2 -translate-x-1/2 -rotate-[30deg] text-map-ink-blue/30" size={20} />}
+                  </div>
+               </div>
+            </div>
+            {gameState.phase === 'distribution-units' && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[9px] font-bold text-map-ink-blue uppercase bg-white/50 px-3 py-1 rounded-full animate-pulse">
+                Klikněte na jednotku pro přidělení zdrojů ze sekce
+              </div>
+            )}
+        </div>
       {combatResult && <DiceAnimation dice={combatResult.dice} onComplete={() => setCombatResult(null)} />}
       {gameState.winner && <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100]"><div className="bg-white p-12 rounded-3xl text-center border-8 border-map-paper shadow-2xl"><h1 className="text-5xl font-bold font-handwriting mb-4 text-map-ink-blue uppercase">Vítězství!</h1><p className="mb-8">{gameState.winner === 'player1' ? scenario.player1.name : scenario.player2.name} vyhrál.</p><button onClick={onExit} className="bg-map-ink-red text-white px-8 py-3 rounded text-xl uppercase font-bold">Zpět</button></div></div>}
       {showConfirm && <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] uppercase">
@@ -221,6 +314,7 @@ const GameView = ({ scenario, onExit }) => {
           </div>
         </div>
       </div>}
+      </div>
     </div>
   );
 };

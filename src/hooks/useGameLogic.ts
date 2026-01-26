@@ -11,8 +11,20 @@ export function useGameLogic(scenario) {
   const [retreatingUnitId, setRetreatingUnitId] = useState(null);
   const [takeGroundOption, setTakeGroundOption] = useState(null);
   const initialGrid = useMemo(() => {
-    const grid = {}; scenario.initialHexes.forEach(h => { grid[`${h.q},${h.r}`] = { ...h }; });
-    for (let r = 0; r < scenario.boardHeight; r++) { for (let col = 0; col < scenario.boardWidth; col++) { const q = col - Math.floor(r / 2); const key = `${q},${r}`; if (!grid[key]) grid[key] = { q, r, s: -q - r, terrainTypeId: 'grass' }; } }
+    const grid = {};
+    for (let r = 0; r < scenario.boardHeight; r++) {
+      const width = r % 2 === 0 ? scenario.boardWidth : scenario.boardWidth - 1;
+      for (let col = 0; col < width; col++) {
+        const q = col - Math.floor(r / 2);
+        const key = `${q},${r}`;
+        const initial = scenario.initialHexes.find(h => h.q === q && h.r === r);
+        if (initial) {
+          grid[key] = { ...initial };
+        } else {
+          grid[key] = { q, r, s: -q - r, terrainTypeId: 'grass' };
+        }
+      }
+    }
     return grid;
   }, [scenario]);
   const initialUnits = useMemo(() => {
@@ -26,11 +38,15 @@ export function useGameLogic(scenario) {
   const getUnitHex = (uid) => Object.values(gameState.grid).find(h => h.unitId === uid) || null;
   const getTerrainAt = (q, r) => { const hex = gameState.grid[`${q},${r}`]; return terrainTypes.find(t => t.id === hex?.terrainTypeId) || terrainTypes[0]; };
   const getOverlayAt = (q, r) => { const hex = gameState.grid[`${q},${r}`]; return overlayTypes.find(o => o.id === hex?.overlayTypeId) || null; };
-  const distributeResource = (pid, sec) => {
+  const distributeResource = (pid, sec, amount: number | 'max' = 1) => {
     if (gameState.phase !== 'distribution-sections' || gameState.activePlayerId !== pid || gameState.centralWarehouse[pid] <= 0) return;
     setGameState(prev => {
-      const newState = { ...prev, centralWarehouse: { ...prev.centralWarehouse, [pid]: prev.centralWarehouse[pid] - 1 }, sectionResources: { ...prev.sectionResources, [pid]: { ...prev.sectionResources[pid], [sec]: prev.sectionResources[pid][sec] + 1 } } };
-      if (newState.centralWarehouse[pid] === 0) newState.phase = 'distribution-units';
+      const actualAmount = amount === 'max' ? prev.centralWarehouse[pid] : Math.min(amount, prev.centralWarehouse[pid]);
+      const newState = {
+        ...prev,
+        centralWarehouse: { ...prev.centralWarehouse, [pid]: prev.centralWarehouse[pid] - actualAmount },
+        sectionResources: { ...prev.sectionResources, [pid]: { ...prev.sectionResources[pid], [sec]: prev.sectionResources[pid][sec] + actualAmount } }
+      };
       return newState;
     });
   };
@@ -434,8 +450,23 @@ export function useGameLogic(scenario) {
   };
   const nextPhase = () => {
     setGameState(prev => {
-      if (prev.phase === 'distribution-sections') return { ...prev, phase: 'distribution-units' };
-      if (prev.phase === 'distribution-units') return { ...prev, phase: 'movement' };
+      if (prev.phase === 'distribution-sections') {
+        return {
+          ...prev,
+          phase: 'distribution-units',
+          centralWarehouse: { ...prev.centralWarehouse, [prev.activePlayerId]: 0 }
+        };
+      }
+      if (prev.phase === 'distribution-units') {
+        return {
+          ...prev,
+          phase: 'movement',
+          sectionResources: {
+            ...prev.sectionResources,
+            [prev.activePlayerId]: { left: 0, center: 0, right: 0 }
+          }
+        };
+      }
       if (prev.phase === 'movement') return { ...prev, phase: 'attack' };
       return prev;
     });
