@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes } from '../data/typeUtils'; import { getUnitSections } from '../logic/hexGrid';
+import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils'; import { getUnitSections } from '../logic/hexGrid';
 const GameView = ({ scenario, onExit }) => {
   const { gameState, combatResult, retreatingUnitId, setCombatResult, takeGroundOption, setTakeGroundOption, takeGround, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario);
   const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none'); const [hovered, setHovered] = useState(null);
@@ -10,7 +10,7 @@ const GameView = ({ scenario, onExit }) => {
     }
   }, [retreatingUnitId?.unitId, takeGroundOption?.unitId]);
   const [showConfirm, setShowConfirm] = useState(false);
-  const tTypes = getAllTerrainTypes(); const uTypes = getAllUnitTypes(); const activeP = gameState.activePlayerId; const res = gameState.sectionResources[activeP]; const wh = gameState.centralWarehouse[activeP];
+  const tTypes = getAllTerrainTypes(); const uTypes = getAllUnitTypes(); const oTypes = getAllOverlayTypes(); const activeP = gameState.activePlayerId; const res = gameState.sectionResources[activeP]; const wh = gameState.centralWarehouse[activeP];
   const highlightedHexes = useMemo(() => {
     const h = {};
     if (retreatingUnitId) {
@@ -179,6 +179,15 @@ const GameView = ({ scenario, onExit }) => {
                 <p className="text-[10px] text-gray-700 italic">
                   {tTypes.find(t => t.id === gameState.grid[hovered]?.terrainTypeId)?.description || 'Základní terén bez omezení.'}
                 </p>
+                {gameState.grid[hovered]?.overlayTypeId && (
+                  <div className="mt-2 pt-2 border-t border-gray-100">
+                    <h4 className="text-[10px] font-bold uppercase text-gray-600">{oTypes.find(o => o.id === gameState.grid[hovered].overlayTypeId)?.name}</h4>
+                    <p className="text-[9px] text-gray-600">
+                      {oTypes.find(o => o.id === gameState.grid[hovered].overlayTypeId)?.description}
+                      {oTypes.find(o => o.id === gameState.grid[hovered].overlayTypeId)?.diceModifierDefense && ` (Obrana: +${oTypes.find(o => o.id === gameState.grid[hovered].overlayTypeId).diceModifierDefense})`}
+                    </p>
+                  </div>
+                )}
                 {gameState.grid[hovered]?.unitId && (
                   <div className="mt-3 pt-2 border-t border-gray-200">
                      <p className="text-[9px] font-bold uppercase text-gray-500 mb-1">Jednotka na poli:</p>

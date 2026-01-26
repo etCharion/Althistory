@@ -33,7 +33,7 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
   const [campaigns, setCampaigns] = useState([]);
   const [hexes, setHexes] = useState({});
   const [units, setUnits] = useState({});
-  const [objSettings, setObjSettings] = useState({ type: 'permanent', timing: 'immediate', points: 1 });
+  const [objSettings, setObjSettings] = useState({ type: 'permanent', timing: 'immediate', points: 1, validFor: 'both' as any });
 
   useEffect(() => {
     setTerrainTypes(getAllTerrainTypes());
@@ -234,6 +234,14 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
                <div className="flex justify-between items-center">
                  <span className="font-bold uppercase text-gray-500">Body:</span>
                  <input type="number" className="border rounded p-1 w-12" value={objSettings.points} onChange={e => setObjSettings({...objSettings, points: parseInt(e.target.value) || 0})} />
+               </div>
+               <div className="flex justify-between items-center">
+                 <span className="font-bold uppercase text-gray-500">Pro stranu:</span>
+                 <select className="border rounded p-1" value={objSettings.validFor} onChange={e => setObjSettings({...objSettings, validFor: e.target.value as any})}>
+                   <option value="both">Všechny</option>
+                   <option value="player1">Spojenci</option>
+                   <option value="player2">Osa</option>
+                 </select>
                </div>
                <button
                  onClick={() => setTool({ type: 'objective', id: 'obj' })}
