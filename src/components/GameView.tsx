@@ -2,25 +2,25 @@ import React, { useState, useMemo, useEffect } from 'react'; import { useGameLog
 import { Menu, Info, ChevronRight, X as CloseIcon } from 'lucide-react';
 
 const ResourceCube = () => (
-  <div className="w-3 h-3 bg-green-600 border border-green-800 rounded-sm shadow-sm animate-in zoom-in duration-300" />
+  <div className="w-2.5 h-2.5 bg-green-600 border border-green-800 rounded-sm shadow-sm animate-in zoom-in duration-300" />
 );
 
 const Misticka = ({ title, count, onAdd, buttons, active, warehouse = false }) => (
-  <div className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${active ? 'scale-105' : 'opacity-40'}`}>
-    {!warehouse && <span className="text-[10px] font-bold uppercase text-map-ink-blue">{title}</span>}
-    <div className={`${warehouse ? 'w-48 h-20' : 'w-24 h-16'} border-2 ${active ? 'border-map-ink-blue' : 'border-gray-400'} rounded-2xl flex flex-wrap gap-1 p-2 items-start content-start overflow-hidden bg-white/40 shadow-inner relative`}>
+  <div className={`flex flex-col items-center gap-0.5 p-1 rounded-xl transition-all ${active ? 'scale-105' : 'opacity-40'}`}>
+    {!warehouse && <span className="text-[9px] font-bold uppercase text-map-ink-blue leading-none mb-0.5">{title}</span>}
+    <div className={`${warehouse ? 'w-40 h-14' : 'w-20 h-11'} border-2 ${active ? 'border-map-ink-blue' : 'border-gray-400'} rounded-xl flex flex-wrap gap-0.5 p-1.5 items-start content-start overflow-hidden bg-white/40 shadow-inner relative`}>
        {Array.from({ length: Math.min(count, 50) }).map((_, i) => <ResourceCube key={i} />)}
-       {count > 50 && <span className="absolute bottom-1 right-1 text-[8px] font-bold">+{count-50}</span>}
-       {count === 0 && <span className="absolute inset-0 flex items-center justify-center text-[8px] uppercase opacity-20">Prázdno</span>}
+       {count > 50 && <span className="absolute bottom-0.5 right-0.5 text-[7px] font-bold">+{count-50}</span>}
+       {count === 0 && <span className="absolute inset-0 flex items-center justify-center text-[7px] uppercase opacity-20 font-bold">Prázdno</span>}
     </div>
-    {warehouse && <span className="text-[10px] font-bold uppercase text-map-ink-blue mt-1">Sklad: {count}</span>}
+    {warehouse && <span className="text-[9px] font-bold uppercase text-map-ink-blue mt-0.5">Sklad: {count}</span>}
     {buttons && (
-      <div className="flex gap-1 mt-1">
+      <div className="flex gap-0.5 mt-1">
         {[1, 2, 3, 'Max'].map(v => (
           <button
             key={v}
             onClick={() => onAdd(v === 'Max' ? 'max' : v)}
-            className="px-1.5 py-0.5 bg-white border border-map-ink-blue rounded text-[8px] font-bold hover:bg-map-ink-blue hover:text-white transition-colors uppercase"
+            className="px-1 py-0.5 bg-white border border-map-ink-blue rounded text-[7px] font-bold hover:bg-map-ink-blue hover:text-white transition-colors uppercase"
           >
             {v}
           </button>
@@ -270,31 +270,23 @@ const GameView = ({ scenario, onExit }) => {
         </div>
 
         {/* Resource UI */}
-        <div className="h-48 bg-white/30 border-t border-map-ink-blue/20 flex flex-col items-center justify-center relative overflow-visible pt-2">
-            <div className="flex items-center gap-12 relative">
-               {/* Warehouse at the bottom center */}
-               <div className="absolute top-24 left-1/2 -translate-x-1/2">
-                  <Misticka count={wh} active={gameState.phase === 'distribution-sections'} warehouse />
+        <div className="h-36 bg-white/30 border-t border-map-ink-blue/20 flex flex-col items-center justify-center relative overflow-visible py-1">
+            <div className="flex flex-col items-center gap-0 relative">
+               {/* Section bowls */}
+               <div className="flex gap-3">
+                  <Misticka title="Levá" count={res.left} active={gameState.phase === 'distribution-sections' || (gameState.phase === 'distribution-units' && res.left > 0)} onAdd={(v) => distributeResource(activeP, 'left', v)} buttons={gameState.phase === 'distribution-sections' && wh > 0} />
+                  <Misticka title="Střed" count={res.center} active={gameState.phase === 'distribution-sections' || (gameState.phase === 'distribution-units' && res.center > 0)} onAdd={(v) => distributeResource(activeP, 'center', v)} buttons={gameState.phase === 'distribution-sections' && wh > 0} />
+                  <Misticka title="Pravá" count={res.right} active={gameState.phase === 'distribution-sections' || (gameState.phase === 'distribution-units' && res.right > 0)} onAdd={(v) => distributeResource(activeP, 'right', v)} buttons={gameState.phase === 'distribution-sections' && wh > 0} />
                </div>
 
-               {/* Section bowls */}
-               <div className="flex gap-4 mb-16">
-                  <div className="relative">
-                    <Misticka title="Levá" count={res.left} active={gameState.phase === 'distribution-sections' || (gameState.phase === 'distribution-units' && res.left > 0)} onAdd={(v) => distributeResource(activeP, 'left', v)} buttons={gameState.phase === 'distribution-sections' && wh > 0} />
-                    {gameState.phase === 'distribution-sections' && wh > 0 && <ChevronRight className="absolute -bottom-4 left-1/2 -translate-x-1/2 rotate-[120deg] text-map-ink-blue/30" size={20} />}
-                  </div>
-                  <div className="relative">
-                    <Misticka title="Střed" count={res.center} active={gameState.phase === 'distribution-sections' || (gameState.phase === 'distribution-units' && res.center > 0)} onAdd={(v) => distributeResource(activeP, 'center', v)} buttons={gameState.phase === 'distribution-sections' && wh > 0} />
-                    {gameState.phase === 'distribution-sections' && wh > 0 && <ChevronRight className="absolute -bottom-6 left-1/2 -translate-x-1/2 -rotate-90 text-map-ink-blue/30" size={20} />}
-                  </div>
-                  <div className="relative">
-                    <Misticka title="Pravá" count={res.right} active={gameState.phase === 'distribution-sections' || (gameState.phase === 'distribution-units' && res.right > 0)} onAdd={(v) => distributeResource(activeP, 'right', v)} buttons={gameState.phase === 'distribution-sections' && wh > 0} />
-                    {gameState.phase === 'distribution-sections' && wh > 0 && <ChevronRight className="absolute -bottom-4 left-1/2 -translate-x-1/2 -rotate-[30deg] text-map-ink-blue/30" size={20} />}
-                  </div>
+               {/* Central Warehouse below sections */}
+               <div className="flex flex-col items-center -mt-1">
+                  {gameState.phase === 'distribution-sections' && wh > 0 && <ChevronRight size={14} className="-rotate-90 text-map-ink-blue/40" />}
+                  <Misticka count={wh} active={gameState.phase === 'distribution-sections'} warehouse />
                </div>
             </div>
             {gameState.phase === 'distribution-units' && (
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[9px] font-bold text-map-ink-blue uppercase bg-white/50 px-3 py-1 rounded-full animate-pulse">
+              <div className="absolute top-1 left-1/2 -translate-x-1/2 text-[8px] font-bold text-map-ink-blue uppercase bg-white/50 px-2 py-0.5 rounded-full animate-pulse">
                 Klikněte na jednotku pro přidělení zdrojů ze sekce
               </div>
             )}
