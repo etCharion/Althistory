@@ -1,19 +1,34 @@
-import React, { useState, useMemo } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes } from '../data/typeUtils'; import { getUnitSections } from '../logic/hexGrid';
+import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes } from '../data/typeUtils'; import { getUnitSections } from '../logic/hexGrid';
 const GameView = ({ scenario, onExit }) => {
-  const { gameState, combatResult, retreatingUnitId, setCombatResult, takeGroundOption, setTakeGroundOption, takeGround, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario);
+  const { gameState, combatResult, retreatingUnitId, setCombatResult, takeGroundOption, setTakeGroundOption, takeGround, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario);
   const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none'); const [hovered, setHovered] = useState(null);
+  const [dismissedOverlay, setDismissedOverlay] = useState(false);
+
+  useEffect(() => {
+    if (retreatingUnitId || takeGroundOption) {
+      setDismissedOverlay(false);
+    }
+  }, [retreatingUnitId?.unitId, takeGroundOption?.unitId]);
   const [showConfirm, setShowConfirm] = useState(false);
   const tTypes = getAllTerrainTypes(); const uTypes = getAllUnitTypes(); const activeP = gameState.activePlayerId; const res = gameState.sectionResources[activeP]; const wh = gameState.centralWarehouse[activeP];
   const highlightedHexes = useMemo(() => {
-    if (!selected) return {};
     const h = {};
+    if (retreatingUnitId) {
+      getRetreatHexes(retreatingUnitId.unitId).forEach(k => h[k] = 'move');
+      return h;
+    }
+    if (takeGroundOption) {
+      h[`${takeGroundOption.hex.q},${takeGroundOption.hex.r}`] = 'move';
+      return h;
+    }
+    if (!selected) return {};
     if (gameState.phase === 'movement' && (actType === 'move' || !gameState.units[selected].hasMoved)) {
       getSelectedReachable(selected).forEach(k => h[k] = 'move');
     } else if (gameState.phase === 'attack' && (actType === 'attack')) {
       getSelectedTargetable(selected).forEach(uid => { const hex = getUnitHex(uid); if (hex) h[`${hex.q},${hex.r}`] = 'attack'; });
     }
     return h;
-  }, [selected, actType, gameState.phase, gameState.units, gameState.grid]);
+  }, [selected, actType, gameState.phase, gameState.units, gameState.grid, retreatingUnitId, takeGroundOption]);
   const currentUnitSections = useMemo(() => {
     if (!selected || gameState.phase !== 'distribution-units') return [];
     const hex = getUnitHex(selected); if (!hex) return [];
@@ -100,8 +115,32 @@ const GameView = ({ scenario, onExit }) => {
             highlightedHexes={highlightedHexes} hoveredHex={hovered} activePhase={gameState.phase}
             unitSections={currentUnitSections} onSectionSelect={(s) => assignResourceToUnit(selected, s)}
           />
-          {retreatingUnitId && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border-4 border-red-600 p-8 rounded shadow-2xl z-50 text-center uppercase"><h2 className="text-2xl font-bold text-red-600 font-handwriting">Ustupte!</h2><p>Zbývá: {retreatingUnitId.count}</p><p className="text-[10px] mt-2 text-gray-500">Klikněte na stejné pole pro ztrátu života</p></div>}
-          {takeGroundOption && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border-4 border-blue-600 p-8 rounded shadow-2xl z-50 text-center uppercase"><h2 className="text-2xl font-bold text-blue-600 font-handwriting">Obsadit pozici?</h2><p>Klikněte na pole pro přesun, nebo kamkoliv jinam pro zrušení.</p><button onClick={() => setTakeGroundOption(null)} className="mt-4 bg-gray-200 px-4 py-1 text-xs">Zrušit</button></div>}
+          {retreatingUnitId && (
+            <div className={`absolute left-1/2 -translate-x-1/2 z-50 text-center uppercase transition-all duration-300 ${dismissedOverlay ? 'top-2' : 'top-1/2 -translate-y-1/2'}`}>
+              <div className={`bg-white border-4 border-red-600 rounded shadow-2xl ${dismissedOverlay ? 'p-2 flex items-center gap-4' : 'p-8'}`}>
+                <h2 className={`${dismissedOverlay ? 'text-sm' : 'text-2xl'} font-bold text-red-600 font-handwriting`}>Ustupte!</h2>
+                {!dismissedOverlay && <p>Zbývá: {retreatingUnitId.count}</p>}
+                {!dismissedOverlay && <p className="text-[10px] mt-2 text-gray-500">Klikněte na stejné pole pro ztrátu života</p>}
+                <button onClick={() => setDismissedOverlay(!dismissedOverlay)} className={`mt-2 bg-red-600 text-white px-4 py-1 text-xs font-bold rounded ${dismissedOverlay ? 'mt-0' : ''}`}>
+                  {dismissedOverlay ? 'Zobrazit info' : 'Vyřešit'}
+                </button>
+              </div>
+            </div>
+          )}
+          {takeGroundOption && (
+            <div className={`absolute left-1/2 -translate-x-1/2 z-50 text-center uppercase transition-all duration-300 ${dismissedOverlay ? 'top-2' : 'top-1/2 -translate-y-1/2'}`}>
+              <div className={`bg-white border-4 border-blue-600 rounded shadow-2xl ${dismissedOverlay ? 'p-2 flex items-center gap-4' : 'p-8'}`}>
+                <h2 className={`${dismissedOverlay ? 'text-sm' : 'text-2xl'} font-bold text-blue-600 font-handwriting`}>Obsadit pozici?</h2>
+                {!dismissedOverlay && <p>Klikněte na pole pro přesun, nebo kamkoliv jinam pro zrušení.</p>}
+                <div className={`${dismissedOverlay ? 'flex gap-2' : 'mt-4 flex flex-col gap-2'}`}>
+                  <button onClick={() => setDismissedOverlay(!dismissedOverlay)} className="bg-blue-600 text-white px-4 py-1 text-xs font-bold rounded">
+                    {dismissedOverlay ? 'Zobrazit' : 'Vyřešit'}
+                  </button>
+                  <button onClick={() => setTakeGroundOption(null)} className="bg-gray-200 px-4 py-1 text-xs font-bold rounded">Zrušit</button>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="absolute top-4 right-4 flex flex-col gap-4 w-56 z-40">
             {selected && !retreatingUnitId && (
               <div className="bg-white/95 p-4 border-2 border-map-ink-blue shadow-lg rounded">
