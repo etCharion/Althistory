@@ -154,6 +154,29 @@ const Customization = ({ onBack, onEditScenario }) => {
                         <option value="infantry">Pěchota</option>
                         <option value="tank">Tank</option>
                         <option value="artillery">Dělostřelectvo</option>
+                        <option value="sof">SOF (Speciální síly)</option>
+                        <option value="engineers">Ženisté</option>
+                        <option value="mortar">Minomet</option>
+                        <option value="hmg">Těžký kulomet</option>
+                        <option value="anti-tank">Protitanková jednotka</option>
+                        <option value="sniper">Odstřelovač</option>
+                        <option value="tank-destroyer">Stíhač tanků</option>
+                        <option value="elite-tank">Elitní tank</option>
+                        <option value="flame-tank">Plamenometný tank</option>
+                        <option value="mobile-artillery">Mobilní dělostřelectvo</option>
+                        <option value="rocket-artillery">Raketové dělostřelectvo</option>
+                        <option value="long-range-artillery">Dalekonosné dělostřelectvo</option>
+                        <option value="anti-aircraft">Protiletadlové dělo</option>
+                        <option value="partisans">Partyzáni</option>
+                        <option value="half-track">Polopás</option>
+                        <option value="mobile-infantry">Mobilní pěchota</option>
+                        <option value="command-vehicle">Řídicí vůz</option>
+                        <option value="supply">Zásobování</option>
+                        <option value="ambulance">Sanitka</option>
+                        <option value="cavalry">Kavalérie</option>
+                        <option value="mountain">Horské jednotky</option>
+                        <option value="landing">Vyloďovací jednotky</option>
+                        <option value="paratroopers">Parašutisté</option>
                       </select>
                     </div>
                   </div>

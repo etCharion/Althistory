@@ -1,4 +1,5 @@
 import React from 'react'; import { axialToPixel, HEX_SIZE } from '../logic/hexGrid';
+import NatoSymbol from './NatoSymbol';
 
 const getHexPoints = (radius) => {
   const pts = [];
@@ -7,19 +8,6 @@ const getHexPoints = (radius) => {
     pts.push({ x: radius * Math.cos(a), y: radius * Math.sin(a) });
   }
   return pts;
-};
-
-const NatoSymbol = ({ type, owner }) => {
-  const color = owner === 'player1' ? '#1e40af' : '#b91c1c';
-  return (
-    <g>
-      <rect x="-18" y="-12" width="36" height="24" fill="white" stroke={color} strokeWidth="2" />
-      {type === 'infantry' && <path d="M-18,-12 L18,12 M18,-12 L-18,12" stroke={color} strokeWidth="1" />}
-      {type === 'tank' && <ellipse cx="0" cy="0" rx="12" ry="6" fill="none" stroke={color} strokeWidth="2" />}
-      {type === 'artillery' && <circle cx="0" cy="0" r="3" fill={color} />}
-      {['infantry', 'tank', 'artillery'].indexOf(type) === -1 && <text y="5" textAnchor="middle" fontSize="10" fill={color}>{type[0].toUpperCase()}</text>}
-    </g>
-  );
 };
 const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], onHexClick, onHexMouseEnter, onHexMouseLeave, leftWidth, centerWidth, selectedUnitId, highlightedHexes, hoveredHex, activePhase, unitSections, onSectionSelect }) => {
   const getTerrain = (id) => terrainTypes.find(t => t.id === id) || terrainTypes[0];

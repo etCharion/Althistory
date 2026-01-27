@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils'; import { getUnitSections, axialToOffset, getSection } from '../logic/hexGrid';
+import NatoSymbol from './NatoSymbol';
 import { Menu, Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check } from 'lucide-react';
 import { getGameState } from '../logic/firebaseService';
 
@@ -72,8 +73,10 @@ const StatisticsModal = ({ unitStats, scenario, unitTypes, onClose }) => {
               <div className="grid grid-cols-1 gap-3">
                  {stats.sort((a,b) => b.damageDealt - a.damageDealt).map(s => (
                    <div key={s.unitId} className={`flex items-center gap-6 p-4 rounded-xl border-2 ${s.ownerId === 'player1' ? 'border-blue-100 bg-blue-50/30' : 'border-red-100 bg-red-50/30'} ${s.destroyedInRound ? 'opacity-60 saturate-50 grayscale-[0.3]' : ''}`}>
-                      <div className={`w-12 h-12 flex items-center justify-center rounded-lg border-2 ${s.ownerId === 'player1' ? 'bg-blue-600 border-blue-800' : 'bg-red-600 border-red-800'} text-white shadow-md flex-shrink-0`}>
-                         <span className="font-black text-xs uppercase">{unitTypes.find(ut => ut.id === s.unitTypeId)?.natoSymbol}</span>
+                      <div className={`w-12 h-12 flex items-center justify-center rounded-lg border-2 ${s.ownerId === 'player1' ? 'bg-blue-600 border-blue-800' : 'bg-red-600 border-red-800'} text-white shadow-md flex-shrink-0 overflow-hidden`}>
+                         <svg viewBox="-20 -15 40 30" className="w-full h-full p-1">
+                            <NatoSymbol type={unitTypes.find(ut => ut.id === s.unitTypeId)?.natoSymbol || 'infantry'} owner={s.ownerId} />
+                         </svg>
                       </div>
 
                       <div className="w-48">
