@@ -195,21 +195,16 @@ const GameView = ({ scenario: initialScenario, gameId, onExit }) => {
   const [hoveredVP, setHoveredVP] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [victoryDismissed, setVictoryDismissed] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     if (retreatingUnitId || takeGroundOption) {
       setDismissedOverlay(false);
     }
   }, [retreatingUnitId?.unitId, takeGroundOption?.unitId]);
-  const [showConfirm, setShowConfirm] = useState(false);
-
-  if (loading || !gameState.scenario) return <div className="h-screen w-screen flex items-center justify-center bg-map-paper font-military uppercase font-bold text-map-ink-blue">Načítám bitevní pole...</div>;
-
-  const activeP = gameState.activePlayerId;
-  const res = gameState.sectionResources[activeP];
-  const wh = gameState.centralWarehouse[activeP];
 
   const highlightedHexes = useMemo(() => {
+    if (!gameState.scenario) return {};
     const h = {};
     if (retreatingUnitId) {
       getRetreatHexes(retreatingUnitId.unitId).forEach(k => h[k] = 'move');
@@ -226,12 +221,19 @@ const GameView = ({ scenario: initialScenario, gameId, onExit }) => {
       getSelectedTargetable(selected).forEach(uid => { const hex = getUnitHex(uid); if (hex) h[`${hex.q},${hex.r}`] = 'attack'; });
     }
     return h;
-  }, [selected, actType, gameState.phase, gameState.units, gameState.grid, retreatingUnitId, takeGroundOption]);
+  }, [selected, actType, gameState.phase, gameState.units, gameState.grid, retreatingUnitId, takeGroundOption, gameState.scenario]);
+
   const currentUnitSections = useMemo(() => {
-    if (!selected || gameState.phase !== 'distribution-units') return [];
+    if (!selected || gameState.phase !== 'distribution-units' || !gameState.scenario) return [];
     const hex = getUnitHex(selected); if (!hex) return [];
     return getUnitSections(hex.q, hex.r, gameState.scenario);
-  }, [selected, gameState.phase]);
+  }, [selected, gameState.phase, gameState.scenario]);
+
+  if (loading || !gameState.scenario) return <div className="h-screen w-screen flex items-center justify-center bg-map-paper font-military uppercase font-bold text-map-ink-blue">Načítám bitevní pole...</div>;
+
+  const activeP = gameState.activePlayerId;
+  const res = gameState.sectionResources[activeP];
+  const wh = gameState.centralWarehouse[activeP];
 
   const handleHexClick = (q, r) => {
     if (retreatingUnitId) { retreatUnit(retreatingUnitId.unitId, q, r); return; }
