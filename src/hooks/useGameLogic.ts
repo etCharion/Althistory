@@ -325,7 +325,7 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     const tarTerrain = getTerrainAt(tH.q, tH.r);
     const tarOverlay = getOverlayAt(tH.q, tH.r);
 
-    const isArtillery = att.typeId === 'artillery';
+    const isArtillery = utype.category === 'artillery';
     const dC = getDiceCount(att, tar, fH, tH, gameState.grid, terrainTypes, overlayTypes, utype);
 
     let ignoreFlags = 0;
@@ -336,8 +336,10 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     const dice = rollDice(dC);
     let h = 0, f = 0;
     const targetUnitType = unitTypes.find(ut => ut.id === tar.typeId);
+    const targetCategory = targetUnitType?.category || (tar.typeId === 'tank' ? 'tank' : (tar.typeId === 'artillery' ? 'artillery' : 'infantry'));
+
     dice.forEach(s => {
-      if (s === 'grenade' || s === targetUnitType?.category) h++;
+      if (s === 'grenade' || s === targetCategory) h++;
       if (s === 'flag') f++;
     });
 

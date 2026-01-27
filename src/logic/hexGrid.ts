@@ -191,7 +191,8 @@ export function getDiceCount(attackerUnit, targetUnit, attackerHex, targetHex, g
     const onSameRidge = areOnSameRidge(attackerHex, targetHex, grid);
     let terrainDef = 0;
     if (!(tarTerrain.id === 'hill' && onSameRidge)) {
-      terrainDef = isTank ? (tarTerrain.diceModifierDefenseTank ?? 0) : (tarTerrain.diceModifierDefenseInfantry ?? 0);
+      if (isTank) terrainDef = tarTerrain.diceModifierDefenseTank ?? 0;
+      else if (isInfantry) terrainDef = tarTerrain.diceModifierDefenseInfantry ?? 0;
     }
     const overlayDef = tarOverlay?.diceModifierDefense ?? 0;
     diceModifierDefense = Math.max(terrainDef, overlayDef);

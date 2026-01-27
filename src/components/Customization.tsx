@@ -196,12 +196,6 @@ const Customization = ({ onBack, onEditScenario }) => {
                         <option value="artillery">Dělostřelectvo</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="text-[10px] font-bold uppercase text-gray-400">Vybraný symbol</label>
-                      <div className="py-2 border-b-2 border-gray-100 font-bold text-slate-800 uppercase text-sm truncate">
-                        {NATO_SYMBOLS.find(s => s.id === u.natoSymbol)?.name || u.natoSymbol}
-                      </div>
-                    </div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                     <div>
