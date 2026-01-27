@@ -34,7 +34,23 @@ export function useGameLogic(scenario) {
     });
     return units;
   }, [scenario]);
-  const [gameState, setGameState] = useState({ scenario, currentTurn: 1, activePlayerId: scenario.firstPlayerId, phase: 'distribution-sections', sectionResources: { player1: { left: 0, center: 0, right: 0 }, player2: { left: 0, center: 0, right: 0 } }, centralWarehouse: { player1: scenario.player1.income, player2: scenario.player2.income }, units: initialUnits, grid: initialGrid, victoryPoints: { player1: 0, player2: 0 } });
+  const initialStats = useMemo(() => {
+    const stats = {};
+    scenario.initialUnits.forEach(u => {
+      stats[u.id] = {
+        unitId: u.id,
+        unitTypeId: u.typeId,
+        ownerId: u.ownerId,
+        damageDealt: 0,
+        damageTaken: 0,
+        kills: 0,
+        distanceTraveled: 0,
+        attackers: []
+      };
+    });
+    return stats;
+  }, [scenario]);
+  const [gameState, setGameState] = useState({ scenario, currentTurn: 1, activePlayerId: scenario.firstPlayerId, phase: 'distribution-sections', sectionResources: { player1: { left: 0, center: 0, right: 0 }, player2: { left: 0, center: 0, right: 0 } }, centralWarehouse: { player1: scenario.player1.income, player2: scenario.player2.income }, units: initialUnits, grid: initialGrid, victoryPoints: { player1: [], player2: [] }, unitStats: initialStats });
   const getUnitHex = (uid) => Object.values(gameState.grid).find(h => h.unitId === uid) || null;
   const getTerrainAt = (q, r) => { const hex = gameState.grid[`${q},${r}`]; return terrainTypes.find(t => t.id === hex?.terrainTypeId) || terrainTypes[0]; };
   const getOverlayAt = (q, r) => { const hex = gameState.grid[`${q},${r}`]; return overlayTypes.find(o => o.id === hex?.overlayTypeId) || null; };
@@ -77,8 +93,7 @@ export function useGameLogic(scenario) {
         }
       });
 
-      const { vpChange1, vpChange2, newGrid: updatedGrid } = checkObjectives(prev.grid, newUnits, next, 'startOfTurn');
-      const nVP = { player1: prev.victoryPoints.player1 + vpChange1, player2: prev.victoryPoints.player2 + vpChange2 };
+      const { nVP, newGrid: updatedGrid } = checkObjectives(prev.grid, newUnits, next, 'startOfTurn', prev.currentTurn, prev.victoryPoints);
 
       return {
         ...prev,
@@ -89,7 +104,7 @@ export function useGameLogic(scenario) {
         units: newUnits,
         grid: updatedGrid,
         victoryPoints: nVP,
-        winner: nVP.player1 >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2 >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
+        winner: nVP.player1.length >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2.length >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
       };
     });
   };
@@ -151,10 +166,9 @@ export function useGameLogic(scenario) {
       return prev;
     });
   };
-  const checkObjectives = (grid, units, playerId, timing) => {
-    let vpChange1 = 0;
-    let vpChange2 = 0;
+  const checkObjectives = (grid, units, playerId, timing, round, currentVP) => {
     const newGrid = { ...grid };
+    const nVP = { player1: [...currentVP.player1], player2: [...currentVP.player2] };
 
     Object.keys(newGrid).forEach(key => {
       const hex = newGrid[key];
@@ -170,15 +184,22 @@ export function useGameLogic(scenario) {
           if (obj.controllingPlayerId !== playerId) {
             // Player captured objective
             if (obj.controllingPlayerId) {
-              // Other player lost it IF it was valid for them
-              if (isValidForPlayer(obj.controllingPlayerId)) {
-                if (obj.controllingPlayerId === 'player1') vpChange1 -= obj.points; else vpChange2 -= obj.points;
-              }
+              // Other player lost it
+              const other = obj.controllingPlayerId;
+              nVP[other] = nVP[other].filter(vp => vp.objectiveHexKey !== key);
             }
             obj.controllingPlayerId = playerId;
-            // New controller gains points IF it is valid for them
+            // New controller gains points
             if (isValidForPlayer(playerId)) {
-              if (playerId === 'player1') vpChange1 += obj.points; else vpChange2 += obj.points;
+              for (let i = 0; i < obj.points; i++) {
+                nVP[playerId].push({
+                  id: `obj-${key}-${i}-${round}`,
+                  type: 'objective',
+                  round: round,
+                  objectiveName: obj.name || 'Cíl',
+                  objectiveHexKey: key
+                });
+              }
             }
             newGrid[key] = { ...hex, objective: obj };
           }
@@ -187,15 +208,14 @@ export function useGameLogic(scenario) {
 
       // Handle Temporary Objectives loss when leaving
       if (obj.type === 'temporary' && obj.controllingPlayerId && (!occupyingUnit || occupyingUnit.ownerId !== obj.controllingPlayerId)) {
-        if (isValidForPlayer(obj.controllingPlayerId)) {
-          if (obj.controllingPlayerId === 'player1') vpChange1 -= obj.points; else vpChange2 -= obj.points;
-        }
+        const prevController = obj.controllingPlayerId;
+        nVP[prevController] = nVP[prevController].filter(vp => vp.objectiveHexKey !== key);
         obj.controllingPlayerId = undefined;
         newGrid[key] = { ...hex, objective: obj };
       }
     });
 
-    return { vpChange1, vpChange2, newGrid };
+    return { nVP, newGrid };
   };
 
   const moveUnit = (uid, tq, tr) => {
@@ -234,15 +254,18 @@ export function useGameLogic(scenario) {
       const finalMovementUsed = isStopTerrain ? utype.movement : totalDist;
       const hasAttacked = (isStopTerrain && !allowAttackAfterStop) || (totalDist > utype.canShootAfterMovingMax ? true : unit.hasAttacked);
 
-      const { vpChange1, vpChange2, newGrid: updatedGrid } = checkObjectives(nGrid, prev.units, prev.activePlayerId, 'immediate');
-      const nVP = { player1: prev.victoryPoints.player1 + vpChange1, player2: prev.victoryPoints.player2 + vpChange2 };
+      const newStats = { ...prev.unitStats };
+      newStats[uid] = { ...newStats[uid], distanceTraveled: newStats[uid].distanceTraveled + dist };
+
+      const { nVP, newGrid: updatedGrid } = checkObjectives(nGrid, prev.units, prev.activePlayerId, 'immediate', prev.currentTurn, prev.victoryPoints);
 
       return {
         ...prev,
         grid: updatedGrid,
         units: { ...prev.units, [uid]: { ...unit, resources: newResources, hasMoved: true, movementUsed: finalMovementUsed, hasAttacked } },
         victoryPoints: nVP,
-        winner: nVP.player1 >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2 >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
+        unitStats: newStats,
+        winner: nVP.player1.length >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2.length >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
       };
     });
   };
@@ -308,31 +331,53 @@ export function useGameLogic(scenario) {
     setGameState(prev => {
       let nU = { ...prev.units };
       let nG = { ...prev.grid };
-      let nVP = { ...prev.victoryPoints };
+      let nVP = { player1: [...prev.victoryPoints.player1], player2: [...prev.victoryPoints.player2] };
+      let nStats = { ...prev.unitStats };
+
       let upT = { ...nU[tid] };
-      for (let i=0; i<h; i++) { if (upT.resources > 0) upT.resources--; else upT.figures--; }
+      let targetStats = { ...nStats[tid] };
+      let attackerStats = { ...nStats[aid] };
+
+      attackerStats.damageDealt += h;
+      targetStats.damageTaken += h;
+      if (!targetStats.attackers.includes(att.typeId)) {
+        targetStats.attackers.push(att.typeId);
+      }
+
+      for (let i = 0; i < h; i++) { if (upT.resources > 0) upT.resources--; else upT.figures--; }
 
       let isEliminated = false;
       if (upT.figures <= 0) {
+        attackerStats.kills += 1;
+        targetStats.destroyedInRound = prev.currentTurn;
+
         delete nU[tid];
         nG[`${tH.q},${tH.r}`].unitId = undefined;
         if (nG[`${tH.q},${tH.r}`].overlayTypeId === 'sandbags') {
           nG[`${tH.q},${tH.r}`].overlayTypeId = undefined;
         }
-        nVP[att.ownerId]++;
+
+        nVP[att.ownerId].push({
+          id: `kill-${tid}-${prev.currentTurn}`,
+          type: 'unit',
+          round: prev.currentTurn,
+          unitStats: targetStats
+        });
+
         isEliminated = true;
       } else {
         nU[tid] = upT;
       }
 
-      nU[aid] = { ...nU[aid], resources: nU[aid].resources-1, hasAttacked: true };
+      nStats[aid] = attackerStats;
+      nStats[tid] = targetStats;
+
+      nU[aid] = { ...nU[aid], resources: nU[aid].resources - 1, hasAttacked: true };
 
       if (isEliminated) {
-        // Recalculate objectives (e.g. if defender was holding a temporary objective)
-        const { vpChange1, vpChange2, newGrid: updatedGrid } = checkObjectives(nG, nU, prev.activePlayerId, 'immediate');
+        const { nVP: updatedVP, newGrid: updatedGrid } = checkObjectives(nG, nU, prev.activePlayerId, 'immediate', prev.currentTurn, { player1: nVP.player1, player2: nVP.player2 });
         nG = updatedGrid;
-        nVP.player1 += vpChange1;
-        nVP.player2 += vpChange2;
+        nVP = updatedVP;
 
         if (dist === 1 && att.typeId !== 'artillery') {
           setTimeout(() => setTakeGroundOption({ unitId: aid, hex: { q: tH.q, r: tH.r } }), 1000);
@@ -341,7 +386,7 @@ export function useGameLogic(scenario) {
         setTimeout(() => setRetreatingUnitId({ unitId: tid, count: finalFlags, attackerId: aid, targetHex: { q: tH.q, r: tH.r } }), 1000);
       }
 
-      return { ...prev, units: nU, grid: nG, victoryPoints: nVP, winner: nVP.player1 >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2 >= prev.scenario.victoryPointsToWin ? 'player2' : undefined) };
+      return { ...prev, units: nU, grid: nG, victoryPoints: nVP, unitStats: nStats, winner: nVP.player1.length >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2.length >= prev.scenario.victoryPointsToWin ? 'player2' : undefined) };
     });
   };
   const retreatUnit = (uid, tq, tr) => {
@@ -352,36 +397,54 @@ export function useGameLogic(scenario) {
 
     // Manual retreat to same hex = cannot retreat
     if (fH.q === tq && fH.r === tr) {
-       setGameState(prev => {
-         const nU = { ...prev.units };
-         const nVP = { ...prev.victoryPoints };
-         let u = { ...nU[uid] };
-         if (u.resources > 0) u.resources--; else u.figures--;
-         let nG = { ...prev.grid };
-         if (u.figures <= 0) {
-           delete nU[uid];
-           nG[`${fH.q},${fH.r}`].unitId = undefined;
-           if (nG[`${fH.q},${fH.r}`].overlayTypeId === 'sandbags') {
-             nG[`${fH.q},${fH.r}`].overlayTypeId = undefined;
-           }
-           nVP[retreatingUnitId.attackerId === 'player1' ? 'player1' : 'player2']++;
-         } else {
-           nU[uid] = u;
-         }
+      setGameState(prev => {
+        const nU = { ...prev.units };
+        const nVP = { player1: [...prev.victoryPoints.player1], player2: [...prev.victoryPoints.player2] };
+        const nStats = { ...prev.unitStats };
+        let u = { ...nU[uid] };
+        let uStats = { ...nStats[uid] };
 
-         const { vpChange1, vpChange2, newGrid: updatedGrid } = checkObjectives(nG, nU, prev.activePlayerId, 'immediate');
-         const finalVP = { player1: nVP.player1 + vpChange1, player2: nVP.player2 + vpChange2 };
+        uStats.damageTaken += 1;
+        if (u.resources > 0) u.resources--; else u.figures--;
+        let nG = { ...prev.grid };
+        if (u.figures <= 0) {
+          uStats.destroyedInRound = prev.currentTurn;
+          delete nU[uid];
+          nG[`${fH.q},${fH.r}`].unitId = undefined;
+          if (nG[`${fH.q},${fH.r}`].overlayTypeId === 'sandbags') {
+            nG[`${fH.q},${fH.r}`].overlayTypeId = undefined;
+          }
+          const attacker = prev.units[retreatingUnitId.attackerId];
+          if (attacker) {
+            const winnerOfPoint = attacker.ownerId;
+            nVP[winnerOfPoint].push({
+              id: `kill-${uid}-${prev.currentTurn}`,
+              type: 'unit',
+              round: prev.currentTurn,
+              unitStats: uStats
+            });
+            if (nStats[retreatingUnitId.attackerId]) {
+              nStats[retreatingUnitId.attackerId] = { ...nStats[retreatingUnitId.attackerId], kills: nStats[retreatingUnitId.attackerId].kills + 1 };
+            }
+          }
+        } else {
+          nU[uid] = u;
+        }
+        nStats[uid] = uStats;
 
-         if (u.figures <= 0) setRetreatingUnitId(null);
+        const { nVP: finalVP, newGrid: updatedGrid } = checkObjectives(nG, nU, prev.activePlayerId, 'immediate', prev.currentTurn, nVP);
 
-         return {
-           ...prev,
-           units: nU,
-           grid: updatedGrid,
-           victoryPoints: finalVP,
-           winner: finalVP.player1 >= prev.scenario.victoryPointsToWin ? 'player1' : (finalVP.player2 >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
-         };
-       });
+        if (u.figures <= 0) setRetreatingUnitId(null);
+
+        return {
+          ...prev,
+          units: nU,
+          grid: updatedGrid,
+          victoryPoints: finalVP,
+          unitStats: nStats,
+          winner: finalVP.player1.length >= prev.scenario.victoryPointsToWin ? 'player1' : (finalVP.player2.length >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
+        };
+      });
        if (retreatingUnitId.count > 1 && (gameState.units[uid]?.figures > 0 || gameState.units[uid]?.resources > 0)) {
          setRetreatingUnitId(prev => ({ ...prev, count: prev.count - 1 }));
        } else {
@@ -411,11 +474,18 @@ export function useGameLogic(scenario) {
       fromHex.unitId = undefined;
       nG[`${tq},${tr}`].unitId = uid;
 
-      const { vpChange1, vpChange2, newGrid: updatedGrid } = checkObjectives(nG, prev.units, prev.activePlayerId, 'immediate');
+      const nStats = { ...prev.unitStats };
+      if (nStats[uid]) {
+        nStats[uid] = { ...nStats[uid], distanceTraveled: nStats[uid].distanceTraveled + 1 };
+      }
+
+      const { nVP, newGrid: updatedGrid } = checkObjectives(nG, prev.units, prev.activePlayerId, 'immediate', prev.currentTurn, prev.victoryPoints);
       return {
         ...prev,
         grid: updatedGrid,
-        victoryPoints: { player1: prev.victoryPoints.player1 + vpChange1, player2: prev.victoryPoints.player2 + vpChange2 }
+        victoryPoints: nVP,
+        unitStats: nStats,
+        winner: nVP.player1.length >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2.length >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
       };
     });
 
@@ -470,13 +540,18 @@ export function useGameLogic(scenario) {
       fromHex.unitId = undefined;
       nG[`${q},${r}`].unitId = uid;
 
-      const { vpChange1, vpChange2, newGrid: updatedGrid } = checkObjectives(nG, prev.units, prev.activePlayerId, 'immediate');
-      const nVP = { player1: prev.victoryPoints.player1 + vpChange1, player2: prev.victoryPoints.player2 + vpChange2 };
+      const nStats = { ...prev.unitStats };
+      if (nStats[uid]) {
+        nStats[uid] = { ...nStats[uid], distanceTraveled: nStats[uid].distanceTraveled + 1 };
+      }
+
+      const { nVP, newGrid: updatedGrid } = checkObjectives(nG, prev.units, prev.activePlayerId, 'immediate', prev.currentTurn, prev.victoryPoints);
       return {
         ...prev,
         grid: updatedGrid,
         victoryPoints: nVP,
-        winner: nVP.player1 >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2 >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
+        unitStats: nStats,
+        winner: nVP.player1.length >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2.length >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
       };
     });
     setTakeGroundOption(null);
