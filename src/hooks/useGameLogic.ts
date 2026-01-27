@@ -310,9 +310,10 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
 
     const utype = unitTypes.find(u => u.id === att.typeId);
     if (!utype) return;
+    const attCategory = utype.category || (utype.id === 'tank' ? 'tank' : (utype.id === 'artillery' ? 'artillery' : 'infantry'));
 
     // Artillery cannot shoot if it moved
-    if (utype.category === 'artillery' && (att.movementUsed > 0 || att.hasMoved)) return;
+    if (attCategory === 'artillery' && (att.movementUsed > 0 || att.hasMoved)) return;
 
     const fH = getUnitHex(aid);
     const tH = getUnitHex(tid);
@@ -325,7 +326,7 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     const tarTerrain = getTerrainAt(tH.q, tH.r);
     const tarOverlay = getOverlayAt(tH.q, tH.r);
 
-    const isArtillery = utype.category === 'artillery';
+    const isArtillery = attCategory === 'artillery';
     const dC = getDiceCount(att, tar, fH, tH, gameState.grid, terrainTypes, overlayTypes, utype);
 
     let ignoreFlags = 0;
@@ -396,7 +397,7 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
         nG = updatedGrid;
         nVP = updatedVP;
 
-        if (dist === 1 && utype.category !== 'artillery') {
+        if (dist === 1 && attCategory !== 'artillery') {
           setTimeout(() => setTakeGroundOption({ unitId: aid, hex: { q: tH.q, r: tH.r } }), 1000);
         }
       } else if (finalFlags > 0) {
@@ -468,7 +469,8 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
          if (retreatingUnitId.attackerId && retreatingUnitId.targetHex) {
            const att = gameState.units[retreatingUnitId.attackerId];
            const attType = unitTypes.find(ut => ut.id === att?.typeId);
-           if (att && getDistance(getUnitHex(retreatingUnitId.attackerId), retreatingUnitId.targetHex) === 1 && attType?.category !== 'artillery') {
+           const category = attType?.category || (attType?.id === 'tank' ? 'tank' : (attType?.id === 'artillery' ? 'artillery' : 'infantry'));
+           if (att && getDistance(getUnitHex(retreatingUnitId.attackerId), retreatingUnitId.targetHex) === 1 && category !== 'artillery') {
              setTakeGroundOption({ unitId: retreatingUnitId.attackerId, hex: retreatingUnitId.targetHex });
            }
          }
@@ -513,7 +515,8 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
       if (retreatingUnitId.attackerId && retreatingUnitId.targetHex) {
         const att = gameState.units[retreatingUnitId.attackerId];
         const attType = unitTypes.find(ut => ut.id === att?.typeId);
-        if (att && getDistance(getUnitHex(retreatingUnitId.attackerId), retreatingUnitId.targetHex) === 1 && attType?.category !== 'artillery') {
+        const category = attType?.category || (attType?.id === 'tank' ? 'tank' : (attType?.id === 'artillery' ? 'artillery' : 'infantry'));
+        if (att && getDistance(getUnitHex(retreatingUnitId.attackerId), retreatingUnitId.targetHex) === 1 && category !== 'artillery') {
           setTakeGroundOption({ unitId: retreatingUnitId.attackerId, hex: retreatingUnitId.targetHex });
         }
       }
@@ -613,8 +616,9 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     const hex = getUnitHex(uid); if (!hex) return [];
     const utype = unitTypes.find(u => u.id === unit.typeId);
     if (unit.resources <= 0 || unit.hasAttacked) return [];
+    const category = utype?.category || (utype?.id === 'tank' ? 'tank' : (utype?.id === 'artillery' ? 'artillery' : 'infantry'));
     // Artillery cannot shoot if it moved
-    if (utype?.category === 'artillery' && (unit.movementUsed > 0 || unit.hasMoved)) return [];
+    if (category === 'artillery' && (unit.movementUsed > 0 || unit.hasMoved)) return [];
     return getTargetableUnits(hex.q, hex.r, utype, gameState, terrainTypes, overlayTypes);
   };
 
@@ -659,12 +663,13 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
       const attackable = Object.values(gameState.units).filter(u => {
         const utype = unitTypes.find(ut => ut.id === u.typeId);
         if (u.ownerId !== activeP || u.resources <= 0 || u.hasAttacked) return false;
-        if (utype?.category === 'artillery' && (u.movementUsed > 0 || u.hasMoved)) return false;
+        const category = utype?.category || (utype?.id === 'tank' ? 'tank' : (utype?.id === 'artillery' ? 'artillery' : 'infantry'));
+        if (category === 'artillery' && (u.movementUsed > 0 || u.hasMoved)) return false;
         const hex = getUnitHex(u.id);
         if (!hex) return false;
 
         // Can attack or destroy wire
-        if (hex.overlayTypeId === 'wire' && utype?.category === 'infantry') return true;
+        if (hex.overlayTypeId === 'wire' && category === 'infantry') return true;
 
         return getTargetableUnits(hex.q, hex.r, utype, gameState, terrainTypes, overlayTypes).length > 0;
       });
