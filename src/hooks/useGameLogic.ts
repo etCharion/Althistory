@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { getDistance, axialToOffset, getUnitSections, getNeighbors, getReachableHexes, getTargetableUnits, areOnSameRidge, checkLOS as calcLOS } from '../logic/hexGrid';
+import { getDistance, axialToOffset, getUnitSections, getNeighbors, getReachableHexes, getTargetableUnits, areOnSameRidge, checkLOS as calcLOS, getDiceCount } from '../logic/hexGrid';
 import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils';
 import { rollDice } from '../logic/dice';
 export function useGameLogic(scenario) {
@@ -84,8 +84,11 @@ export function useGameLogic(scenario) {
           };
         } else {
           // Reset flags for the defending player who just finished their turn
+          // Cap resources at 1 during opponent's turn
           newUnits[id] = {
             ...u,
+            resources: Math.min(u.resources, 1),
+            resourceOrigins: u.resourceOrigins ? u.resourceOrigins.slice(0, Math.min(u.resources, 1)) : [],
             hasMoved: false,
             hasAttacked: false,
             movementUsed: 0
@@ -291,35 +294,14 @@ export function useGameLogic(scenario) {
     const tarOverlay = getOverlayAt(tH.q, tH.r);
 
     const isArtillery = att.typeId === 'artillery';
-    const isTank = att.typeId === 'tank';
-    const isInfantry = att.typeId === 'infantry';
+    const dC = getDiceCount(att, tar, fH, tH, gameState.grid, terrainTypes, overlayTypes, utype);
 
-    let diceModifierDefense = 0;
     let ignoreFlags = 0;
     if (!isArtillery) {
-      const onSameRidge = areOnSameRidge(fH, tH, gameState.grid);
-      let terrainDef = 0;
-      if (!(tarTerrain.id === 'hill' && onSameRidge)) {
-        terrainDef = isTank ? (tarTerrain.diceModifierDefenseTank ?? 0) : (tarTerrain.diceModifierDefenseInfantry ?? 0);
-      }
-      const overlayDef = tarOverlay?.diceModifierDefense ?? 0;
-      diceModifierDefense = Math.max(terrainDef, overlayDef);
       ignoreFlags = Math.max(tarTerrain.ignoreFlags ?? 0, tarOverlay?.ignoreFlags ?? 0);
     }
 
-    let terrainAtt = 0;
-    if (isTank) terrainAtt = attTerrain.diceModifierAttackTank ?? 0;
-    else if (isInfantry) terrainAtt = attTerrain.diceModifierAttackInfantry ?? 0;
-
-    let overlayAtt = 0;
-    if (isTank) overlayAtt = attOverlay?.diceModifierAttackTank ?? 0;
-    else if (isInfantry) overlayAtt = attOverlay?.diceModifierAttackInfantry ?? 0;
-    else if (isArtillery) overlayAtt = attOverlay?.diceModifierAttackArtillery ?? 0;
-
-    const diceModifierAttack = Math.min(terrainAtt, overlayAtt);
-
-    let dC = utype.shootingRange[dist-1] - diceModifierDefense + diceModifierAttack;
-    const dice = rollDice(Math.max(0, dC));
+    const dice = rollDice(dC);
     let h = 0, f = 0;
     dice.forEach(s => {
       if (s==='grenade' || s===tar.typeId) h++;
