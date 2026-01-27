@@ -128,7 +128,7 @@ const VPItem = ({ vp, player, onMouseEnter }) => {
       className="cursor-help transition-all hover:scale-125 hover:-translate-y-1 active:scale-95 flex-shrink-0"
     >
       {vp.type === 'unit' ? (
-        <div className={`w-3.5 h-4.5 border border-slate-800 rounded shadow-[0_1px_0_0_rgba(0,0,0,0.3)] ${player === 'player1' ? 'bg-blue-600' : 'bg-red-600'}`} />
+        <div className={`w-4 h-5 border-2 border-slate-800 rounded shadow-[0_1px_0_0_rgba(0,0,0,0.3)] ${player === 'player1' ? 'bg-blue-600 shadow-blue-900/20' : 'bg-red-600 shadow-red-900/20'}`} />
       ) : (
         <div className="text-yellow-500 drop-shadow-sm filter saturate-150">
           <Star size={16} fill="currentColor" strokeWidth={3} />
