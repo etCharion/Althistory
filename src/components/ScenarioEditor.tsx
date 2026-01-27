@@ -33,7 +33,7 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
   const [campaigns, setCampaigns] = useState([]);
   const [hexes, setHexes] = useState({});
   const [units, setUnits] = useState({});
-  const [objSettings, setObjSettings] = useState({ type: 'permanent', timing: 'immediate', points: 1, validFor: 'both' as any });
+  const [objSettings, setObjSettings] = useState({ name: 'Cíl', type: 'permanent', timing: 'immediate', points: 1, validFor: 'both' as any });
 
   useEffect(() => {
     setTerrainTypes(getAllTerrainTypes());
@@ -165,6 +165,21 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-gray-500">Body k výhře</label>
+                <input type="number" className="w-full p-2 border text-xs rounded outline-none focus:border-map-ink-blue" value={scenario.victoryPointsToWin} onChange={e => setScenario({ ...scenario, victoryPointsToWin: parseInt(e.target.value) || 0 })} />
+              </div>
+              <div className="space-y-1">
+                 <label className="text-[10px] font-bold uppercase text-gray-500">Příjem Spojenci</label>
+                 <input type="number" className="w-full p-2 border text-xs rounded outline-none focus:border-map-ink-blue" value={scenario.player1.income} onChange={e => setScenario({ ...scenario, player1: { ...scenario.player1, income: parseInt(e.target.value) || 0 }})} />
+              </div>
+              <div className="space-y-1">
+                 <label className="text-[10px] font-bold uppercase text-gray-500">Příjem Osa</label>
+                 <input type="number" className="w-full p-2 border text-xs rounded outline-none focus:border-map-ink-blue" value={scenario.player2.income} onChange={e => setScenario({ ...scenario, player2: { ...scenario.player2, income: parseInt(e.target.value) || 0 }})} />
+              </div>
+            </div>
+
             <div className="grid grid-cols-3 gap-2">
               <div className="col-span-2 space-y-1">
                 <label className="text-[10px] font-bold uppercase text-gray-500 flex items-center gap-1"><Globe size={10} /> Kampaň</label>
@@ -217,6 +232,10 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
           <section>
             <h3 className="font-bold mb-2 uppercase text-xs text-map-ink-blue border-b border-map-ink-blue/20 pb-1">Objektivy</h3>
             <div className="bg-white p-2 border rounded space-y-2 text-[10px]">
+               <div className="flex justify-between items-center">
+                 <span className="font-bold uppercase text-gray-500">Název:</span>
+                 <input type="text" className="border rounded p-1 w-32" value={objSettings.name || ''} onChange={e => setObjSettings({...objSettings, name: e.target.value})} />
+               </div>
                <div className="flex justify-between items-center">
                  <span className="font-bold uppercase text-gray-500">Typ:</span>
                  <select className="border rounded p-1" value={objSettings.type} onChange={e => setObjSettings({...objSettings, type: e.target.value as any})}>

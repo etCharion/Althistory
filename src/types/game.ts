@@ -43,6 +43,7 @@ export type OverlayType = {
 };
 
 export type Objective = {
+  name?: string;
   type: 'permanent' | 'temporary';
   timing: 'immediate' | 'startOfTurn';
   points: number;
@@ -81,5 +82,26 @@ export type Scenario = {
   campaignNumber?: number;
 };
 
+export type UnitStats = {
+  unitId: string;
+  unitTypeId: string;
+  ownerId: PlayerId;
+  damageDealt: number;
+  damageTaken: number;
+  kills: number;
+  distanceTraveled: number;
+  attackers: string[];
+  destroyedInRound?: number;
+};
+
+export type VPDetail = {
+  id: string;
+  type: 'unit' | 'objective';
+  round: number;
+  unitStats?: UnitStats;
+  objectiveName?: string;
+  objectiveHexKey?: string;
+};
+
 export type GamePhase = 'distribution-sections' | 'distribution-units' | 'movement' | 'attack' | 'gameOver';
-export type GameState = { scenario: Scenario; currentTurn: number; activePlayerId: PlayerId; phase: GamePhase; sectionResources: { player1: { left: number; center: number; right: number }; player2: { left: number; center: number; right: number }; }; centralWarehouse: { player1: number; player2: number; }; units: Record<string, Unit>; grid: Record<string, Hex>; winner?: PlayerId; victoryPoints: { player1: number; player2: number; }; };
+export type GameState = { scenario: Scenario; currentTurn: number; activePlayerId: PlayerId; phase: GamePhase; sectionResources: { player1: { left: number; center: number; right: number }; player2: { left: number; center: number; right: number }; }; centralWarehouse: { player1: number; player2: number; }; units: Record<string, Unit>; grid: Record<string, Hex>; winner?: PlayerId; victoryPoints: { player1: VPDetail[]; player2: VPDetail[]; }; unitStats: Record<string, UnitStats>; };
