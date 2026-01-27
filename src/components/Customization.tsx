@@ -1,7 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Plus, Edit2 } from 'lucide-react';
+import { Trash2, Plus, Edit2, X as CloseIcon } from 'lucide-react';
 import NatoSymbol from './NatoSymbol';
 import { getAllUnitTypes, getAllTerrainTypes, getAllCountries, getAllCampaigns, getAllScenarios, getAllOverlayTypes, saveUnitType, deleteUnitType, saveTerrainType, deleteTerrainType, saveOverlayType, deleteOverlayType, saveCountry, deleteCountry, saveCampaign, deleteCampaign, saveScenario, deleteScenario } from '../data/typeUtils';
+
+const NATO_SYMBOLS = [
+  { id: 'infantry', name: 'Pěchota' },
+  { id: 'tank', name: 'Tank' },
+  { id: 'artillery', name: 'Dělostřelectvo' },
+  { id: 'sof', name: 'SOF (Speciální síly)' },
+  { id: 'engineers', name: 'Ženisté' },
+  { id: 'mortar', name: 'Minomet' },
+  { id: 'hmg', name: 'Těžký kulomet' },
+  { id: 'anti-tank', name: 'Protitanková jednotka' },
+  { id: 'sniper', name: 'Odstřelovač' },
+  { id: 'tank-destroyer', name: 'Stíhač tanků' },
+  { id: 'elite-tank', name: 'Elitní tank' },
+  { id: 'flame-tank', name: 'Plamenometný tank' },
+  { id: 'mobile-artillery', name: 'Mobilní dělostřelectvo' },
+  { id: 'rocket-artillery', name: 'Raketové dělostřelectvo' },
+  { id: 'long-range-artillery', name: 'Dalekonosné dělostřelectvo' },
+  { id: 'anti-aircraft', name: 'Protiletadlové dělo' },
+  { id: 'partisans', name: 'Partyzáni' },
+  { id: 'half-track', name: 'Polopás' },
+  { id: 'mobile-infantry', name: 'Mobilní pěchota' },
+  { id: 'command-vehicle', name: 'Řídicí vůz' },
+  { id: 'supply', name: 'Zásobování' },
+  { id: 'ambulance', name: 'Sanitka' },
+  { id: 'cavalry', name: 'Kavalérie' },
+  { id: 'mountain', name: 'Horské jednotky' },
+  { id: 'landing', name: 'Vyloďovací jednotky' },
+  { id: 'paratroopers', name: 'Parašutisté' }
+];
 
 const Customization = ({ onBack, onEditScenario }) => {
   const [units, setUnits] = useState([]);
@@ -11,6 +40,7 @@ const Customization = ({ onBack, onEditScenario }) => {
   const [campaigns, setCampaigns] = useState([]);
   const [scenarios, setScenarios] = useState([]);
   const [activeTab, setActiveTab] = useState('scenarios');
+  const [selectedUnitForSymbol, setSelectedUnitForSymbol] = useState(null);
 
   useEffect(() => {
     const load = async () => {
@@ -145,10 +175,14 @@ const Customization = ({ onBack, onEditScenario }) => {
               {units.map((u, idx) => (
                 <div key={u.id} className="p-4 border-2 border-gray-200 rounded bg-white shadow-sm">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                    <div className="flex items-center justify-center bg-gray-50 rounded border-2 border-gray-100 p-2">
+                    <div className="flex flex-col items-center justify-center bg-gray-50 rounded border-2 border-gray-100 p-2 cursor-pointer hover:border-map-ink-blue transition-all group relative" onClick={() => setSelectedUnitForSymbol(u)}>
                       <svg viewBox="-20 -15 40 30" className="w-16 h-12">
                          <NatoSymbol type={u.natoSymbol} owner="player1" />
                       </svg>
+                      <div className="absolute inset-0 bg-map-ink-blue/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                         <Edit2 size={20} className="text-map-ink-blue" />
+                      </div>
+                      <span className="text-[8px] font-bold uppercase text-gray-400 mt-1 group-hover:text-map-ink-blue transition-colors">Změnit symbol</span>
                     </div>
                     <div className="md:col-span-1">
                       <label className="text-[10px] font-bold uppercase text-gray-400">Název jednotky</label>
@@ -163,35 +197,10 @@ const Customization = ({ onBack, onEditScenario }) => {
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold uppercase text-gray-400">NATO Symbol</label>
-                      <select className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold" value={u.natoSymbol} onChange={e => updateUnit({ ...u, natoSymbol: e.target.value })}>
-                        <option value="infantry">Pěchota</option>
-                        <option value="tank">Tank</option>
-                        <option value="artillery">Dělostřelectvo</option>
-                        <option value="sof">SOF (Speciální síly)</option>
-                        <option value="engineers">Ženisté</option>
-                        <option value="mortar">Minomet</option>
-                        <option value="hmg">Těžký kulomet</option>
-                        <option value="anti-tank">Protitanková jednotka</option>
-                        <option value="sniper">Odstřelovač</option>
-                        <option value="tank-destroyer">Stíhač tanků</option>
-                        <option value="elite-tank">Elitní tank</option>
-                        <option value="flame-tank">Plamenometný tank</option>
-                        <option value="mobile-artillery">Mobilní dělostřelectvo</option>
-                        <option value="rocket-artillery">Raketové dělostřelectvo</option>
-                        <option value="long-range-artillery">Dalekonosné dělostřelectvo</option>
-                        <option value="anti-aircraft">Protiletadlové dělo</option>
-                        <option value="partisans">Partyzáni</option>
-                        <option value="half-track">Polopás</option>
-                        <option value="mobile-infantry">Mobilní pěchota</option>
-                        <option value="command-vehicle">Řídicí vůz</option>
-                        <option value="supply">Zásobování</option>
-                        <option value="ambulance">Sanitka</option>
-                        <option value="cavalry">Kavalérie</option>
-                        <option value="mountain">Horské jednotky</option>
-                        <option value="landing">Vyloďovací jednotky</option>
-                        <option value="paratroopers">Parašutisté</option>
-                      </select>
+                      <label className="text-[10px] font-bold uppercase text-gray-400">Vybraný symbol</label>
+                      <div className="py-2 border-b-2 border-gray-100 font-bold text-slate-800 uppercase text-sm truncate">
+                        {NATO_SYMBOLS.find(s => s.id === u.natoSymbol)?.name || u.natoSymbol}
+                      </div>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
@@ -395,6 +404,38 @@ const Customization = ({ onBack, onEditScenario }) => {
               ))}
             </div>
           </section>
+        )}
+
+        {selectedUnitForSymbol && (
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => setSelectedUnitForSymbol(null)}>
+            <div className="bg-white rounded-xl shadow-2xl border-4 border-slate-800 w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+              <div className="p-4 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 className="font-bold text-xl uppercase text-slate-800 tracking-tight">Katalog symbolů NATO</h3>
+                <button onClick={() => setSelectedUnitForSymbol(null)} className="text-slate-400 hover:text-slate-600 transition-colors p-1">
+                  <CloseIcon size={24} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  {NATO_SYMBOLS.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        updateUnit({ ...selectedUnitForSymbol, natoSymbol: s.id });
+                        setSelectedUnitForSymbol(null);
+                      }}
+                      className={`flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all hover:scale-105 active:scale-95 ${selectedUnitForSymbol.natoSymbol === s.id ? 'border-map-ink-blue bg-blue-50' : 'border-gray-100 hover:border-map-ink-blue bg-white shadow-sm'}`}
+                    >
+                      <svg viewBox="-20 -15 40 30" className="w-12 h-10">
+                        <NatoSymbol type={s.id} owner="player1" />
+                      </svg>
+                      <span className="text-[10px] font-bold text-center uppercase leading-tight">{s.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {activeTab === 'campaigns' && (
