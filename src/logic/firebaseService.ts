@@ -58,17 +58,33 @@ export async function getFirestoreData(collectionName: string) {
 
 // Saving functions for Customization / Admin
 export async function saveToFirestore(collectionName: string, data: any) {
-  await setDoc(doc(db, collectionName, data.id), data);
+  const sanitized = sanitizeData(data);
+  await setDoc(doc(db, collectionName, data.id), sanitized);
 }
 
 export async function deleteFromFirestore(collectionName: string, id: string) {
   await deleteDoc(doc(db, collectionName, id));
 }
 
+// Helper to remove undefined values for Firestore
+function sanitizeData(data: any): any {
+  if (data === undefined) return null;
+  if (data === null || typeof data !== 'object') return data;
+  if (Array.isArray(data)) return data.map(sanitizeData);
+  const sanitized: any = {};
+  for (const key in data) {
+    if (data[key] !== undefined) {
+      sanitized[key] = sanitizeData(data[key]);
+    }
+  }
+  return sanitized;
+}
+
 // Game State specific functions
 export async function saveGameState(gameId: string, gameState: any) {
+  const sanitized = sanitizeData(gameState);
   await setDoc(doc(db, "games", gameId), {
-    ...gameState,
+    ...sanitized,
     updatedAt: new Date().toISOString()
   });
 }

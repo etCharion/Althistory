@@ -79,7 +79,7 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
 
   // Sync TO Firestore
   useEffect(() => {
-    if (!gameId || isSyncingRef.current) return;
+    if (!gameId || isSyncingRef.current || !gameState.scenario) return;
     saveGameState(gameId, gameState);
   }, [gameState, gameId]);
   const getUnitHex = (uid) => Object.values(gameState.grid).find(h => h.unitId === uid) || null;
