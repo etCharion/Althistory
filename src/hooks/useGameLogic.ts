@@ -308,14 +308,15 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     const tar = gameState.units[tid];
     if (gameState.phase !== 'attack' || !att || !tar || att.ownerId !== gameState.activePlayerId || att.resources <= 0 || att.hasAttacked) return;
 
+    const utype = unitTypes.find(u => u.id === att.typeId);
+    if (!utype) return;
+
     // Artillery cannot shoot if it moved
     if (utype.category === 'artillery' && (att.movementUsed > 0 || att.hasMoved)) return;
 
     const fH = getUnitHex(aid);
     const tH = getUnitHex(tid);
     if (!fH || !tH) return;
-    const utype = unitTypes.find(u => u.id === att.typeId);
-    if (!utype) return;
     const targetable = getTargetableUnits(fH.q, fH.r, utype, gameState, terrainTypes, overlayTypes);
     if (!targetable.includes(tid)) return;
     const dist = getDistance(fH, tH);
