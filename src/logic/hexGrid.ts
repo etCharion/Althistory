@@ -176,9 +176,9 @@ export function checkLOS(from, to, grid, terrainTypes, overlayTypes = []) {
 
 export function getDiceCount(attackerUnit, targetUnit, attackerHex, targetHex, grid, terrainTypes, overlayTypes, attackerUnitType) {
   const dist = getDistance(attackerHex, targetHex);
-  const isArtillery = attackerUnit.typeId === 'artillery';
-  const isTank = attackerUnit.typeId === 'tank';
-  const isInfantry = attackerUnit.typeId === 'infantry';
+  const isArtillery = attackerUnitType.category === 'artillery';
+  const isTank = attackerUnitType.category === 'tank';
+  const isInfantry = attackerUnitType.category === 'infantry';
 
   const tarHex = grid[`${targetHex.q},${targetHex.r}`];
   const tarTerrain = terrainTypes.find(t => t.id === tarHex?.terrainTypeId) || terrainTypes[0];
@@ -238,7 +238,7 @@ export function getTargetableUnits(attackerQ, attackerR, unitType, gameState, te
     const targetHex = Object.values(gameState.grid).find(h => h.unitId === unitId) as any;
     if (!targetHex) continue;
     const dist = getDistance({ q: attackerQ, r: attackerR }, targetHex);
-    const isArtillery = unitType.id === 'artillery';
+    const isArtillery = unitType.category === 'artillery';
     if (dist > 1 && dist <= maxRange && (isArtillery || checkLOS({ q: attackerQ, r: attackerR }, targetHex, gameState.grid, terrainTypes, overlayTypes))) {
       if (getDiceCount(attackerUnit, unit, attacker, targetHex, gameState.grid, terrainTypes, overlayTypes, unitType) > 0) {
         targetable.push(unitId);

@@ -280,7 +280,7 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
 
       if (targetOverlayId === 'wire') {
         allowAttackAfterStop = true; // All units can attack from wire (with penalty)
-        if (unit.typeId === 'tank') {
+        if (utype.category === 'tank') {
           targetHex.overlayTypeId = undefined;
         }
       }
@@ -309,7 +309,7 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     if (gameState.phase !== 'attack' || !att || !tar || att.ownerId !== gameState.activePlayerId || att.resources <= 0 || att.hasAttacked) return;
 
     // Artillery cannot shoot if it moved
-    if (att.typeId === 'artillery' && (att.movementUsed > 0 || att.hasMoved)) return;
+    if (utype.category === 'artillery' && (att.movementUsed > 0 || att.hasMoved)) return;
 
     const fH = getUnitHex(aid);
     const tH = getUnitHex(tid);
@@ -334,9 +334,10 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
 
     const dice = rollDice(dC);
     let h = 0, f = 0;
+    const targetUnitType = unitTypes.find(ut => ut.id === tar.typeId);
     dice.forEach(s => {
-      if (s==='grenade' || s===tar.typeId) h++;
-      if (s==='flag') f++;
+      if (s === 'grenade' || s === targetUnitType?.category) h++;
+      if (s === 'flag') f++;
     });
 
     const finalFlags = Math.max(0, f - ignoreFlags);
@@ -392,7 +393,7 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
         nG = updatedGrid;
         nVP = updatedVP;
 
-        if (dist === 1 && att.typeId !== 'artillery') {
+        if (dist === 1 && utype.category !== 'artillery') {
           setTimeout(() => setTakeGroundOption({ unitId: aid, hex: { q: tH.q, r: tH.r } }), 1000);
         }
       } else if (finalFlags > 0) {
@@ -463,7 +464,8 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
        } else {
          if (retreatingUnitId.attackerId && retreatingUnitId.targetHex) {
            const att = gameState.units[retreatingUnitId.attackerId];
-           if (att && getDistance(getUnitHex(retreatingUnitId.attackerId), retreatingUnitId.targetHex) === 1 && att.typeId !== 'artillery') {
+           const attType = unitTypes.find(ut => ut.id === att?.typeId);
+           if (att && getDistance(getUnitHex(retreatingUnitId.attackerId), retreatingUnitId.targetHex) === 1 && attType?.category !== 'artillery') {
              setTakeGroundOption({ unitId: retreatingUnitId.attackerId, hex: retreatingUnitId.targetHex });
            }
          }
@@ -507,7 +509,8 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     } else {
       if (retreatingUnitId.attackerId && retreatingUnitId.targetHex) {
         const att = gameState.units[retreatingUnitId.attackerId];
-        if (att && getDistance(getUnitHex(retreatingUnitId.attackerId), retreatingUnitId.targetHex) === 1 && att.typeId !== 'artillery') {
+        const attType = unitTypes.find(ut => ut.id === att?.typeId);
+        if (att && getDistance(getUnitHex(retreatingUnitId.attackerId), retreatingUnitId.targetHex) === 1 && attType?.category !== 'artillery') {
           setTakeGroundOption({ unitId: retreatingUnitId.attackerId, hex: retreatingUnitId.targetHex });
         }
       }
@@ -608,7 +611,7 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     const utype = unitTypes.find(u => u.id === unit.typeId);
     if (unit.resources <= 0 || unit.hasAttacked) return [];
     // Artillery cannot shoot if it moved
-    if (unit.typeId === 'artillery' && (unit.movementUsed > 0 || unit.hasMoved)) return [];
+    if (utype?.category === 'artillery' && (unit.movementUsed > 0 || unit.hasMoved)) return [];
     return getTargetableUnits(hex.q, hex.r, utype, gameState, terrainTypes, overlayTypes);
   };
 
@@ -651,15 +654,15 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
       if (movable.length > 0) reasons.push(`Jednotky k pohybu: ${movable.length}`);
     } else if (gameState.phase === 'attack') {
       const attackable = Object.values(gameState.units).filter(u => {
+        const utype = unitTypes.find(ut => ut.id === u.typeId);
         if (u.ownerId !== activeP || u.resources <= 0 || u.hasAttacked) return false;
-        if (u.typeId === 'artillery' && (u.movementUsed > 0 || u.hasMoved)) return false;
+        if (utype?.category === 'artillery' && (u.movementUsed > 0 || u.hasMoved)) return false;
         const hex = getUnitHex(u.id);
         if (!hex) return false;
 
         // Can attack or destroy wire
-        if (hex.overlayTypeId === 'wire' && u.typeId === 'infantry') return true;
+        if (hex.overlayTypeId === 'wire' && utype?.category === 'infantry') return true;
 
-        const utype = unitTypes.find(ut => ut.id === u.typeId);
         return getTargetableUnits(hex.q, hex.r, utype, gameState, terrainTypes, overlayTypes).length > 0;
       });
       if (attackable.length > 0) reasons.push(`Jednotky k útoku: ${attackable.length}`);
