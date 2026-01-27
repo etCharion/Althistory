@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate, useParams, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Search, Filter, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle } from 'lucide-react';
 import ScenarioEditor from './components/ScenarioEditor';
 import GameView from './components/GameView';
@@ -238,12 +238,12 @@ function GameWrapper() {
 
 function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route path="/" element={<MainMenu />} />
         <Route path="/game/:gameId" element={<GameWrapper />} />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 
