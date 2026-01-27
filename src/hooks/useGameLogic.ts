@@ -104,7 +104,7 @@ export function useGameLogic(scenario) {
         units: newUnits,
         grid: updatedGrid,
         victoryPoints: nVP,
-        winner: nVP.player1.length >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2.length >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
+        winner: (nVP.player1.length >= prev.scenario.victoryPointsToWin || !Object.values(newUnits).some(u => u.ownerId === 'player2')) ? 'player1' : ((nVP.player2.length >= prev.scenario.victoryPointsToWin || !Object.values(newUnits).some(u => u.ownerId === 'player1')) ? 'player2' : undefined)
       };
     });
   };
@@ -265,7 +265,7 @@ export function useGameLogic(scenario) {
         units: { ...prev.units, [uid]: { ...unit, resources: newResources, hasMoved: true, movementUsed: finalMovementUsed, hasAttacked } },
         victoryPoints: nVP,
         unitStats: newStats,
-        winner: nVP.player1.length >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2.length >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
+        winner: (nVP.player1.length >= prev.scenario.victoryPointsToWin || !Object.values(prev.units).some(u => u.ownerId === 'player2')) ? 'player1' : ((nVP.player2.length >= prev.scenario.victoryPointsToWin || !Object.values(prev.units).some(u => u.ownerId === 'player1')) ? 'player2' : undefined)
       };
     });
   };
@@ -386,7 +386,7 @@ export function useGameLogic(scenario) {
         setTimeout(() => setRetreatingUnitId({ unitId: tid, count: finalFlags, attackerId: aid, targetHex: { q: tH.q, r: tH.r } }), 1000);
       }
 
-      return { ...prev, units: nU, grid: nG, victoryPoints: nVP, unitStats: nStats, winner: nVP.player1.length >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2.length >= prev.scenario.victoryPointsToWin ? 'player2' : undefined) };
+      return { ...prev, units: nU, grid: nG, victoryPoints: nVP, unitStats: nStats, winner: (nVP.player1.length >= prev.scenario.victoryPointsToWin || !Object.values(nU).some(u => u.ownerId === 'player2')) ? 'player1' : ((nVP.player2.length >= prev.scenario.victoryPointsToWin || !Object.values(nU).some(u => u.ownerId === 'player1')) ? 'player2' : undefined) };
     });
   };
   const retreatUnit = (uid, tq, tr) => {
@@ -442,7 +442,7 @@ export function useGameLogic(scenario) {
           grid: updatedGrid,
           victoryPoints: finalVP,
           unitStats: nStats,
-          winner: finalVP.player1.length >= prev.scenario.victoryPointsToWin ? 'player1' : (finalVP.player2.length >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
+          winner: (finalVP.player1.length >= prev.scenario.victoryPointsToWin || !Object.values(nU).some(u => u.ownerId === 'player2')) ? 'player1' : ((finalVP.player2.length >= prev.scenario.victoryPointsToWin || !Object.values(nU).some(u => u.ownerId === 'player1')) ? 'player2' : undefined)
         };
       });
        if (retreatingUnitId.count > 1 && (gameState.units[uid]?.figures > 0 || gameState.units[uid]?.resources > 0)) {
@@ -485,7 +485,7 @@ export function useGameLogic(scenario) {
         grid: updatedGrid,
         victoryPoints: nVP,
         unitStats: nStats,
-        winner: nVP.player1.length >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2.length >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
+        winner: (nVP.player1.length >= prev.scenario.victoryPointsToWin || !Object.values(prev.units).some(u => u.ownerId === 'player2')) ? 'player1' : ((nVP.player2.length >= prev.scenario.victoryPointsToWin || !Object.values(prev.units).some(u => u.ownerId === 'player1')) ? 'player2' : undefined)
       };
     });
 
@@ -551,7 +551,7 @@ export function useGameLogic(scenario) {
         grid: updatedGrid,
         victoryPoints: nVP,
         unitStats: nStats,
-        winner: nVP.player1.length >= prev.scenario.victoryPointsToWin ? 'player1' : (nVP.player2.length >= prev.scenario.victoryPointsToWin ? 'player2' : undefined)
+        winner: (nVP.player1.length >= prev.scenario.victoryPointsToWin || !Object.values(prev.units).some(u => u.ownerId === 'player2')) ? 'player1' : ((nVP.player2.length >= prev.scenario.victoryPointsToWin || !Object.values(prev.units).some(u => u.ownerId === 'player1')) ? 'player2' : undefined)
       };
     });
     setTakeGroundOption(null);
