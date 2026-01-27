@@ -384,7 +384,11 @@ const GameView = ({ scenario: initialScenario, gameId, onExit }) => {
                   {gameState.phase === 'attack' && (
                     <>
                       <button disabled={gameState.units[selected].resources === 0 || gameState.units[selected].hasAttacked} onClick={() => setActType('attack')} className={`w-full p-2 rounded border text-[10px] font-bold ${actType === 'attack' ? 'bg-red-200' : 'bg-white disabled:opacity-50 uppercase'}`}>ÚTOK</button>
-                      {getUnitHex(selected)?.overlayTypeId === 'wire' && uTypes.find(ut => ut.id === gameState.units[selected].typeId)?.category === 'infantry' && !gameState.units[selected].hasAttacked && (
+                      {getUnitHex(selected)?.overlayTypeId === 'wire' && (() => {
+                        const ut = uTypes.find(ut => ut.id === gameState.units[selected].typeId);
+                        const category = ut?.category || (ut?.id === 'tank' ? 'tank' : (ut?.id === 'artillery' ? 'artillery' : 'infantry'));
+                        return category === 'infantry';
+                      })() && !gameState.units[selected].hasAttacked && (
                         <button disabled={gameState.units[selected].resources === 0} onClick={() => destroyOverlay(selected)} className="w-full p-2 rounded border text-[10px] font-bold bg-orange-100 hover:bg-orange-200 disabled:opacity-50 uppercase mt-2">Zničit ostnatý drát</button>
                       )}
                     </>

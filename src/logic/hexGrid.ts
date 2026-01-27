@@ -176,9 +176,10 @@ export function checkLOS(from, to, grid, terrainTypes, overlayTypes = []) {
 
 export function getDiceCount(attackerUnit, targetUnit, attackerHex, targetHex, grid, terrainTypes, overlayTypes, attackerUnitType) {
   const dist = getDistance(attackerHex, targetHex);
-  const isArtillery = attackerUnitType.category === 'artillery';
-  const isTank = attackerUnitType.category === 'tank';
-  const isInfantry = attackerUnitType.category === 'infantry';
+  const category = attackerUnitType.category || (attackerUnitType.id === 'tank' ? 'tank' : (attackerUnitType.id === 'artillery' ? 'artillery' : 'infantry'));
+  const isArtillery = category === 'artillery';
+  const isTank = category === 'tank';
+  const isInfantry = category === 'infantry';
 
   const tarHex = grid[`${targetHex.q},${targetHex.r}`];
   const tarTerrain = terrainTypes.find(t => t.id === tarHex?.terrainTypeId) || terrainTypes[0];
