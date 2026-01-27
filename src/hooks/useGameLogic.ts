@@ -1,16 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { getDistance, axialToOffset, getUnitSections, getNeighbors, getReachableHexes, getTargetableUnits, areOnSameRidge, checkLOS as calcLOS, getDiceCount } from '../logic/hexGrid';
-import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils';
 import { rollDice } from '../logic/dice';
-export function useGameLogic(scenario) {
-  const terrainTypes = getAllTerrainTypes();
-  const unitTypes = getAllUnitTypes();
-  const overlayTypes = getAllOverlayTypes();
+import { saveGameState, subscribeToGame } from '../logic/firebaseService';
+
+export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, gameId?: string) {
 
   const [combatResult, setCombatResult] = useState(null);
   const [retreatingUnitId, setRetreatingUnitId] = useState(null);
   const [takeGroundOption, setTakeGroundOption] = useState(null);
   const initialGrid = useMemo(() => {
+    if (!scenario) return {};
     const grid = {};
     for (let r = 0; r < scenario.boardHeight; r++) {
       const width = r % 2 === 0 ? scenario.boardWidth : scenario.boardWidth - 1;
@@ -28,6 +27,7 @@ export function useGameLogic(scenario) {
     return grid;
   }, [scenario]);
   const initialUnits = useMemo(() => {
+    if (!scenario) return {};
     const units = {};
     scenario.initialUnits.forEach(u => {
       units[u.id] = { ...u, movementUsed: 0, resourceOrigins: [] };
@@ -35,6 +35,7 @@ export function useGameLogic(scenario) {
     return units;
   }, [scenario]);
   const initialStats = useMemo(() => {
+    if (!scenario) return {};
     const stats = {};
     scenario.initialUnits.forEach(u => {
       stats[u.id] = {
@@ -50,7 +51,37 @@ export function useGameLogic(scenario) {
     });
     return stats;
   }, [scenario]);
-  const [gameState, setGameState] = useState({ scenario, currentTurn: 1, activePlayerId: scenario.firstPlayerId, phase: 'distribution-sections', sectionResources: { player1: { left: 0, center: 0, right: 0 }, player2: { left: 0, center: 0, right: 0 } }, centralWarehouse: { player1: scenario.player1.income, player2: scenario.player2.income }, units: initialUnits, grid: initialGrid, victoryPoints: { player1: [], player2: [] }, unitStats: initialStats });
+  const [gameState, setGameState] = useState(() => ({
+    scenario,
+    currentTurn: 1,
+    activePlayerId: scenario?.firstPlayerId || 'player1',
+    phase: 'distribution-sections' as any,
+    sectionResources: { player1: { left: 0, center: 0, right: 0 }, player2: { left: 0, center: 0, right: 0 } },
+    centralWarehouse: { player1: scenario?.player1.income || 0, player2: scenario?.player2.income || 0 },
+    units: initialUnits,
+    grid: initialGrid,
+    victoryPoints: { player1: [], player2: [] },
+    unitStats: initialStats
+  }));
+
+  const isSyncingRef = useRef(false);
+
+  // Sync FROM Firestore
+  useEffect(() => {
+    if (!gameId) return;
+    const unsubscribe = subscribeToGame(gameId, (remoteState) => {
+      isSyncingRef.current = true;
+      setGameState(remoteState);
+      setTimeout(() => { isSyncingRef.current = false; }, 100);
+    });
+    return () => unsubscribe();
+  }, [gameId]);
+
+  // Sync TO Firestore
+  useEffect(() => {
+    if (!gameId || isSyncingRef.current) return;
+    saveGameState(gameId, gameState);
+  }, [gameState, gameId]);
   const getUnitHex = (uid) => Object.values(gameState.grid).find(h => h.unitId === uid) || null;
   const getTerrainAt = (q, r) => { const hex = gameState.grid[`${q},${r}`]; return terrainTypes.find(t => t.id === hex?.terrainTypeId) || terrainTypes[0]; };
   const getOverlayAt = (q, r) => { const hex = gameState.grid[`${q},${r}`]; return overlayTypes.find(o => o.id === hex?.overlayTypeId) || null; };

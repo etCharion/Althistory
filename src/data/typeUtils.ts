@@ -1,23 +1,64 @@
-import { DEFAULT_UNIT_TYPES, DEFAULT_TERRAIN_TYPES, DEFAULT_OVERLAY_TYPES, DEFAULT_COUNTRIES } from './defaults';
-import { DEFAULT_SCENARIO } from './defaultScenario';
+import {
+  getFirestoreData,
+  saveToFirestore,
+  deleteFromFirestore,
+  seedDatabase
+} from '../logic/firebaseService';
 
-function mergeWithDefaults(storageKey, defaults) {
-  const s = localStorage.getItem(storageKey);
-  if (!s) return defaults;
-  const custom = JSON.parse(s);
-  const merged = [...custom];
-  defaults.forEach(d => {
-    if (!merged.find(m => m.id === d.id)) merged.push(d);
-  });
-  return merged;
+// We call seedDatabase once when the module is loaded or on first fetch
+let seedingPromise: Promise<void> | null = null;
+async function ensureSeeded() {
+  if (seedingPromise) return seedingPromise;
+
+  seedingPromise = seedDatabase();
+  return seedingPromise;
 }
 
-export function getAllUnitTypes() { return mergeWithDefaults('customUnitTypes', DEFAULT_UNIT_TYPES); }
-export function getAllTerrainTypes() { return mergeWithDefaults('customTerrainTypes', DEFAULT_TERRAIN_TYPES); }
-export function getAllOverlayTypes() { return mergeWithDefaults('customOverlayTypes', DEFAULT_OVERLAY_TYPES); }
-export function getAllCountries() { const s = localStorage.getItem('customCountries'); return s ? JSON.parse(s) : DEFAULT_COUNTRIES; }
-export function getAllCampaigns() { const s = localStorage.getItem('customCampaigns'); return s ? JSON.parse(s) : []; }
-export function getAllScenarios() {
-  const s = localStorage.getItem('scenarios');
-  return s ? JSON.parse(s) : [DEFAULT_SCENARIO];
+export async function getAllUnitTypes() {
+  await ensureSeeded();
+  return getFirestoreData('unitTypes');
 }
+
+export async function getAllTerrainTypes() {
+  await ensureSeeded();
+  return getFirestoreData('terrainTypes');
+}
+
+export async function getAllOverlayTypes() {
+  await ensureSeeded();
+  return getFirestoreData('overlayTypes');
+}
+
+export async function getAllCountries() {
+  await ensureSeeded();
+  return getFirestoreData('countries');
+}
+
+export async function getAllCampaigns() {
+  await ensureSeeded();
+  return getFirestoreData('campaigns');
+}
+
+export async function getAllScenarios() {
+  await ensureSeeded();
+  return getFirestoreData('scenarios');
+}
+
+// Helper functions for saving (used in Customization/Editor)
+export async function saveUnitType(data: any) { await saveToFirestore('unitTypes', data); }
+export async function deleteUnitType(id: string) { await deleteFromFirestore('unitTypes', id); }
+
+export async function saveTerrainType(data: any) { await saveToFirestore('terrainTypes', data); }
+export async function deleteTerrainType(id: string) { await deleteFromFirestore('terrainTypes', id); }
+
+export async function saveOverlayType(data: any) { await saveToFirestore('overlayTypes', data); }
+export async function deleteOverlayType(id: string) { await deleteFromFirestore('overlayTypes', id); }
+
+export async function saveCountry(data: any) { await saveToFirestore('countries', data); }
+export async function deleteCountry(id: string) { await deleteFromFirestore('countries', id); }
+
+export async function saveCampaign(data: any) { await saveToFirestore('campaigns', data); }
+export async function deleteCampaign(id: string) { await deleteFromFirestore('campaigns', id); }
+
+export async function saveScenario(data: any) { await saveToFirestore('scenarios', data); }
+export async function deleteScenario(id: string) { await deleteFromFirestore('scenarios', id); }

@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, Sword, Settings, Plus, Info, Globe } from 'lucide-react';
+import { BrowserRouter, Routes, Route, useNavigate, useParams, useLocation } from 'react-router-dom';
+import { Search, Filter, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle } from 'lucide-react';
 import ScenarioEditor from './components/ScenarioEditor';
 import GameView from './components/GameView';
 import Customization from './components/Customization';
 import { getAllScenarios, getAllCountries, getAllCampaigns } from './data/typeUtils';
 
-function App() {
+function MainMenu() {
+  const navigate = useNavigate();
   const [mode, setMode] = useState('menu');
   const [scenarios, setScenarios] = useState([]);
   const [countries, setCountries] = useState([]);
@@ -21,9 +23,17 @@ function App() {
   const [sortBy, setSortBy] = useState('name');
 
   useEffect(() => {
-    setScenarios(getAllScenarios());
-    setCountries(getAllCountries());
-    setCampaigns(getAllCampaigns());
+    const load = async () => {
+      const [s, c, cp] = await Promise.all([
+        getAllScenarios(),
+        getAllCountries(),
+        getAllCampaigns()
+      ]);
+      setScenarios(s);
+      setCountries(c);
+      setCampaigns(cp);
+    };
+    load();
   }, [mode]);
 
   const filteredScenarios = useMemo(() => {
@@ -58,6 +68,19 @@ function App() {
     setMode('editor');
   };
 
+  const [showOnlineHelp, setShowOnlineHelp] = useState(false);
+
+  const startOnlineGame = (scenario) => {
+    const gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    localStorage.setItem('lastGameId', gameId);
+    navigate(`/game/${gameId}`, { state: { scenario } });
+  };
+
+  const [lastGameId, setLastGameId] = useState<string | null>(null);
+  useEffect(() => {
+    setLastGameId(localStorage.getItem('lastGameId'));
+  }, []);
+
   if (mode === 'editor') return <ScenarioEditor onBack={() => setMode('menu')} initialScenario={editingScenario} />;
   if (mode === 'custom') return <Customization onBack={() => setMode('menu')} onEditScenario={handleEditScenario} />;
   if (mode === 'game' && currentScenario) return <GameView scenario={currentScenario} onExit={() => setMode('menu')} />;
@@ -86,6 +109,15 @@ function App() {
             <Settings /> Nastavení
           </button>
         </div>
+
+        {lastGameId && (
+          <button
+            onClick={() => navigate(`/game/${lastGameId}`)}
+            className="w-full mb-8 bg-blue-50 text-blue-700 py-3 rounded-lg font-black uppercase border-2 border-blue-200 hover:bg-blue-100 transition-all flex items-center justify-center gap-2"
+          >
+            <Wifi size={18} /> Pokračovat v online hře
+          </button>
+        )}
 
         <div className="pt-6 border-t-2 border-map-ink-blue/20">
           <div className="flex flex-col gap-4 mb-6">
@@ -140,12 +172,34 @@ function App() {
                       <span>{s.year || '????'}</span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => { setCurrentScenario(s); setMode('game'); }}
-                    className="bg-map-ink-green text-white px-6 py-2 rounded-lg font-bold uppercase hover:bg-opacity-90 transition-transform active:scale-95 shadow-md flex items-center gap-2"
-                  >
-                    Hrát
-                  </button>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => { setCurrentScenario(s); setMode('game'); }}
+                      className="bg-map-ink-green text-white px-6 py-2 rounded-lg font-bold uppercase hover:bg-opacity-90 transition-transform active:scale-95 shadow-md flex items-center gap-2"
+                    >
+                      Místní hra
+                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => startOnlineGame(s)}
+                        className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg font-bold uppercase text-[10px] hover:bg-blue-700 transition-all shadow-md flex items-center justify-center gap-2"
+                      >
+                        <Wifi size={12} /> Online hra
+                      </button>
+                      <button
+                        onMouseEnter={() => setShowOnlineHelp(true)}
+                        onMouseLeave={() => setShowOnlineHelp(false)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors relative"
+                      >
+                        <HelpCircle size={16} />
+                        {showOnlineHelp && (
+                          <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-white border-2 border-blue-600 rounded-xl shadow-2xl z-[100] normal-case font-bold text-xs text-slate-700 animate-in fade-in slide-in-from-bottom-2">
+                            Online hra se ukládá do cloudu a synchronizuje v reálném čase. Po spuštění stačí zkopírovat URL adresu z prohlížeče a poslat ji spoluhráči.
+                          </div>
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 {s.campaignId && (
                   <div className="text-[9px] bg-gray-50 p-1 rounded inline-flex items-center gap-1 font-bold text-gray-600 uppercase">
@@ -169,6 +223,27 @@ function App() {
         </div>
       </div>
     </div>
+  );
+}
+
+function GameWrapper() {
+  const { gameId } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const scenario = location.state?.scenario;
+
+  // If we have gameId but no scenario in state, we'll let useGameLogic handle loading from Firestore
+  return <GameView scenario={scenario} gameId={gameId} onExit={() => navigate('/')} />;
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<MainMenu />} />
+        <Route path="/game/:gameId" element={<GameWrapper />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

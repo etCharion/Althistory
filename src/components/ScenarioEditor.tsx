@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, X, Globe, Calendar, Flag, BookOpen, Layers } from 'lucide-react';
-import { getAllTerrainTypes, getAllUnitTypes, getAllCountries, getAllCampaigns, getAllOverlayTypes } from '../data/typeUtils';
+import { getAllTerrainTypes, getAllUnitTypes, getAllCountries, getAllCampaigns, getAllOverlayTypes, saveScenario, saveCountry, saveCampaign } from '../data/typeUtils';
 import HexGrid from './HexGrid';
 
 const ScenarioEditor = ({ onBack, initialScenario }) => {
@@ -36,11 +36,21 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
   const [objSettings, setObjSettings] = useState({ name: 'Cíl', type: 'permanent', timing: 'immediate', points: 1, validFor: 'both' as any });
 
   useEffect(() => {
-    setTerrainTypes(getAllTerrainTypes());
-    setUnitTypes(getAllUnitTypes());
-    setOverlayTypes(getAllOverlayTypes());
-    setCountries(getAllCountries());
-    setCampaigns(getAllCampaigns());
+    const load = async () => {
+      const [t, u, o, c, cp] = await Promise.all([
+        getAllTerrainTypes(),
+        getAllUnitTypes(),
+        getAllOverlayTypes(),
+        getAllCountries(),
+        getAllCampaigns()
+      ]);
+      setTerrainTypes(t);
+      setUnitTypes(u);
+      setOverlayTypes(o);
+      setCountries(c);
+      setCampaigns(cp);
+    };
+    load();
 
     if (initialScenario) {
       setScenario(initialScenario);
@@ -87,36 +97,30 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
     }
   };
 
-  const save = () => {
+  const save = async () => {
     const final = {
       ...scenario,
       id: scenario.id || `scen-${Date.now()}`,
       initialHexes: Object.values(hexes),
       initialUnits: Object.values(units).filter(u => Object.values(hexes).some(h => h.unitId === u.id))
     };
-    const saved = localStorage.getItem('scenarios');
-    const scens = saved ? JSON.parse(saved) : [];
-    const idx = scens.findIndex(s => s.id === final.id);
-    if (idx >= 0) scens[idx] = final; else scens.push(final);
-    localStorage.setItem('scenarios', JSON.stringify(scens));
-    alert('Uloženo!');
+    await saveScenario(final);
+    alert('Uloženo do cloudu!');
     onBack();
   };
 
-  const addNewItem = (type) => {
+  const addNewItem = async (type) => {
     const name = prompt(`Zadejte název pro novou ${type === 'country' ? 'zemi' : 'kampaň'}:`);
     if (!name) return;
     const id = `${type}-${Date.now()}`;
     const newItem = { id, name };
     if (type === 'country') {
-      const updated = [...countries, newItem];
-      setCountries(updated);
-      localStorage.setItem('customCountries', JSON.stringify(updated));
+      await saveCountry(newItem);
+      setCountries([...countries, newItem]);
       setScenario({ ...scenario, countryId: id });
     } else {
-      const updated = [...campaigns, newItem];
-      setCampaigns(updated);
-      localStorage.setItem('customCampaigns', JSON.stringify(updated));
+      await saveCampaign(newItem);
+      setCampaigns([...campaigns, newItem]);
       setScenario({ ...scenario, campaignId: id });
     }
   };

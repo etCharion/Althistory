@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils'; import { getUnitSections, axialToOffset, getSection } from '../logic/hexGrid';
-import { Menu, Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon } from 'lucide-react';
+import { Menu, Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check } from 'lucide-react';
+import { getGameState } from '../logic/firebaseService';
 
 const ResourceCube = () => (
   <div className="w-4 h-5 bg-green-600 border-2 border-green-800 rounded shadow-[0_2px_0_0_rgba(0,0,0,0.2)] animate-in zoom-in duration-300 flex-shrink-0" />
@@ -59,7 +60,7 @@ const StatisticsModal = ({ unitStats, scenario, unitTypes, onClose }) => {
                    <div className="mt-auto">
                       <p className="font-bold text-slate-800">{unitTypes.find(ut => ut.id === award.unit.unitTypeId)?.name}</p>
                       <p className={`text-[9px] font-black uppercase ${award.unit.ownerId === 'player1' ? 'text-blue-600' : 'text-red-600'}`}>
-                         {award.unit.ownerId === 'player1' ? scenario.player1.name : scenario.player2.name}
+                         {award.unit.ownerId === 'player1' ? gameState.scenario.player1.name : gameState.scenario.player2.name}
                       </p>
                    </div>
                 </div>
@@ -78,7 +79,7 @@ const StatisticsModal = ({ unitStats, scenario, unitTypes, onClose }) => {
                       <div className="w-48">
                          <h4 className="font-black text-sm uppercase">{unitTypes.find(ut => ut.id === s.unitTypeId)?.name}</h4>
                          <p className={`text-[10px] font-bold ${s.ownerId === 'player1' ? 'text-blue-600' : 'text-red-600'}`}>
-                            {s.ownerId === 'player1' ? scenario.player1.name : scenario.player2.name}
+                            {s.ownerId === 'player1' ? gameState.scenario.player1.name : gameState.scenario.player2.name}
                          </p>
                       </div>
 
@@ -157,8 +158,37 @@ const PHASE_DESCRIPTIONS = {
   }
 };
 
-const GameView = ({ scenario, onExit }) => {
-  const { gameState, combatResult, retreatingUnitId, setCombatResult, takeGroundOption, setTakeGroundOption, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario);
+const GameView = ({ scenario: initialScenario, gameId, onExit }) => {
+  const [uTypes, setUTypes] = useState([]);
+  const [tTypes, setTTypes] = useState([]);
+  const [oTypes, setOTypes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [scenario, setScenario] = useState(initialScenario);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      const [u, t, o] = await Promise.all([
+        getAllUnitTypes(),
+        getAllTerrainTypes(),
+        getAllOverlayTypes()
+      ]);
+      setUTypes(u);
+      setTTypes(t);
+      setOTypes(o);
+
+      if (!scenario && gameId) {
+        const remoteState = await getGameState(gameId);
+        if (remoteState) {
+          setScenario(remoteState.scenario);
+        }
+      }
+      setLoading(false);
+    };
+    load();
+  }, [gameId, initialScenario]);
+
+  const { gameState, combatResult, retreatingUnitId, setCombatResult, takeGroundOption, setTakeGroundOption, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId);
   const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none'); const [hovered, setHovered] = useState(null);
   const [dismissedOverlay, setDismissedOverlay] = useState(false);
   const [showPhaseInfo, setShowPhaseInfo] = useState(false);
@@ -173,9 +203,7 @@ const GameView = ({ scenario, onExit }) => {
   }, [retreatingUnitId?.unitId, takeGroundOption?.unitId]);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const tTypes = getAllTerrainTypes();
-  const uTypes = getAllUnitTypes();
-  const oTypes = getAllOverlayTypes();
+  if (loading || !gameState.scenario) return <div className="h-screen w-screen flex items-center justify-center bg-map-paper font-military uppercase font-bold text-map-ink-blue">Načítám bitevní pole...</div>;
 
   const activeP = gameState.activePlayerId;
   const res = gameState.sectionResources[activeP];
@@ -249,7 +277,7 @@ const GameView = ({ scenario, onExit }) => {
       <div className="flex-1 relative flex flex-col">
         <div className="bg-white/70 p-2 flex justify-between items-center border-b border-map-ink-blue z-20 px-8">
            <div className="flex items-center gap-4">
-             <div className="text-blue-800 uppercase font-black text-sm tracking-tighter">{scenario.player1.name}</div>
+             <div className="text-blue-800 uppercase font-black text-sm tracking-tighter">{gameState.scenario.player1.name}</div>
              <div
                onMouseLeave={() => setHoveredVP(null)}
                className="flex gap-1.5 h-10 items-center px-4 bg-slate-200/50 rounded-lg border border-slate-300 shadow-inner min-w-[160px]"
@@ -260,7 +288,22 @@ const GameView = ({ scenario, onExit }) => {
              </div>
            </div>
 
-           <div className="text-[11px] uppercase opacity-40 font-black tracking-[0.2em]">Turn {gameState.currentTurn}</div>
+           <div className="flex flex-col items-center gap-1">
+             <div className="text-[11px] uppercase opacity-40 font-black tracking-[0.2em]">Turn {gameState.currentTurn}</div>
+             {gameId && (
+               <button
+                 onClick={() => {
+                   navigator.clipboard.writeText(window.location.href);
+                   setCopied(true);
+                   setTimeout(() => setCopied(false), 2000);
+                 }}
+                 className="flex items-center gap-1 text-[8px] font-black uppercase bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
+               >
+                 {copied ? <Check size={8} /> : <Copy size={8} />}
+                 {copied ? 'Zkopírováno' : 'Sdílet odkaz'}
+               </button>
+             )}
+           </div>
 
            <div className="flex items-center gap-4">
              <div
@@ -271,7 +314,7 @@ const GameView = ({ scenario, onExit }) => {
                    <VPItem key={vp.id} vp={vp} player="player2" onMouseEnter={(vp, p, e) => setHoveredVP({ vp, player: p, x: e.clientX, y: e.clientY })} />
                 ))}
              </div>
-             <div className="text-red-800 uppercase font-black text-sm tracking-tighter text-right">{scenario.player2.name}</div>
+             <div className="text-red-800 uppercase font-black text-sm tracking-tighter text-right">{gameState.scenario.player2.name}</div>
            </div>
         </div>
         <div className="flex-1 relative flex flex-col overflow-hidden">
@@ -366,7 +409,7 @@ const GameView = ({ scenario, onExit }) => {
                 {gameState.grid[hovered]?.unitId && (
                   <div className="mt-3 pt-2 border-t border-gray-200">
                      <p className="text-[9px] font-bold uppercase text-gray-500 mb-1">Jednotka na poli:</p>
-                     <p className="text-[11px] font-bold">{uTypes.find(u => u.id === gameState.units[gameState.grid[hovered].unitId].typeId)?.name} ({gameState.units[gameState.grid[hovered].unitId].ownerId === 'player1' ? scenario.player1.name : scenario.player2.name})</p>
+                     <p className="text-[11px] font-bold">{uTypes.find(u => u.id === gameState.units[gameState.grid[hovered].unitId].typeId)?.name} ({gameState.units[gameState.grid[hovered].unitId].ownerId === 'player1' ? gameState.scenario.player1.name : gameState.scenario.player2.name})</p>
                   </div>
                 )}
               </div>
@@ -468,7 +511,7 @@ const GameView = ({ scenario, onExit }) => {
             </div>
             <h1 className="text-6xl font-black font-handwriting mb-2 text-map-ink-blue uppercase tracking-tighter">Vítězství!</h1>
             <p className="text-2xl font-bold mb-10 text-slate-700 uppercase tracking-widest">
-              {gameState.winner === 'player1' ? scenario.player1.name : scenario.player2.name} vyhrál
+              {gameState.winner === 'player1' ? gameState.scenario.player1.name : gameState.scenario.player2.name} vyhrál
             </p>
             <div className="flex flex-col gap-4">
                <button onClick={() => setShowStats(true)} className="bg-slate-800 text-white px-8 py-4 rounded-xl text-xl uppercase font-black hover:bg-slate-700 transition-all shadow-lg active:scale-95">
@@ -487,7 +530,7 @@ const GameView = ({ scenario, onExit }) => {
       {showStats && (
         <StatisticsModal
           unitStats={gameState.unitStats}
-          scenario={scenario}
+          scenario={gameState.scenario}
           unitTypes={uTypes}
           onClose={() => setShowStats(false)}
         />
