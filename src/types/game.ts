@@ -8,6 +8,7 @@ export type UnitType = {
   canShootAfterMovingMax: number;
   maxFigures: number;
   natoSymbol: string;
+  category: 'infantry' | 'tank' | 'artillery';
 };
 export type Unit = { id: string; typeId: string; ownerId: PlayerId; figures: number; resources: number; hasMoved: boolean; hasAttacked: boolean; movementUsed: number; };
 

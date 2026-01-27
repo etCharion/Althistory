@@ -1,7 +1,7 @@
 export const DEFAULT_UNIT_TYPES = [
-  { id: 'infantry', name: 'Pěchota', movement: 2, shootingRange: [3, 2, 1], canShootAfterMovingMax: 1, maxFigures: 4, natoSymbol: 'infantry' },
-  { id: 'tank', name: 'Tank', movement: 3, shootingRange: [3, 3, 3], canShootAfterMovingMax: 3, maxFigures: 3, natoSymbol: 'tank' },
-  { id: 'artillery', name: 'Dělostřelectvo', movement: 1, shootingRange: [3, 3, 2, 2, 1, 1], canShootAfterMovingMax: 0, maxFigures: 2, natoSymbol: 'artillery' }
+  { id: 'infantry', name: 'Pěchota', movement: 2, shootingRange: [3, 2, 1], canShootAfterMovingMax: 1, maxFigures: 4, natoSymbol: 'infantry', category: 'infantry' as const },
+  { id: 'tank', name: 'Tank', movement: 3, shootingRange: [3, 3, 3], canShootAfterMovingMax: 3, maxFigures: 3, natoSymbol: 'tank', category: 'tank' as const },
+  { id: 'artillery', name: 'Dělostřelectvo', movement: 1, shootingRange: [3, 3, 2, 2, 1, 1], canShootAfterMovingMax: 0, maxFigures: 2, natoSymbol: 'artillery', category: 'artillery' as const }
 ];
 export const DEFAULT_TERRAIN_TYPES = [
   { id: 'grass', name: 'Tráva', blocksLOS: false, diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, color: '#91b94d' },

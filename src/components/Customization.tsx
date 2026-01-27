@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Plus, Edit2 } from 'lucide-react';
+import NatoSymbol from './NatoSymbol';
 import { getAllUnitTypes, getAllTerrainTypes, getAllCountries, getAllCampaigns, getAllScenarios, getAllOverlayTypes, saveUnitType, deleteUnitType, saveTerrainType, deleteTerrainType, saveOverlayType, deleteOverlayType, saveCountry, deleteCountry, saveCampaign, deleteCampaign, saveScenario, deleteScenario } from '../data/typeUtils';
 
 const Customization = ({ onBack, onEditScenario }) => {
@@ -39,7 +40,7 @@ const Customization = ({ onBack, onEditScenario }) => {
   const updateCampaign = async (item) => { await saveCampaign(item); setCampaigns(prev => prev.map(cp => cp.id === item.id ? item : cp)); };
 
   const addUnit = async () => {
-    const newUnit = { id: `unit-${Date.now()}`, name: 'Nová jednotka', movement: 2, shootingRange: [3, 2, 1], canShootAfterMovingMax: 1, maxFigures: 4, natoSymbol: 'infantry' };
+    const newUnit = { id: `unit-${Date.now()}`, name: 'Nová jednotka', movement: 2, shootingRange: [3, 2, 1], canShootAfterMovingMax: 1, maxFigures: 4, natoSymbol: 'infantry', category: 'infantry' };
     await saveUnitType(newUnit);
     setUnits([...units, newUnit]);
   };
@@ -143,10 +144,23 @@ const Customization = ({ onBack, onEditScenario }) => {
             <div className="space-y-4">
               {units.map((u, idx) => (
                 <div key={u.id} className="p-4 border-2 border-gray-200 rounded bg-white shadow-sm">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <div className="md:col-span-2">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                    <div className="flex items-center justify-center bg-gray-50 rounded border-2 border-gray-100 p-2">
+                      <svg viewBox="-20 -15 40 30" className="w-16 h-12">
+                         <NatoSymbol type={u.natoSymbol} owner="player1" />
+                      </svg>
+                    </div>
+                    <div className="md:col-span-1">
                       <label className="text-[10px] font-bold uppercase text-gray-400">Název jednotky</label>
                       <input className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold text-lg" value={u.name} onChange={e => updateUnit({ ...u, name: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-gray-400">Typ (pro pravidla)</label>
+                      <select className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold" value={u.category || 'infantry'} onChange={e => updateUnit({ ...u, category: e.target.value })}>
+                        <option value="infantry">Pěchota</option>
+                        <option value="tank">Tank</option>
+                        <option value="artillery">Dělostřelectvo</option>
+                      </select>
                     </div>
                     <div>
                       <label className="text-[10px] font-bold uppercase text-gray-400">NATO Symbol</label>
