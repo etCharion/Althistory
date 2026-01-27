@@ -174,6 +174,44 @@ export function checkLOS(from, to, grid, terrainTypes, overlayTypes = []) {
   return true;
 }
 
+export function getDiceCount(attackerUnit, targetUnit, attackerHex, targetHex, grid, terrainTypes, overlayTypes, attackerUnitType) {
+  const dist = getDistance(attackerHex, targetHex);
+  const isArtillery = attackerUnit.typeId === 'artillery';
+  const isTank = attackerUnit.typeId === 'tank';
+  const isInfantry = attackerUnit.typeId === 'infantry';
+
+  const tarHex = grid[`${targetHex.q},${targetHex.r}`];
+  const tarTerrain = terrainTypes.find(t => t.id === tarHex?.terrainTypeId) || terrainTypes[0];
+  const tarOverlay = overlayTypes.find(o => o.id === tarHex?.overlayTypeId) || null;
+  const attTerrain = terrainTypes.find(t => t.id === attackerHex?.terrainTypeId) || terrainTypes[0];
+  const attOverlay = overlayTypes.find(o => o.id === attackerHex?.overlayTypeId) || null;
+
+  let diceModifierDefense = 0;
+  if (!isArtillery) {
+    const onSameRidge = areOnSameRidge(attackerHex, targetHex, grid);
+    let terrainDef = 0;
+    if (!(tarTerrain.id === 'hill' && onSameRidge)) {
+      terrainDef = isTank ? (tarTerrain.diceModifierDefenseTank ?? 0) : (tarTerrain.diceModifierDefenseInfantry ?? 0);
+    }
+    const overlayDef = tarOverlay?.diceModifierDefense ?? 0;
+    diceModifierDefense = Math.max(terrainDef, overlayDef);
+  }
+
+  let terrainAtt = 0;
+  if (isTank) terrainAtt = attTerrain.diceModifierAttackTank ?? 0;
+  else if (isInfantry) terrainAtt = attTerrain.diceModifierAttackInfantry ?? 0;
+
+  let overlayAtt = 0;
+  if (isTank) overlayAtt = attOverlay?.diceModifierAttackTank ?? 0;
+  else if (isInfantry) overlayAtt = attOverlay?.diceModifierAttackInfantry ?? 0;
+  else if (isArtillery) overlayAtt = attOverlay?.diceModifierAttackArtillery ?? 0;
+
+  const diceModifierAttack = Math.min(terrainAtt, overlayAtt);
+
+  let baseDice = attackerUnitType.shootingRange[dist - 1] ?? 0;
+  return Math.max(0, baseDice - diceModifierDefense + diceModifierAttack);
+}
+
 export function getTargetableUnits(attackerQ, attackerR, unitType, gameState, terrainTypes, overlayTypes = []) {
   const attacker = gameState.grid[`${attackerQ},${attackerR}`];
   if (!attacker?.unitId) return [];
@@ -184,7 +222,11 @@ export function getTargetableUnits(attackerQ, attackerR, unitType, gameState, te
     const hex = gameState.grid[`${n.q},${n.r}`];
     if (hex?.unitId) {
       const unit = gameState.units[hex.unitId];
-      if (unit.ownerId !== attackerUnit.ownerId) adjacentEnemies.push(hex.unitId);
+      if (unit.ownerId !== attackerUnit.ownerId) {
+        if (getDiceCount(attackerUnit, unit, attacker, hex, gameState.grid, terrainTypes, overlayTypes, unitType) > 0) {
+          adjacentEnemies.push(hex.unitId);
+        }
+      }
     }
   }
   if (adjacentEnemies.length > 0) return adjacentEnemies;
@@ -198,7 +240,9 @@ export function getTargetableUnits(attackerQ, attackerR, unitType, gameState, te
     const dist = getDistance({ q: attackerQ, r: attackerR }, targetHex);
     const isArtillery = unitType.id === 'artillery';
     if (dist > 1 && dist <= maxRange && (isArtillery || checkLOS({ q: attackerQ, r: attackerR }, targetHex, gameState.grid, terrainTypes, overlayTypes))) {
-      targetable.push(unitId);
+      if (getDiceCount(attackerUnit, unit, attacker, targetHex, gameState.grid, terrainTypes, overlayTypes, unitType) > 0) {
+        targetable.push(unitId);
+      }
     }
   }
   return targetable;
