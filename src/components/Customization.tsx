@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Plus, Edit2 } from 'lucide-react';
-import { DEFAULT_UNIT_TYPES, DEFAULT_TERRAIN_TYPES, DEFAULT_COUNTRIES } from '../data/defaults';
-import { getAllUnitTypes, getAllTerrainTypes, getAllCountries, getAllCampaigns, getAllScenarios, getAllOverlayTypes } from '../data/typeUtils';
+import { getAllUnitTypes, getAllTerrainTypes, getAllCountries, getAllCampaigns, getAllScenarios, getAllOverlayTypes, saveUnitType, deleteUnitType, saveTerrainType, deleteTerrainType, saveOverlayType, deleteOverlayType, saveCountry, deleteCountry, saveCampaign, deleteCampaign, saveScenario, deleteScenario } from '../data/typeUtils';
 
 const Customization = ({ onBack, onEditScenario }) => {
   const [units, setUnits] = useState([]);
@@ -13,55 +12,77 @@ const Customization = ({ onBack, onEditScenario }) => {
   const [activeTab, setActiveTab] = useState('scenarios');
 
   useEffect(() => {
-    setUnits(getAllUnitTypes());
-    setTerrains(getAllTerrainTypes());
-    setOverlays(getAllOverlayTypes());
-    setCountries(getAllCountries());
-    setCampaigns(getAllCampaigns());
-    setScenarios(getAllScenarios());
+    const load = async () => {
+      const [u, t, o, c, cp, s] = await Promise.all([
+        getAllUnitTypes(),
+        getAllTerrainTypes(),
+        getAllOverlayTypes(),
+        getAllCountries(),
+        getAllCampaigns(),
+        getAllScenarios()
+      ]);
+      setUnits(u);
+      setTerrains(t);
+      setOverlays(o);
+      setCountries(c);
+      setCampaigns(cp);
+      setScenarios(s);
+    };
+    load();
   }, []);
 
-  const saveUnits = (val) => { setUnits(val); localStorage.setItem('customUnitTypes', JSON.stringify(val)); };
-  const saveTerrains = (val) => { setTerrains(val); localStorage.setItem('customTerrainTypes', JSON.stringify(val)); };
-  const saveOverlays = (val) => { setOverlays(val); localStorage.setItem('customOverlayTypes', JSON.stringify(val)); };
-  const saveCountries = (val) => { setCountries(val); localStorage.setItem('customCountries', JSON.stringify(val)); };
-  const saveCampaigns = (val) => { setCampaigns(val); localStorage.setItem('customCampaigns', JSON.stringify(val)); };
-  const saveScenarios = (val) => { setScenarios(val); localStorage.setItem('scenarios', JSON.stringify(val)); };
+  // Updated saving logic to handle single item updates to Firestore
+  const updateUnit = async (item) => { await saveUnitType(item); setUnits(prev => prev.map(u => u.id === item.id ? item : u)); };
+  const updateTerrain = async (item) => { await saveTerrainType(item); setTerrains(prev => prev.map(t => t.id === item.id ? item : t)); };
+  const updateOverlay = async (item) => { await saveOverlayType(item); setOverlays(prev => prev.map(o => o.id === item.id ? item : o)); };
+  const updateCountry = async (item) => { await saveCountry(item); setCountries(prev => prev.map(c => c.id === item.id ? item : c)); };
+  const updateCampaign = async (item) => { await saveCampaign(item); setCampaigns(prev => prev.map(cp => cp.id === item.id ? item : cp)); };
 
-  const addUnit = () => {
+  const addUnit = async () => {
     const newUnit = { id: `unit-${Date.now()}`, name: 'Nová jednotka', movement: 2, shootingRange: [3, 2, 1], canShootAfterMovingMax: 1, maxFigures: 4, natoSymbol: 'infantry' };
-    saveUnits([...units, newUnit]);
+    await saveUnitType(newUnit);
+    setUnits([...units, newUnit]);
   };
 
-  const addTerrain = () => {
+  const addTerrain = async () => {
     const newTerrain = { id: `terrain-${Date.now()}`, name: 'Nový terén', blocksLOS: false, diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, ignoreFlags: 0, color: '#cccccc', description: '' };
-    saveTerrains([...terrains, newTerrain]);
+    await saveTerrainType(newTerrain);
+    setTerrains([...terrains, newTerrain]);
   };
 
-  const addOverlay = () => {
+  const addOverlay = async () => {
     const newOverlay = { id: `overlay-${Date.now()}`, name: 'Nová překážka', diceModifierDefense: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, diceModifierAttackArtillery: 0, ignoreFlags: 0, movementRestriction: 'none', blocksLOS: false, color: '#cccccc', description: '' };
-    saveOverlays([...overlays, newOverlay]);
+    await saveOverlayType(newOverlay);
+    setOverlays([...overlays, newOverlay]);
   };
 
-  const addCountry = () => {
+  const addCountry = async () => {
     const newCountry = { id: `country-${Date.now()}`, name: 'Nová země' };
-    saveCountries([...countries, newCountry]);
+    await saveCountry(newCountry);
+    setCountries([...countries, newCountry]);
   };
 
-  const addCampaign = () => {
+  const addCampaign = async () => {
     const newCampaign = { id: `campaign-${Date.now()}`, name: 'Nová kampaň' };
-    saveCampaigns([...campaigns, newCampaign]);
+    await saveCampaign(newCampaign);
+    setCampaigns([...campaigns, newCampaign]);
   };
 
-  const deleteItem = (setter, list, id, storageKey, isScenario = false) => {
-    if (isScenario && id === 'default-1') {
+  const deleteItem = async (type, setter, list, id) => {
+    if (type === 'scenarios' && id === 'default-1') {
       alert('Výchozí scénář nelze smazat.');
       return;
     }
     if (!confirm('Opravdu smazat?')) return;
-    const newList = list.filter(item => item.id !== id);
-    setter(newList);
-    localStorage.setItem(storageKey, JSON.stringify(newList));
+
+    if (type === 'units') await deleteUnitType(id);
+    else if (type === 'terrains') await deleteTerrainType(id);
+    else if (type === 'overlays') await deleteOverlayType(id);
+    else if (type === 'countries') await deleteCountry(id);
+    else if (type === 'campaigns') await deleteCampaign(id);
+    else if (type === 'scenarios') await deleteScenario(id);
+
+    setter(list.filter(item => item.id !== id));
   };
 
   return (
@@ -104,7 +125,7 @@ const Customization = ({ onBack, onEditScenario }) => {
                   <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
                     <button onClick={() => onEditScenario(s)} className="flex-1 flex items-center justify-center gap-1 bg-map-ink-green text-white py-2 rounded text-xs font-bold uppercase hover:bg-opacity-90 transition-all"><Edit2 size={12} /> Upravit</button>
                     {s.id !== 'default-1' && (
-                      <button onClick={() => deleteItem(setScenarios, scenarios, s.id, 'scenarios', true)} className="bg-red-600 text-white p-2 rounded hover:bg-opacity-90 transition-all"><Trash2 size={14} /></button>
+                      <button onClick={() => deleteItem('scenarios', setScenarios, scenarios, s.id)} className="bg-red-600 text-white p-2 rounded hover:bg-opacity-90 transition-all"><Trash2 size={14} /></button>
                     )}
                   </div>
                 </div>
@@ -125,11 +146,11 @@ const Customization = ({ onBack, onEditScenario }) => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div className="md:col-span-2">
                       <label className="text-[10px] font-bold uppercase text-gray-400">Název jednotky</label>
-                      <input className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold text-lg" value={u.name} onChange={e => { const n = [...units]; n[idx].name = e.target.value; saveUnits(n); }} />
+                      <input className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold text-lg" value={u.name} onChange={e => updateUnit({ ...u, name: e.target.value })} />
                     </div>
                     <div>
                       <label className="text-[10px] font-bold uppercase text-gray-400">NATO Symbol</label>
-                      <select className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold" value={u.natoSymbol} onChange={e => { const n = [...units]; n[idx].natoSymbol = e.target.value; saveUnits(n); }}>
+                      <select className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold" value={u.natoSymbol} onChange={e => updateUnit({ ...u, natoSymbol: e.target.value })}>
                         <option value="infantry">Pěchota</option>
                         <option value="tank">Tank</option>
                         <option value="artillery">Dělostřelectvo</option>
@@ -139,23 +160,23 @@ const Customization = ({ onBack, onEditScenario }) => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                     <div>
                       <label className="block text-[10px] font-bold uppercase text-gray-400">Pohyb</label>
-                      <input type="number" className="w-full border p-1 rounded mt-1" value={u.movement} onChange={e => { const n = [...units]; n[idx].movement = parseInt(e.target.value) || 0; saveUnits(n); }} />
+                      <input type="number" className="w-full border p-1 rounded mt-1" value={u.movement} onChange={e => updateUnit({ ...u, movement: parseInt(e.target.value) || 0 })} />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold uppercase text-gray-400">Max Figurek</label>
-                      <input type="number" className="w-full border p-1 rounded mt-1" value={u.maxFigures} onChange={e => { const n = [...units]; n[idx].maxFigures = parseInt(e.target.value) || 0; saveUnits(n); }} />
+                      <input type="number" className="w-full border p-1 rounded mt-1" value={u.maxFigures} onChange={e => updateUnit({ ...u, maxFigures: parseInt(e.target.value) || 0 })} />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold uppercase text-gray-400">Max pohyb pro střelbu</label>
-                      <input type="number" className="w-full border p-1 rounded mt-1" value={u.canShootAfterMovingMax} onChange={e => { const n = [...units]; n[idx].canShootAfterMovingMax = parseInt(e.target.value) || 0; saveUnits(n); }} />
+                      <input type="number" className="w-full border p-1 rounded mt-1" value={u.canShootAfterMovingMax} onChange={e => updateUnit({ ...u, canShootAfterMovingMax: parseInt(e.target.value) || 0 })} />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold uppercase text-gray-400">Dostřel (oddělený čárkou)</label>
-                      <input className="w-full border p-1 rounded mt-1" value={u.shootingRange.join(',')} onChange={e => { const n = [...units]; n[idx].shootingRange = e.target.value.split(',').map(v => parseInt(v.trim()) || 0); saveUnits(n); }} />
+                      <input className="w-full border p-1 rounded mt-1" value={u.shootingRange.join(',')} onChange={e => updateUnit({ ...u, shootingRange: e.target.value.split(',').map(v => parseInt(v.trim()) || 0) })} />
                     </div>
                   </div>
                   <div className="mt-4 flex justify-end">
-                    <button onClick={() => deleteItem(setUnits, units, u.id, 'customUnitTypes')} className="text-red-600 hover:text-red-800 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase"><Trash2 size={12} /> Smazat typ</button>
+                    <button onClick={() => deleteItem('units', setUnits, units, u.id)} className="text-red-600 hover:text-red-800 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase"><Trash2 size={12} /> Smazat typ</button>
                   </div>
                 </div>
               ))}
@@ -175,17 +196,17 @@ const Customization = ({ onBack, onEditScenario }) => {
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                     <div className="md:col-span-2">
                       <label className="text-[10px] font-bold uppercase text-gray-400">Název terénu</label>
-                      <input className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold text-lg" value={t.name} onChange={e => { const n = [...terrains]; n[idx].name = e.target.value; saveTerrains(n); }} />
+                      <input className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold text-lg" value={t.name} onChange={e => updateTerrain({ ...t, name: e.target.value })} />
                     </div>
                     <div>
                       <label className="text-[10px] font-bold uppercase text-gray-400">Barva (HEX)</label>
                       <div className="flex gap-2 items-center">
                         <div className="w-6 h-6 rounded border border-gray-300 shadow-inner" style={{ backgroundColor: t.color }}></div>
-                        <input className="flex-1 border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-mono text-xs" value={t.color} onChange={e => { const n = [...terrains]; n[idx].color = e.target.value; saveTerrains(n); }} />
+                        <input className="flex-1 border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-mono text-xs" value={t.color} onChange={e => updateTerrain({ ...t, color: e.target.value })} />
                       </div>
                     </div>
                     <div className="flex items-center gap-2 pt-4">
-                      <input type="checkbox" id={`los-${t.id}`} checked={t.blocksLOS} onChange={e => { const n = [...terrains]; n[idx].blocksLOS = e.target.checked; saveTerrains(n); }} />
+                      <input type="checkbox" id={`los-${t.id}`} checked={t.blocksLOS} onChange={e => updateTerrain({ ...t, blocksLOS: e.target.checked })} />
                       <label htmlFor={`los-${t.id}`} className="text-[10px] font-bold uppercase text-gray-600">Blokuje viditelnost</label>
                     </div>
                   </div>
@@ -193,7 +214,7 @@ const Customization = ({ onBack, onEditScenario }) => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs mb-4">
                     <div>
                       <label className="block text-[10px] font-bold uppercase text-gray-400">Omezení pohybu</label>
-                      <select className="w-full border p-1 rounded mt-1" value={t.movementRestriction || 'none'} onChange={e => { const n = [...terrains]; n[idx].movementRestriction = e.target.value; saveTerrains(n); }}>
+                      <select className="w-full border p-1 rounded mt-1" value={t.movementRestriction || 'none'} onChange={e => updateTerrain({ ...t, movementRestriction: e.target.value as any })}>
                         <option value="none">Žádné</option>
                         <option value="stop">Zastavit při vstupu</option>
                         <option value="no-move">Neprůchodné</option>
@@ -203,40 +224,40 @@ const Customization = ({ onBack, onEditScenario }) => {
                       <label className="block text-[10px] font-bold uppercase text-gray-400">Obranný bonus (kostky)</label>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] w-12">Inf:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={t.diceModifierDefenseInfantry} onChange={e => { const n = [...terrains]; n[idx].diceModifierDefenseInfantry = parseInt(e.target.value) || 0; saveTerrains(n); }} />
+                        <input type="number" className="w-full border p-1 rounded" value={t.diceModifierDefenseInfantry} onChange={e => updateTerrain({ ...t, diceModifierDefenseInfantry: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] w-12">Tank:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={t.diceModifierDefenseTank} onChange={e => { const n = [...terrains]; n[idx].diceModifierDefenseTank = parseInt(e.target.value) || 0; saveTerrains(n); }} />
+                        <input type="number" className="w-full border p-1 rounded" value={t.diceModifierDefenseTank} onChange={e => updateTerrain({ ...t, diceModifierDefenseTank: parseInt(e.target.value) || 0 })} />
                       </div>
                     </div>
                     <div className="space-y-2 border-l pl-4">
                       <label className="block text-[10px] font-bold uppercase text-gray-400">Postih k útoku (kostky)</label>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] w-12">Inf:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={t.diceModifierAttackInfantry} onChange={e => { const n = [...terrains]; n[idx].diceModifierAttackInfantry = parseInt(e.target.value) || 0; saveTerrains(n); }} />
+                        <input type="number" className="w-full border p-1 rounded" value={t.diceModifierAttackInfantry} onChange={e => updateTerrain({ ...t, diceModifierAttackInfantry: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] w-12">Tank:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={t.diceModifierAttackTank} onChange={e => { const n = [...terrains]; n[idx].diceModifierAttackTank = parseInt(e.target.value) || 0; saveTerrains(n); }} />
+                        <input type="number" className="w-full border p-1 rounded" value={t.diceModifierAttackTank} onChange={e => updateTerrain({ ...t, diceModifierAttackTank: parseInt(e.target.value) || 0 })} />
                       </div>
                     </div>
                     <div className="space-y-2 border-l pl-4">
                       <label className="block text-[10px] font-bold uppercase text-gray-400">Speciální</label>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] w-12">Ign. vlajek:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={t.ignoreFlags || 0} onChange={e => { const n = [...terrains]; n[idx].ignoreFlags = parseInt(e.target.value) || 0; saveTerrains(n); }} />
+                        <input type="number" className="w-full border p-1 rounded" value={t.ignoreFlags || 0} onChange={e => updateTerrain({ ...t, ignoreFlags: parseInt(e.target.value) || 0 })} />
                       </div>
                     </div>
                   </div>
 
                   <div>
                     <label className="text-[10px] font-bold uppercase text-gray-400">Popis</label>
-                    <textarea className="w-full border p-2 rounded mt-1 text-xs" rows={2} value={t.description || ''} onChange={e => { const n = [...terrains]; n[idx].description = e.target.value; saveTerrains(n); }} />
+                    <textarea className="w-full border p-2 rounded mt-1 text-xs" rows={2} value={t.description || ''} onChange={e => updateTerrain({ ...t, description: e.target.value })} />
                   </div>
 
                   <div className="mt-4 flex justify-end">
-                    <button onClick={() => deleteItem(setTerrains, terrains, t.id, 'customTerrainTypes')} className="text-red-600 hover:text-red-800 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase"><Trash2 size={12} /> Smazat typ</button>
+                    <button onClick={() => deleteItem('terrains', setTerrains, terrains, t.id)} className="text-red-600 hover:text-red-800 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase"><Trash2 size={12} /> Smazat typ</button>
                   </div>
                 </div>
               ))}
@@ -256,17 +277,17 @@ const Customization = ({ onBack, onEditScenario }) => {
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                     <div className="md:col-span-2">
                       <label className="text-[10px] font-bold uppercase text-gray-400">Název překážky</label>
-                      <input className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold text-lg" value={o.name} onChange={e => { const n = [...overlays]; n[idx].name = e.target.value; saveOverlays(n); }} />
+                      <input className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold text-lg" value={o.name} onChange={e => updateOverlay({ ...o, name: e.target.value })} />
                     </div>
                     <div>
                       <label className="text-[10px] font-bold uppercase text-gray-400">Barva (HEX)</label>
                       <div className="flex gap-2 items-center">
                         <div className="w-6 h-6 rounded border border-gray-300 shadow-inner" style={{ backgroundColor: o.color }}></div>
-                        <input className="flex-1 border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-mono text-xs" value={o.color} onChange={e => { const n = [...overlays]; n[idx].color = e.target.value; saveOverlays(n); }} />
+                        <input className="flex-1 border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-mono text-xs" value={o.color} onChange={e => updateOverlay({ ...o, color: e.target.value })} />
                       </div>
                     </div>
                     <div className="flex items-center gap-2 pt-4">
-                      <input type="checkbox" id={`los-o-${o.id}`} checked={o.blocksLOS} onChange={e => { const n = [...overlays]; n[idx].blocksLOS = e.target.checked; saveOverlays(n); }} />
+                      <input type="checkbox" id={`los-o-${o.id}`} checked={o.blocksLOS} onChange={e => updateOverlay({ ...o, blocksLOS: e.target.checked })} />
                       <label htmlFor={`los-o-${o.id}`} className="text-[10px] font-bold uppercase text-gray-600">Blokuje viditelnost</label>
                     </div>
                   </div>
@@ -274,7 +295,7 @@ const Customization = ({ onBack, onEditScenario }) => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs mb-4">
                     <div>
                       <label className="block text-[10px] font-bold uppercase text-gray-400">Omezení pohybu</label>
-                      <select className="w-full border p-1 rounded mt-1" value={o.movementRestriction || 'none'} onChange={e => { const n = [...overlays]; n[idx].movementRestriction = e.target.value; saveOverlays(n); }}>
+                      <select className="w-full border p-1 rounded mt-1" value={o.movementRestriction || 'none'} onChange={e => updateOverlay({ ...o, movementRestriction: e.target.value as any })}>
                         <option value="none">Žádné</option>
                         <option value="stop">Zastavit při vstupu</option>
                         <option value="no-move">Neprůchodné</option>
@@ -284,37 +305,37 @@ const Customization = ({ onBack, onEditScenario }) => {
                       <label className="block text-[10px] font-bold uppercase text-gray-400">Obranný bonus (kostky)</label>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] w-12">Všechny:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierDefense || 0} onChange={e => { const n = [...overlays]; n[idx].diceModifierDefense = parseInt(e.target.value) || 0; saveOverlays(n); }} />
+                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierDefense || 0} onChange={e => updateOverlay({ ...o, diceModifierDefense: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] w-12">Ign. vlajek:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={o.ignoreFlags || 0} onChange={e => { const n = [...overlays]; n[idx].ignoreFlags = parseInt(e.target.value) || 0; saveOverlays(n); }} />
+                        <input type="number" className="w-full border p-1 rounded" value={o.ignoreFlags || 0} onChange={e => updateOverlay({ ...o, ignoreFlags: parseInt(e.target.value) || 0 })} />
                       </div>
                     </div>
                     <div className="space-y-2 border-l pl-4">
                       <label className="block text-[10px] font-bold uppercase text-gray-400">Postih k útoku (kostky)</label>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] w-12">Inf:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierAttackInfantry || 0} onChange={e => { const n = [...overlays]; n[idx].diceModifierAttackInfantry = parseInt(e.target.value) || 0; saveOverlays(n); }} />
+                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierAttackInfantry || 0} onChange={e => updateOverlay({ ...o, diceModifierAttackInfantry: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] w-12">Tank:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierAttackTank || 0} onChange={e => { const n = [...overlays]; n[idx].diceModifierAttackTank = parseInt(e.target.value) || 0; saveOverlays(n); }} />
+                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierAttackTank || 0} onChange={e => updateOverlay({ ...o, diceModifierAttackTank: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] w-12">Děl:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierAttackArtillery || 0} onChange={e => { const n = [...overlays]; n[idx].diceModifierAttackArtillery = parseInt(e.target.value) || 0; saveOverlays(n); }} />
+                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierAttackArtillery || 0} onChange={e => updateOverlay({ ...o, diceModifierAttackArtillery: parseInt(e.target.value) || 0 })} />
                       </div>
                     </div>
                   </div>
 
                   <div>
                     <label className="text-[10px] font-bold uppercase text-gray-400">Popis</label>
-                    <textarea className="w-full border p-2 rounded mt-1 text-xs" rows={2} value={o.description || ''} onChange={e => { const n = [...overlays]; n[idx].description = e.target.value; saveOverlays(n); }} />
+                    <textarea className="w-full border p-2 rounded mt-1 text-xs" rows={2} value={o.description || ''} onChange={e => updateOverlay({ ...o, description: e.target.value })} />
                   </div>
 
                   <div className="mt-4 flex justify-end">
-                    <button onClick={() => deleteItem(setOverlays, overlays, o.id, 'customOverlayTypes')} className="text-red-600 hover:text-red-800 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase"><Trash2 size={12} /> Smazat typ</button>
+                    <button onClick={() => deleteItem('overlays', setOverlays, overlays, o.id)} className="text-red-600 hover:text-red-800 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase"><Trash2 size={12} /> Smazat typ</button>
                   </div>
                 </div>
               ))}
@@ -331,8 +352,8 @@ const Customization = ({ onBack, onEditScenario }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {countries.map((c, idx) => (
                 <div key={c.id} className="flex gap-2 p-2 border-2 border-gray-100 rounded bg-white items-center shadow-sm">
-                  <input className="flex-1 font-bold outline-none border-b-2 border-transparent focus:border-map-ink-blue" value={c.name} onChange={e => { const n = [...countries]; n[idx].name = e.target.value; saveCountries(n); }} />
-                  <button onClick={() => deleteItem(setCountries, countries, c.id, 'customCountries')} className="text-red-600 p-2"><Trash2 size={16} /></button>
+                  <input className="flex-1 font-bold outline-none border-b-2 border-transparent focus:border-map-ink-blue" value={c.name} onChange={e => updateCountry({ ...c, name: e.target.value })} />
+                  <button onClick={() => deleteItem('countries', setCountries, countries, c.id)} className="text-red-600 p-2"><Trash2 size={16} /></button>
                 </div>
               ))}
             </div>
@@ -348,8 +369,8 @@ const Customization = ({ onBack, onEditScenario }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {campaigns.map((c, idx) => (
                 <div key={c.id} className="flex gap-2 p-2 border-2 border-gray-100 rounded bg-white items-center shadow-sm">
-                  <input className="flex-1 font-bold outline-none border-b-2 border-transparent focus:border-map-ink-blue" value={c.name} onChange={e => { const n = [...campaigns]; n[idx].name = e.target.value; saveCampaigns(n); }} />
-                  <button onClick={() => deleteItem(setCampaigns, campaigns, c.id, 'customCampaigns')} className="text-red-600 p-2"><Trash2 size={16} /></button>
+                  <input className="flex-1 font-bold outline-none border-b-2 border-transparent focus:border-map-ink-blue" value={c.name} onChange={e => updateCampaign({ ...c, name: e.target.value })} />
+                  <button onClick={() => deleteItem('campaigns', setCampaigns, campaigns, c.id)} className="text-red-600 p-2"><Trash2 size={16} /></button>
                 </div>
               ))}
             </div>
