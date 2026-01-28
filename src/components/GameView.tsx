@@ -61,7 +61,7 @@ const StatisticsModal = ({ unitStats, scenario, unitTypes, onClose }) => {
                    <div className="mt-auto">
                       <p className="font-bold text-slate-800">{unitTypes.find(ut => ut.id === award.unit.unitTypeId)?.name}</p>
                       <p className={`text-[9px] font-black uppercase ${award.unit.ownerId === 'player1' ? 'text-blue-600' : 'text-red-600'}`}>
-                         {award.unit.ownerId === 'player1' ? gameState.scenario.player1.name : gameState.scenario.player2.name}
+                         {award.unit.ownerId === 'player1' ? scenario.player1.name : scenario.player2.name}
                       </p>
                    </div>
                 </div>
@@ -82,7 +82,7 @@ const StatisticsModal = ({ unitStats, scenario, unitTypes, onClose }) => {
                       <div className="w-48">
                          <h4 className="font-black text-sm uppercase">{unitTypes.find(ut => ut.id === s.unitTypeId)?.name}</h4>
                          <p className={`text-[10px] font-bold ${s.ownerId === 'player1' ? 'text-blue-600' : 'text-red-600'}`}>
-                            {s.ownerId === 'player1' ? gameState.scenario.player1.name : gameState.scenario.player2.name}
+                            {s.ownerId === 'player1' ? scenario.player1.name : scenario.player2.name}
                          </p>
                       </div>
 
