@@ -63,15 +63,40 @@ export function cubeLerpFloat(a, b, t) {
   return { q: lerp(a.q, b.q, t), r: lerp(a.r, b.r, t), s: lerp(a.s, b.s, t) };
 }
 
-export function getReachableHexes(q, r, movementLimit, grid, terrainTypes, overlayTypes = []) {
+// Je terén/překážka na poli `hex` zcela neprůchozí pro jednotku dané kategorie
+// a strany? Pokrývá klasické 'no-move' i nová omezení podle typu jednotky a strany.
+export function isImpassableForUnit(hex, terrainTypes, overlayTypes = [], unitCategory, ownerId) {
+  const terrain = terrainTypes.find(t => t.id === hex?.terrainTypeId);
+  const overlay = overlayTypes.find(o => o.id === hex?.overlayTypeId);
+  for (const def of [terrain, overlay]) {
+    if (!def) continue;
+    if (def.movementRestriction === 'no-move') return true;
+    if (unitCategory && def.impassableForCategories?.includes(unitCategory)) return true;
+    if (ownerId && def.impassableForPlayer === ownerId) return true;
+  }
+  return false;
+}
+
+export function getReachableHexes(q, r, movementLimit, grid, terrainTypes, overlayTypes = [], options = {}) {
+  const { unitCategory = undefined, ownerId = undefined } = options as any;
   const reachable = new Set();
   const queue = [{ q, r, dist: 0 }];
   const visited = new Set();
   visited.add(`${q},${r}`);
+
+  // Výchozí pole jednotky: pokud z něj lze vystoupit jen na vedlejší pole,
+  // jednotka se po prvním kroku musí zastavit.
+  const startHex = grid[`${q},${r}`];
+  const startTerrain = terrainTypes.find(t => t.id === startHex?.terrainTypeId);
+  const startOverlay = overlayTypes.find(o => o.id === startHex?.overlayTypeId);
+  const exitAdjacentOnly = !!(startTerrain?.exitToAdjacentOnly || startOverlay?.exitToAdjacentOnly);
+
   while (queue.length > 0) {
     const { q: cq, r: cr, dist: cd } = queue.shift();
     if (cd > 0) reachable.add(`${cq},${cr}`);
     if (cd >= movementLimit) continue;
+    // Po vystoupení z pole s omezeným výstupem už nelze pokračovat v pohybu.
+    if (cd > 0 && exitAdjacentOnly) continue;
     const currentHex = grid[`${cq},${cr}`];
     const currentTerrain = terrainTypes.find(t => t.id === currentHex?.terrainTypeId);
     const currentOverlay = overlayTypes.find(o => o.id === currentHex?.overlayTypeId);
@@ -86,12 +111,14 @@ export function getReachableHexes(q, r, movementLimit, grid, terrainTypes, overl
       const hex = grid[key];
       if (!hex || visited.has(key) || hex.unitId) continue;
 
+      if (isImpassableForUnit(hex, terrainTypes, overlayTypes, unitCategory, ownerId)) continue;
+
+      // Na pole se vstupem jen z vedlejšího pole lze vstoupit pouze přímo
+      // z výchozí pozice jednotky (cd === 0), ne průchodem přes jiná pole.
       const terrain = terrainTypes.find(t => t.id === hex.terrainTypeId);
       const overlay = overlayTypes.find(o => o.id === hex.overlayTypeId);
-
-      const isImpassable = terrain?.movementRestriction === 'no-move' || overlay?.movementRestriction === 'no-move';
-
-      if (isImpassable) continue;
+      const entryAdjacentOnly = terrain?.entryFromAdjacentOnly || overlay?.entryFromAdjacentOnly;
+      if (entryAdjacentOnly && cd !== 0) continue;
 
       visited.add(key);
       queue.push({ q: n.q, r: n.r, dist: cd + 1 });

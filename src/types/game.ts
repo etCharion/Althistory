@@ -23,11 +23,23 @@ export type Seats = {
 export type Country = { id: string; name: string; };
 export type Campaign = { id: string; name: string; };
 
+export type UnitCategory = 'infantry' | 'tank' | 'artillery';
+
 export type TerrainType = {
   id: string;
   name: string;
   blocksLOS: boolean;
   movementRestriction?: 'stop' | 'no-move' | 'none';
+  // Terén je zcela neprůchozí pro tyto kategorie jednotek.
+  impassableForCategories?: UnitCategory[];
+  // Terén je zcela neprůchozí pro jednotky této strany.
+  impassableForPlayer?: PlayerId;
+  // Na pole lze vstoupit pouze přímo z vedlejšího pole (z výchozí pozice
+  // jednotky) – nelze ho dosáhnout průchodem přes jiná pole.
+  entryFromAdjacentOnly?: boolean;
+  // Z pole lze vystoupit pouze na vedlejší pole; po vystoupení už nelze
+  // pokračovat v pohybu.
+  exitToAdjacentOnly?: boolean;
   diceModifierDefenseInfantry: number;
   diceModifierDefenseTank: number;
   diceModifierAttackInfantry: number;
@@ -46,6 +58,10 @@ export type OverlayType = {
   diceModifierAttackArtillery?: number;
   ignoreFlags?: number;
   movementRestriction?: 'stop' | 'no-move' | 'none';
+  impassableForCategories?: UnitCategory[];
+  impassableForPlayer?: PlayerId;
+  entryFromAdjacentOnly?: boolean;
+  exitToAdjacentOnly?: boolean;
   blocksLOS?: boolean;
   color?: string;
   description?: string;
