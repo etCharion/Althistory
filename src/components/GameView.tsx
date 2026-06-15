@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils'; import { getUnitSections, axialToOffset, getSection } from '../logic/hexGrid';
 import NatoSymbol from './NatoSymbol';
-import { Menu, Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check, Crown, Shield, Eye, QrCode } from 'lucide-react';
+import { Menu, Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check, Crown, Shield, Eye, QrCode, Undo2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { getGameState } from '../logic/firebaseService';
 import { controlsSection, isGeneral } from '../logic/gameReducer';
@@ -198,7 +198,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
     load();
   }, [gameId, initialScenario]);
 
-  const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId);
+  const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, undoLastAction, canUndo, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId);
   const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none'); const [hovered, setHovered] = useState(null);
   const [dismissedOverlay, setDismissedOverlay] = useState(false);
   const [showPhaseInfo, setShowPhaseInfo] = useState(false);
@@ -513,6 +513,16 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
               {gameState.winner && (
                 <button onClick={() => setShowStats(true)} title="Statistiky" className="p-2 bg-slate-800 border-2 border-slate-800 rounded-lg shadow-lg hover:bg-slate-700 transition-colors">
                   <Trophy size={20} className="text-white" />
+                </button>
+              )}
+              {!gameState.winner && isMyTurn && canUndo()
+                && (gameState.phase === 'movement' || (gameState.phase === 'distribution-sections' && iAmGeneral)) && (
+                <button
+                  onClick={() => { undoLastAction(); setSelected(null); setActType('none'); }}
+                  title={gameState.phase === 'movement' ? 'Vrátit poslední pohyb' : 'Vrátit poslední rozdělení'}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg shadow-lg font-bold uppercase text-sm transition-colors border-2 bg-white border-slate-800 text-slate-800 hover:bg-slate-100"
+                >
+                  <Undo2 size={16} /> Vrátit
                 </button>
               )}
               {(gameState.winner || (isMyTurn && iAmGeneral)) && <button onClick={() => {

@@ -46,6 +46,16 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
   const takeGround = (uid, q, r) => dispatch({ type: 'RESOLVE_TAKE_GROUND', clientId, unitId: uid, q, r });
   const cancelTakeGround = () => dispatch({ type: 'CANCEL_TAKE_GROUND', clientId });
   const dismissCombat = () => dispatch({ type: 'DISMISS_COMBAT', clientId });
+  const undoLastAction = () => dispatch({ type: 'UNDO', clientId });
+
+  // Whether the most recent reversible action (resource distribution / move) can
+  // still be undone in the current open phase.
+  const canUndo = () => {
+    if (!gameState) return false;
+    const stack = gameState.undoStack || [];
+    if (stack.length === 0) return false;
+    return stack[stack.length - 1].phase === gameState.phase && !gameState.pendingCombat && !gameState.pendingRetreat && !gameState.pendingTakeGround;
+  };
 
   // ---- Shared combat state (mirrors Firestore so every player sees it) ----
   const combatResult = gameState?.pendingCombat || null;
@@ -138,6 +148,7 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     gameState, combatResult, retreatingUnitId, takeGroundOption,
     dismissCombat, cancelTakeGround, takeGround, destroyOverlay,
     distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit,
+    undoLastAction, canUndo,
     getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions
   };
 }
