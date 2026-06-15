@@ -211,6 +211,26 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
               </div>
             </div>
 
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold uppercase text-gray-500">První hráč</label>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => setScenario({ ...scenario, firstPlayerId: 'player1' })}
+                  className={`flex-1 py-2 border-2 text-[10px] font-bold uppercase rounded transition-all ${scenario.firstPlayerId === 'player1' ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white border-gray-100 text-gray-600 hover:border-blue-600/50'}`}
+                >
+                  {scenario.player1?.name || 'Spojenci'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScenario({ ...scenario, firstPlayerId: 'player2' })}
+                  className={`flex-1 py-2 border-2 text-[10px] font-bold uppercase rounded transition-all ${scenario.firstPlayerId === 'player2' ? 'bg-red-600 text-white border-red-600 shadow-md' : 'bg-white border-gray-100 text-gray-600 hover:border-red-600/50'}`}
+                >
+                  {scenario.player2?.name || 'Osa'}
+                </button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-3 gap-2">
               <div className="col-span-2 space-y-1">
                 <label className="text-[10px] font-bold uppercase text-gray-500 flex items-center gap-1"><Globe size={10} /> Kampaň</label>
