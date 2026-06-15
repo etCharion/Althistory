@@ -1,6 +1,6 @@
 import { getDistance, getUnitSections, getNeighbors, getTargetableUnits, getDiceCount, isImpassableForUnit } from './hexGrid';
 import { rollDice } from './dice';
-import type { GameState, PlayerId, SectionId, Seats } from '../types/game';
+import type { GameState, PlayerId, SectionId, Seats, UndoSnapshot } from '../types/game';
 
 // Rules (unit / terrain / overlay catalogs) are passed in so the reducer stays pure
 // and can run identically on every client and inside a Firestore transaction.
@@ -17,7 +17,8 @@ export type Action =
   | { type: 'DISMISS_COMBAT'; clientId: string }
   | { type: 'RESOLVE_RETREAT'; clientId: string; unitId: string; q: number; r: number }
   | { type: 'RESOLVE_TAKE_GROUND'; clientId: string; unitId: string; q: number; r: number }
-  | { type: 'CANCEL_TAKE_GROUND'; clientId: string };
+  | { type: 'CANCEL_TAKE_GROUND'; clientId: string }
+  | { type: 'UNDO'; clientId: string };
 
 // ---------------------------------------------------------------------------
 // Initial state
@@ -101,6 +102,24 @@ export function onTeam(state: GameState, clientId: string, team: PlayerId): bool
 }
 
 const unitHex = (state: GameState, uid: string) => Object.values(state.grid).find((h: any) => h.unitId === uid) || null;
+
+// Capture the current per-phase state so a reversible action (DISTRIBUTE / MOVE)
+// can be undone while the phase is still open. The grid hexes are cloned because
+// the reducer mutates hex objects in place when moving units; without the clone
+// the snapshot would change underneath us.
+function pushUndo(state: GameState, clientId: string): UndoSnapshot[] {
+  const snap: UndoSnapshot = {
+    clientId,
+    phase: state.phase,
+    units: state.units,
+    grid: Object.fromEntries(Object.entries(state.grid).map(([k, h]) => [k, { ...h }])),
+    unitStats: state.unitStats,
+    victoryPoints: state.victoryPoints,
+    sectionResources: state.sectionResources,
+    centralWarehouse: state.centralWarehouse
+  };
+  return [...(state.undoStack || []), snap];
+}
 
 // While a dice roll / retreat / take-ground is awaiting resolution, no new
 // move or attack may start. This keeps simultaneous commanders from overwriting
@@ -259,6 +278,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       const actualAmount = action.amount === 'max' ? state.centralWarehouse[pid] : Math.min(action.amount, state.centralWarehouse[pid]);
       return {
         ...state,
+        undoStack: pushUndo(state, action.clientId),
         centralWarehouse: { ...state.centralWarehouse, [pid]: state.centralWarehouse[pid] - actualAmount },
         sectionResources: { ...state.sectionResources, [pid]: { ...state.sectionResources[pid], [action.section]: state.sectionResources[pid][action.section] + actualAmount } }
       };
@@ -268,12 +288,12 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
     case 'NEXT_PHASE': {
       if (!isGeneral(state, action.clientId, active)) return state;
       if (state.phase === 'distribution-sections') {
-        return { ...state, phase: 'distribution-units', centralWarehouse: { ...state.centralWarehouse, [active]: 0 } };
+        return { ...state, phase: 'distribution-units', centralWarehouse: { ...state.centralWarehouse, [active]: 0 }, undoStack: [] };
       }
       if (state.phase === 'distribution-units') {
-        return { ...state, phase: 'movement', sectionResources: { ...state.sectionResources, [active]: { left: 0, center: 0, right: 0 } } };
+        return { ...state, phase: 'movement', sectionResources: { ...state.sectionResources, [active]: { left: 0, center: 0, right: 0 } }, undoStack: [] };
       }
-      if (state.phase === 'movement') return { ...state, phase: 'attack' };
+      if (state.phase === 'movement') return { ...state, phase: 'attack', undoStack: [] };
       return state;
     }
 
@@ -306,6 +326,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
         grid: updatedGrid,
         victoryPoints: nVP,
         pendingCombat: null, pendingRetreat: null, pendingTakeGround: null,
+        undoStack: [],
         winner: computeWinner(state.scenario, newUnits, nVP)
       };
     }
@@ -348,7 +369,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
           sectionResources: { ...state.sectionResources, [active]: newSecRes },
           units: { ...state.units, [unitId]: { ...unit, resources: unit.resources + 1, resourceOrigins: newOrigins } }
         };
-        if (newSecRes.left === 0 && newSecRes.center === 0 && newSecRes.right === 0) newState.phase = 'movement';
+        if (newSecRes.left === 0 && newSecRes.center === 0 && newSecRes.right === 0) { newState.phase = 'movement'; newState.undoStack = []; }
         return newState;
       }
       return state;
@@ -383,6 +404,10 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       const exitAdjacentOnly = !!(fTerrain?.exitToAdjacentOnly || fOverlay?.exitToAdjacentOnly);
       if (exitAdjacentOnly && dist !== 1) return state;
 
+      // All checks passed – snapshot before mutating so the move can be undone
+      // while the movement phase is still open.
+      const undoStack = pushUndo(state, action.clientId);
+
       const nGrid = { ...state.grid } as any;
       const fromHex = nGrid[`${(fHex as any).q},${(fHex as any).r}`];
       const targetHex = nGrid[`${tq},${tr}`];
@@ -411,7 +436,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       const { nVP, newGrid: updatedGrid } = checkObjectives(nGrid, state.units, active, 'immediate', state.currentTurn, state.victoryPoints);
 
       const newUnits = { ...state.units, [uid]: { ...unit, resources: newResources, hasMoved: true, movementUsed: finalMovementUsed, hasAttacked } };
-      return { ...state, grid: updatedGrid, units: newUnits, victoryPoints: nVP, unitStats: newStats, winner: computeWinner(state.scenario, state.units, nVP) };
+      return { ...state, grid: updatedGrid, units: newUnits, victoryPoints: nVP, unitStats: newStats, undoStack, winner: computeWinner(state.scenario, state.units, nVP) };
     }
 
     // -------------------------------------------------- Commander: attack
@@ -633,6 +658,33 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       if (!state.pendingTakeGround) return state;
       if (!controlsUnit(state, action.clientId, state.pendingTakeGround.unitId)) return state;
       return { ...state, pendingTakeGround: null };
+    }
+
+    // -------------------------------------------------- Undo last reversible action
+    // Reverts the most recent DISTRIBUTE / MOVE while the phase is still open.
+    // Attacks are intentionally not reversible (they involve a dice roll).
+    case 'UNDO': {
+      const stack = state.undoStack || [];
+      if (stack.length === 0) return state;
+      const top = stack[stack.length - 1];
+      // Only undo within the same (still open) phase.
+      if (top.phase !== state.phase) return state;
+      // No undoing while a combat / retreat / take-ground is unresolved.
+      if (hasPendingCombat(state)) return state;
+      // Must be on the active team; section distribution is the general's job.
+      if (!onTeam(state, action.clientId, active)) return state;
+      if (state.phase === 'distribution-sections' && !isGeneral(state, action.clientId, active)) return state;
+      return {
+        ...state,
+        units: top.units,
+        grid: top.grid,
+        unitStats: top.unitStats,
+        victoryPoints: top.victoryPoints,
+        sectionResources: top.sectionResources,
+        centralWarehouse: top.centralWarehouse,
+        undoStack: stack.slice(0, -1),
+        winner: computeWinner(state.scenario, top.units, top.victoryPoints)
+      };
     }
 
     default:
