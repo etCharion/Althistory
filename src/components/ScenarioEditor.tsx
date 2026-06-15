@@ -34,7 +34,7 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
   const [campaigns, setCampaigns] = useState([]);
   const [hexes, setHexes] = useState({});
   const [units, setUnits] = useState({});
-  const [objSettings, setObjSettings] = useState({ name: 'Cíl', type: 'permanent', timing: 'immediate', points: 1, validFor: 'both' as any });
+  const [objSettings, setObjSettings] = useState({ name: 'Cíl', type: 'permanent', timing: 'immediate', points: 1, validFor: 'both' as any, groupId: '', condition: 'all' as any });
 
   useEffect(() => {
     const load = async () => {
@@ -76,7 +76,12 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
     } else if (tool.type === 'overlay') {
       setHexes({ ...hexes, [key]: { ...ex, overlayTypeId: ex.overlayTypeId === tool.id ? undefined : tool.id } });
     } else if (tool.type === 'objective') {
-      setHexes({ ...hexes, [key]: { ...ex, objective: ex.objective ? undefined : { ...objSettings } } });
+      const { name, type, timing, points, validFor, groupId, condition } = objSettings;
+      // Group objectives carry a shared groupId + condition; single-tile ones omit them.
+      const obj = groupId
+        ? { name, type, timing, points, validFor, groupId, condition }
+        : { name, type, timing, points, validFor };
+      setHexes({ ...hexes, [key]: { ...ex, objective: ex.objective ? undefined : obj } });
     } else if (tool.type === 'unit') {
       const uid = `unit-${Date.now()}`;
       const type = unitTypes.find(u => u.id === tool.id);
@@ -288,6 +293,36 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
                    <option value="player2">Osa</option>
                  </select>
                </div>
+               <div className="flex gap-1 pt-1 border-t border-gray-100">
+                 <button
+                   onClick={() => setObjSettings({...objSettings, groupId: ''})}
+                   className={`flex-1 py-1 border-2 rounded font-bold uppercase ${!objSettings.groupId ? 'bg-map-ink-blue text-white border-map-ink-blue' : 'bg-white border-gray-100'}`}
+                 >Samostatný</button>
+                 <button
+                   onClick={() => setObjSettings({...objSettings, groupId: objSettings.groupId || `grp-${Date.now()}`})}
+                   className={`flex-1 py-1 border-2 rounded font-bold uppercase ${objSettings.groupId ? 'bg-map-ink-blue text-white border-map-ink-blue' : 'bg-white border-gray-100'}`}
+                 >Skupina</button>
+               </div>
+               {objSettings.groupId && (
+                 <>
+                   <div className="flex justify-between items-center">
+                     <span className="font-bold uppercase text-gray-500">Podmínka:</span>
+                     <select className="border rounded p-1" value={objSettings.condition} onChange={e => setObjSettings({...objSettings, condition: e.target.value as any})}>
+                       <option value="any">Aspoň 1 políčko</option>
+                       <option value="majority">Většina políček</option>
+                       <option value="all">Všechna políčka</option>
+                     </select>
+                   </div>
+                   <div className="flex justify-between items-center gap-2">
+                     <span className="text-gray-400 truncate">Skupina: {objSettings.groupId.replace('grp-', '#')}</span>
+                     <button
+                       onClick={() => setObjSettings({...objSettings, groupId: `grp-${Date.now()}`})}
+                       className="px-2 py-1 border-2 border-map-ink-blue text-map-ink-blue rounded font-bold uppercase whitespace-nowrap hover:bg-map-ink-blue/10"
+                     >Nová skupina</button>
+                   </div>
+                   <p className="text-gray-400 leading-tight">Klikni na více políček – přidají se do stejné skupiny. Bod se počítá podle podmínky.</p>
+                 </>
+               )}
                <button
                  onClick={() => setTool({ type: 'objective', id: 'obj' })}
                  className={`w-full p-2 border-2 font-bold uppercase rounded transition-all ${tool.type === 'objective' ? 'bg-map-ink-blue text-white border-map-ink-blue' : 'bg-white border-gray-100'}`}

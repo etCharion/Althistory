@@ -130,45 +130,111 @@ function checkObjectives(grid: any, units: any, playerId: PlayerId, timing: stri
   const newGrid = { ...grid };
   const nVP = { player1: [...currentVP.player1], player2: [...currentVP.player2] } as any;
 
+  const isValidForPlayer = (obj: any, pid: PlayerId) => !obj.validFor || obj.validFor === 'both' || obj.validFor === pid;
+
+  // Update the per-hex `controllingPlayerId` of an objective: a friendly unit of
+  // the active player captures it; temporary objectives release when no
+  // controlling unit remains. Returns the (possibly new) objective object.
+  const updateControl = (hex: any) => {
+    const occupyingUnit = hex.unitId ? units[hex.unitId] : null;
+    const obj = { ...hex.objective };
+    let changed = false;
+
+    if ((timing === 'immediate' || timing === 'startOfTurn')
+        && occupyingUnit && occupyingUnit.ownerId === playerId
+        && obj.timing === timing
+        && obj.controllingPlayerId !== playerId) {
+      obj.controllingPlayerId = playerId;
+      changed = true;
+    }
+
+    if (obj.type === 'temporary' && obj.controllingPlayerId
+        && (!occupyingUnit || occupyingUnit.ownerId !== obj.controllingPlayerId)) {
+      obj.controllingPlayerId = undefined;
+      changed = true;
+    }
+
+    return { obj, changed };
+  };
+
+  // --- Single-tile objectives (unchanged behaviour) ---
   Object.keys(newGrid).forEach(key => {
     const hex = newGrid[key];
-    if (!hex.objective) return;
+    if (!hex.objective || hex.objective.groupId) return; // grouped objectives handled below
 
-    const occupyingUnitId = hex.unitId;
-    const occupyingUnit = occupyingUnitId ? units[occupyingUnitId] : null;
-    const obj = { ...hex.objective };
-    const isValidForPlayer = (pid: PlayerId) => !obj.validFor || obj.validFor === 'both' || obj.validFor === pid;
+    const prevController = hex.objective.controllingPlayerId;
+    const { obj, changed } = updateControl(hex);
+    if (!changed) return;
 
-    if (timing === 'immediate' || timing === 'startOfTurn') {
-      if (occupyingUnit && occupyingUnit.ownerId === playerId && obj.timing === timing) {
-        if (obj.controllingPlayerId !== playerId) {
-          if (obj.controllingPlayerId) {
-            const other = obj.controllingPlayerId;
-            nVP[other] = nVP[other].filter((vp: any) => vp.objectiveHexKey !== key);
-          }
-          obj.controllingPlayerId = playerId;
-          if (isValidForPlayer(playerId)) {
-            for (let i = 0; i < obj.points; i++) {
-              nVP[playerId].push({
-                id: `obj-${key}-${i}-${round}`,
-                type: 'objective',
-                round,
-                objectiveName: obj.name || 'Cíl',
-                objectiveHexKey: key
-              });
-            }
-          }
-          newGrid[key] = { ...hex, objective: obj };
-        }
+    // Whoever previously held this hex loses its points; the new controller
+    // (if any, and if the objective is valid for them) gains them.
+    if (prevController) nVP[prevController] = nVP[prevController].filter((vp: any) => vp.objectiveHexKey !== key);
+    if (obj.controllingPlayerId && isValidForPlayer(obj, obj.controllingPlayerId)) {
+      const ctrl = obj.controllingPlayerId;
+      for (let i = 0; i < obj.points; i++) {
+        nVP[ctrl].push({
+          id: `obj-${key}-${i}-${round}`,
+          type: 'objective',
+          round,
+          objectiveName: obj.name || 'Cíl',
+          objectiveHexKey: key
+        });
       }
     }
+    newGrid[key] = { ...hex, objective: obj };
+  });
 
-    if (obj.type === 'temporary' && obj.controllingPlayerId && (!occupyingUnit || occupyingUnit.ownerId !== obj.controllingPlayerId)) {
-      const prevController = obj.controllingPlayerId;
-      nVP[prevController] = nVP[prevController].filter((vp: any) => vp.objectiveHexKey !== key);
-      obj.controllingPlayerId = undefined;
-      newGrid[key] = { ...hex, objective: obj };
-    }
+  // --- Multi-tile objective groups ---
+  // First refresh per-hex control for every grouped hex, collecting the groups.
+  const groups: Record<string, { keys: string[]; obj: any }> = {};
+  Object.keys(newGrid).forEach(key => {
+    const hex = newGrid[key];
+    if (!hex.objective || !hex.objective.groupId) return;
+    const { obj } = updateControl(hex);
+    newGrid[key] = { ...hex, objective: obj };
+    const gid = obj.groupId;
+    if (!groups[gid]) groups[gid] = { keys: [], obj };
+    groups[gid].keys.push(key);
+    groups[gid].obj = obj; // any member carries the shared group settings
+  });
+
+  // Then award (or revoke) the group's victory points based on its condition.
+  Object.keys(groups).forEach(gid => {
+    const { keys, obj } = groups[gid];
+    const total = keys.length;
+    const controlled = { player1: 0, player2: 0 } as Record<PlayerId, number>;
+    keys.forEach(k => {
+      const c = newGrid[k].objective.controllingPlayerId as PlayerId | undefined;
+      if (c) controlled[c]++;
+    });
+
+    const condition = obj.condition || 'all';
+    const meets = (pid: PlayerId) => {
+      const n = controlled[pid];
+      if (n === 0) return false;
+      if (condition === 'any') return n >= 1;
+      if (condition === 'majority') return n > total / 2;
+      return n === total; // 'all'
+    };
+
+    const groupKey = `group-${gid}`;
+    (['player1', 'player2'] as PlayerId[]).forEach(pid => {
+      const has = nVP[pid].some((vp: any) => vp.objectiveGroupKey === groupKey);
+      const should = meets(pid) && isValidForPlayer(obj, pid);
+      if (should && !has) {
+        for (let i = 0; i < obj.points; i++) {
+          nVP[pid].push({
+            id: `obj-${groupKey}-${i}-${round}`,
+            type: 'objective',
+            round,
+            objectiveName: obj.name || 'Cíl',
+            objectiveGroupKey: groupKey
+          });
+        }
+      } else if (!should && has) {
+        nVP[pid] = nVP[pid].filter((vp: any) => vp.objectiveGroupKey !== groupKey);
+      }
+    });
   });
 
   return { nVP, newGrid };
