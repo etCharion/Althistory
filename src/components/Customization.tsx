@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Trash2, Plus, Edit2, X as CloseIcon } from 'lucide-react';
 import NatoSymbol from './NatoSymbol';
 import { getAllUnitTypes, getAllTerrainTypes, getAllCountries, getAllCampaigns, getAllScenarios, getAllOverlayTypes, saveUnitType, deleteUnitType, saveTerrainType, deleteTerrainType, saveOverlayType, deleteOverlayType, saveCountry, deleteCountry, saveCampaign, deleteCampaign, saveScenario, deleteScenario, getScenarioCountryNames } from '../data/typeUtils';
@@ -62,12 +62,21 @@ const Customization = ({ onBack, onEditScenario }) => {
     load();
   }, []);
 
-  // Updated saving logic to handle single item updates to Firestore
-  const updateUnit = async (item) => { await saveUnitType(item); setUnits(prev => prev.map(u => u.id === item.id ? item : u)); };
-  const updateTerrain = async (item) => { await saveTerrainType(item); setTerrains(prev => prev.map(t => t.id === item.id ? item : t)); };
-  const updateOverlay = async (item) => { await saveOverlayType(item); setOverlays(prev => prev.map(o => o.id === item.id ? item : o)); };
-  const updateCountry = async (item) => { await saveCountry(item); setCountries(prev => prev.map(c => c.id === item.id ? item : c)); };
-  const updateCampaign = async (item) => { await saveCampaign(item); setCampaigns(prev => prev.map(cp => cp.id === item.id ? item : cp)); };
+  // Debounced persistence: update React state synchronously so controlled
+  // inputs keep their caret position, then save to Firestore in the background
+  // (debounced per item to avoid a write on every keystroke).
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const debouncedSave = (key: string, save: () => Promise<void>) => {
+    if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
+    saveTimers.current[key] = setTimeout(() => { save(); }, 500);
+  };
+  useEffect(() => () => { Object.values(saveTimers.current).forEach(clearTimeout); }, []);
+
+  const updateUnit = (item) => { setUnits(prev => prev.map(u => u.id === item.id ? item : u)); debouncedSave(`unit-${item.id}`, () => saveUnitType(item)); };
+  const updateTerrain = (item) => { setTerrains(prev => prev.map(t => t.id === item.id ? item : t)); debouncedSave(`terrain-${item.id}`, () => saveTerrainType(item)); };
+  const updateOverlay = (item) => { setOverlays(prev => prev.map(o => o.id === item.id ? item : o)); debouncedSave(`overlay-${item.id}`, () => saveOverlayType(item)); };
+  const updateCountry = (item) => { setCountries(prev => prev.map(c => c.id === item.id ? item : c)); debouncedSave(`country-${item.id}`, () => saveCountry(item)); };
+  const updateCampaign = (item) => { setCampaigns(prev => prev.map(cp => cp.id === item.id ? item : cp)); debouncedSave(`campaign-${item.id}`, () => saveCampaign(item)); };
 
   const addUnit = async () => {
     const newUnit = { id: `unit-${Date.now()}`, name: 'Nová jednotka', movement: 2, shootingRange: [3, 2, 1], canShootAfterMovingMax: 1, maxFigures: 4, natoSymbol: 'infantry', category: 'infantry' };
