@@ -12,6 +12,7 @@
     "firebase": "^12.8.0",
     "framer-motion": "^12.4.0",
     "lucide-react": "^0.563.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.13.0"
