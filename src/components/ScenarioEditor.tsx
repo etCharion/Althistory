@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, X, Globe, Calendar, Flag, BookOpen, Layers } from 'lucide-react';
-import { getAllTerrainTypes, getAllUnitTypes, getAllCountries, getAllCampaigns, getAllOverlayTypes, saveScenario, saveCountry, saveCampaign } from '../data/typeUtils';
+import { getAllTerrainTypes, getAllUnitTypes, getAllCountries, getAllCampaigns, getAllOverlayTypes, saveScenario, saveCountry, saveCampaign, getScenarioCountryIds } from '../data/typeUtils';
 import HexGrid from './HexGrid';
 
 const ScenarioEditor = ({ onBack, initialScenario }) => {
@@ -20,6 +20,7 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
     isRealBattle: true,
     year: 1944,
     countryId: 'usa',
+    countryIds: ['usa'],
     campaignId: '',
     campaignNumber: 1
   });
@@ -53,7 +54,9 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
     load();
 
     if (initialScenario) {
-      setScenario(initialScenario);
+      // Older scenarios only have the single `countryId`; normalize to the
+      // multi-country `countryIds` array so the editor can work uniformly.
+      setScenario({ ...initialScenario, countryIds: getScenarioCountryIds(initialScenario) });
       const hObj = {};
       initialScenario.initialHexes.forEach(h => { hObj[`${h.q},${h.r}`] = h; });
       setHexes(hObj);
@@ -98,9 +101,14 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
   };
 
   const save = async () => {
+    const countryIds = scenario.countryIds || [];
     const final = {
       ...scenario,
       id: scenario.id || `scen-${Date.now()}`,
+      countryIds,
+      // Keep the legacy `countryId` in sync (first selected country) for
+      // backward compatibility with anything still reading the old field.
+      countryId: countryIds[0] || scenario.countryId || '',
       initialHexes: Object.values(hexes),
       initialUnits: Object.values(units).filter(u => Object.values(hexes).some(h => h.unitId === u.id))
     };
@@ -117,7 +125,7 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
     if (type === 'country') {
       await saveCountry(newItem);
       setCountries([...countries, newItem]);
-      setScenario({ ...scenario, countryId: id });
+      setScenario({ ...scenario, countryIds: [...(scenario.countryIds || []), id] });
     } else {
       await saveCampaign(newItem);
       setCampaigns([...campaigns, newItem]);
@@ -160,12 +168,26 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase text-gray-500 flex items-center gap-1"><Flag size={10} /> Země</label>
-              <div className="flex gap-1">
-                <select className="flex-1 p-2 border text-xs rounded outline-none focus:border-map-ink-blue" value={scenario.countryId} onChange={e => setScenario({ ...scenario, countryId: e.target.value })}>
-                  {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <button onClick={() => addNewItem('country')} className="bg-map-ink-green text-white p-2 rounded hover:bg-opacity-90"><Plus size={16} /></button>
+              <label className="text-[10px] font-bold uppercase text-gray-500 flex items-center gap-1"><Flag size={10} /> Země (lze vybrat více)</label>
+              <div className="flex flex-wrap gap-1 items-center">
+                {countries.map(c => {
+                  const active = (scenario.countryIds || []).includes(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        const cur = scenario.countryIds || [];
+                        const next = active ? cur.filter(x => x !== c.id) : [...cur, c.id];
+                        setScenario({ ...scenario, countryIds: next });
+                      }}
+                      className={`px-2 py-1 rounded text-xs font-bold uppercase border transition-colors ${active ? 'bg-map-ink-blue text-white border-map-ink-blue' : 'bg-white text-gray-600 border-gray-300 hover:border-map-ink-blue'}`}
+                    >
+                      {c.name}
+                    </button>
+                  );
+                })}
+                <button onClick={() => addNewItem('country')} className="bg-map-ink-green text-white p-1.5 rounded hover:bg-opacity-90"><Plus size={14} /></button>
               </div>
             </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Plus, Edit2, X as CloseIcon } from 'lucide-react';
 import NatoSymbol from './NatoSymbol';
-import { getAllUnitTypes, getAllTerrainTypes, getAllCountries, getAllCampaigns, getAllScenarios, getAllOverlayTypes, saveUnitType, deleteUnitType, saveTerrainType, deleteTerrainType, saveOverlayType, deleteOverlayType, saveCountry, deleteCountry, saveCampaign, deleteCampaign, saveScenario, deleteScenario } from '../data/typeUtils';
+import { getAllUnitTypes, getAllTerrainTypes, getAllCountries, getAllCampaigns, getAllScenarios, getAllOverlayTypes, saveUnitType, deleteUnitType, saveTerrainType, deleteTerrainType, saveOverlayType, deleteOverlayType, saveCountry, deleteCountry, saveCampaign, deleteCampaign, saveScenario, deleteScenario, getScenarioCountryNames } from '../data/typeUtils';
 
 const NATO_SYMBOLS = [
   { id: 'infantry', name: 'Pěchota' },
@@ -149,7 +149,7 @@ const Customization = ({ onBack, onEditScenario }) => {
                     <p className="text-[10px] text-gray-500 italic mb-2 line-clamp-2">{s.description || 'Bez popisu.'}</p>
                     <div className="text-[10px] space-y-1">
                       <div className="flex justify-between"><span>Rok:</span> <span className="font-bold">{s.year || '-'}</span></div>
-                      <div className="flex justify-between"><span>Země:</span> <span className="font-bold">{countries.find(c => c.id === s.countryId)?.name || s.countryId || '-'}</span></div>
+                      <div className="flex justify-between gap-2"><span>Země:</span> <span className="font-bold text-right">{getScenarioCountryNames(s, countries) || '-'}</span></div>
                       <div className="flex justify-between"><span>Kampaň:</span> <span className="font-bold">{campaigns.find(c => c.id === s.campaignId)?.name || '-'}</span></div>
                     </div>
                   </div>
