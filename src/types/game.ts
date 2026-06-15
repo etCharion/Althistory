@@ -51,6 +51,12 @@ export type OverlayType = {
   description?: string;
 };
 
+// How a multi-tile objective awards its victory point(s):
+//  - 'any'      – the player controls at least one tile of the group
+//  - 'majority' – the player controls more than half of the group's tiles
+//  - 'all'      – the player controls every tile of the group
+export type ObjectiveCondition = 'any' | 'majority' | 'all';
+
 export type Objective = {
   name?: string;
   type: 'permanent' | 'temporary';
@@ -58,6 +64,12 @@ export type Objective = {
   points: number;
   controllingPlayerId?: PlayerId;
   validFor?: PlayerId | 'both';
+  // Multi-tile objectives: every hex that shares the same `groupId` belongs to
+  // one logical objective. The victory point is awarded once for the whole
+  // group, based on `condition`. Single-tile objectives leave both unset
+  // (which behaves like controlling that one tile).
+  groupId?: string;
+  condition?: ObjectiveCondition;
 };
 
 export type Hex = {
@@ -114,6 +126,9 @@ export type VPDetail = {
   unitStats?: UnitStats;
   objectiveName?: string;
   objectiveHexKey?: string;
+  // For multi-tile objectives the VP belongs to a whole group rather than a
+  // single hex; this ties the VP detail to that group so it can be recomputed.
+  objectiveGroupKey?: string;
 };
 
 export type GamePhase = 'distribution-sections' | 'distribution-units' | 'movement' | 'attack' | 'gameOver';

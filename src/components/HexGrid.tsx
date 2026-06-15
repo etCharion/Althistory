@@ -63,11 +63,19 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], on
           )}
           {hex?.objective && (
             <g transform={`translate(${x}, ${y-35})`}>
+               {hex.objective.groupId && (
+                 <circle r="13" fill="none" stroke="#7c3aed" strokeWidth="1" strokeDasharray="2 1.5" />
+               )}
                <circle r="10" fill={hex.objective.controllingPlayerId === 'player1' ? '#1e40af' : (hex.objective.controllingPlayerId === 'player2' ? '#b91c1c' : 'white')} stroke="black" strokeWidth="0.5" opacity={hex.objective.controllingPlayerId ? 1 : 0.1} />
                <polygon points="0,-8 2,-2 8,-2 3,1 5,7 0,3 -5,7 -3,1 -8,-2 -2,-2"
                         fill={hex.objective.validFor === 'player1' ? '#1e40af' : (hex.objective.validFor === 'player2' ? '#b91c1c' : '#ffd700')}
                         stroke={(!hex.objective.validFor || hex.objective.validFor === 'both') ? "black" : "white"} strokeWidth="0.5" />
                <text y="20" textAnchor="middle" fontSize="8" fontWeight="bold" fill="black" className="bg-white/50">{hex.objective.points} VP</text>
+               {hex.objective.groupId && (
+                 <text y="-13" textAnchor="middle" fontSize="6" fontWeight="bold" fill="#7c3aed">
+                   {hex.objective.condition === 'any' ? '≥1' : (hex.objective.condition === 'majority' ? '>½' : 'VŠE')}
+                 </text>
+               )}
             </g>
           )}
           {unit && (
