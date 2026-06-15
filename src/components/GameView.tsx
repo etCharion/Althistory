@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils'; import { getUnitSections, axialToOffset, getSection } from '../logic/hexGrid';
 import NatoSymbol from './NatoSymbol';
-import { Menu, Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check, Crown, Shield, Eye } from 'lucide-react';
+import { Menu, Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check, Crown, Shield, Eye, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { getGameState } from '../logic/firebaseService';
 import { controlsSection, isGeneral } from '../logic/gameReducer';
 
@@ -173,6 +174,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const [loading, setLoading] = useState(true);
   const [scenario, setScenario] = useState(initialScenario);
   const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -327,17 +329,26 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
            <div className="flex flex-col items-center gap-1">
              <div className="text-[11px] uppercase opacity-40 font-black tracking-[0.2em]">Turn {gameState.currentTurn}</div>
              {gameId && (
-               <button
-                 onClick={() => {
-                   navigator.clipboard.writeText(window.location.href);
-                   setCopied(true);
-                   setTimeout(() => setCopied(false), 2000);
-                 }}
-                 className="flex items-center gap-1 text-[8px] font-black uppercase bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
-               >
-                 {copied ? <Check size={8} /> : <Copy size={8} />}
-                 {copied ? 'Zkopírováno' : 'Sdílet odkaz'}
-               </button>
+               <div className="flex items-center gap-1">
+                 <button
+                   onClick={() => {
+                     navigator.clipboard.writeText(window.location.href);
+                     setCopied(true);
+                     setTimeout(() => setCopied(false), 2000);
+                   }}
+                   className="flex items-center gap-1 text-[8px] font-black uppercase bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
+                 >
+                   {copied ? <Check size={8} /> : <Copy size={8} />}
+                   {copied ? 'Zkopírováno' : 'Sdílet odkaz'}
+                 </button>
+                 <button
+                   onClick={() => setShowQR(true)}
+                   className="flex items-center gap-1 text-[8px] font-black uppercase bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
+                 >
+                   <QrCode size={8} />
+                   Zobrazit QR kód
+                 </button>
+               </div>
              )}
            </div>
 
@@ -585,6 +596,45 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
           unitTypes={uTypes}
           onClose={() => setShowStats(false)}
         />
+      )}
+      {showQR && (
+        <div
+          className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[150] flex items-center justify-center p-8 font-military"
+          onClick={() => setShowQR(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl border-2 border-slate-800 p-8 flex flex-col items-center gap-5 max-w-sm w-full animate-in fade-in zoom-in duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between w-full">
+              <h3 className="font-black uppercase tracking-tighter text-lg text-slate-800">Sdílet hru</h3>
+              <button
+                onClick={() => setShowQR(false)}
+                className="text-slate-400 hover:text-slate-800 transition-colors"
+                aria-label="Zavřít"
+              >
+                <CloseIcon size={20} />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 text-center uppercase font-bold tracking-wide">
+              Naskenujte QR kód a připojte se ke hře
+            </p>
+            <div className="bg-white p-3 rounded-lg border-2 border-slate-200">
+              <QRCodeSVG value={window.location.href} size={232} level="M" />
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="flex items-center gap-1.5 text-[10px] font-black uppercase bg-blue-50 text-blue-600 px-3 py-1.5 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
+            >
+              {copied ? <Check size={12} /> : <Copy size={12} />}
+              {copied ? 'Zkopírováno' : 'Kopírovat odkaz'}
+            </button>
+          </div>
+        </div>
       )}
       {hoveredVP && (
         <div
