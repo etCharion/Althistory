@@ -86,7 +86,11 @@ export type Scenario = {
   // New meta fields
   isRealBattle: boolean;
   year: number;
-  countryId: string;
+  // Legacy single-country field, kept for backward compatibility with older
+  // scenarios. New scenarios use `countryIds` (a scenario can span multiple
+  // countries); `countryId` mirrors the first selected country.
+  countryId?: string;
+  countryIds?: string[];
   campaignId?: string;
   campaignNumber?: number;
 };

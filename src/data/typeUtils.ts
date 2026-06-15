@@ -62,3 +62,18 @@ export async function deleteCampaign(id: string) { await deleteFromFirestore('ca
 
 export async function saveScenario(data: any) { await saveToFirestore('scenarios', data); }
 export async function deleteScenario(id: string) { await deleteFromFirestore('scenarios', id); }
+
+// Returns the list of country ids associated with a scenario, supporting both
+// the legacy single `countryId` field and the new `countryIds` array.
+export function getScenarioCountryIds(s: any): string[] {
+  if (Array.isArray(s?.countryIds) && s.countryIds.length > 0) return s.countryIds;
+  return s?.countryId ? [s.countryId] : [];
+}
+
+// Resolves a scenario's country ids to a comma-separated list of names.
+export function getScenarioCountryNames(s: any, countries: any[]): string {
+  return getScenarioCountryIds(s)
+    .map(id => countries.find(c => c.id === id)?.name || id)
+    .filter(Boolean)
+    .join(', ');
+}

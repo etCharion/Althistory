@@ -29,6 +29,7 @@ export const DEFAULT_SCENARIO = {
   isRealBattle: true,
   year: 1944,
   countryId: 'usa',
+  countryIds: ['usa'],
   initialHexes: [
     { ...q1, s: -q1.q - q1.r, terrainTypeId: 'grass', unitId: 'u1' },
     { ...q2, s: -q2.q - q2.r, terrainTypeId: 'grass', unitId: 'u2' },

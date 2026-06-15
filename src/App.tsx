@@ -1,11 +1,59 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { HashRouter, Routes, Route, useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Search, Filter, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, Maximize2, X } from 'lucide-react';
+import { Search, Filter, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, Maximize2, X, ChevronDown } from 'lucide-react';
 import ScenarioEditor from './components/ScenarioEditor';
 import GameView from './components/GameView';
 import Customization from './components/Customization';
 import Lobby from './components/Lobby';
-import { getAllScenarios, getAllCountries, getAllCampaigns } from './data/typeUtils';
+import { getAllScenarios, getAllCountries, getAllCampaigns, getScenarioCountryIds, getScenarioCountryNames } from './data/typeUtils';
+
+// A dropdown that lets the user filter by one or more countries at once.
+function MultiCountryFilter({ countries, selected, onChange }) {
+  const [open, setOpen] = useState(false);
+  const label =
+    selected.length === 0
+      ? 'Všechny země'
+      : selected.length === 1
+        ? (countries.find(c => c.id === selected[0])?.name || '1 země')
+        : `${selected.length} zemí`;
+  const toggle = (id) =>
+    onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full p-2 border rounded text-[10px] font-bold uppercase outline-none focus:border-map-ink-blue bg-white flex items-center justify-between gap-1"
+      >
+        <span className="truncate">{label}</span>
+        <ChevronDown size={12} className="shrink-0" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white border-2 border-map-ink-blue rounded-lg shadow-xl custom-scrollbar">
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="w-full text-left px-3 py-2 text-[10px] font-bold uppercase hover:bg-map-ink-blue/10 border-b border-gray-100"
+            >
+              Všechny země
+            </button>
+            {countries.map(c => (
+              <label
+                key={c.id}
+                className="flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase hover:bg-map-ink-blue/10 cursor-pointer"
+              >
+                <input type="checkbox" checked={selected.includes(c.id)} onChange={() => toggle(c.id)} />
+                <span className="truncate">{c.name}</span>
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 // Stable per-browser identity used to claim a seat in online games.
 function getClientId(): string {
@@ -30,7 +78,7 @@ function ScenarioCard({ s, countries, campaigns, onLocal, onOnline }) {
             {s.isRealBattle && <span className="bg-red-100 text-red-600 text-[8px] px-1 rounded font-bold uppercase">Historická</span>}
           </div>
           <div className="flex gap-2 text-[9px] text-gray-500 font-bold uppercase mt-1">
-            <span>{countries.find(c => c.id === s.countryId)?.name || 'Neznámá země'}</span>
+            <span>{getScenarioCountryNames(s, countries) || 'Neznámá země'}</span>
             <span>•</span>
             <span>{s.year || '????'}</span>
           </div>
@@ -89,7 +137,7 @@ function MainMenu() {
 
   // Filter & Sort State
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterCountry, setFilterCountry] = useState('all');
+  const [filterCountries, setFilterCountries] = useState<string[]>([]);
   const [filterCampaign, setFilterCampaign] = useState('all');
   const [filterReal, setFilterReal] = useState('all');
   const [sortBy, setSortBy] = useState('name');
@@ -112,7 +160,7 @@ function MainMenu() {
     return scenarios
       .filter(s => {
         const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesCountry = filterCountry === 'all' || s.countryId === filterCountry;
+        const matchesCountry = filterCountries.length === 0 || getScenarioCountryIds(s).some(id => filterCountries.includes(id));
         const matchesCampaign = filterCampaign === 'all' || s.campaignId === filterCampaign;
         const matchesReal = filterReal === 'all' || (filterReal === 'real' ? s.isRealBattle : !s.isRealBattle);
         return matchesSearch && matchesCountry && matchesCampaign && matchesReal;
@@ -128,7 +176,7 @@ function MainMenu() {
         }
         return 0;
       });
-  }, [scenarios, searchTerm, filterCountry, filterCampaign, filterReal, sortBy]);
+  }, [scenarios, searchTerm, filterCountries, filterCampaign, filterReal, sortBy]);
 
   const handleEditScenario = (s) => {
     setEditingScenario(s);
@@ -176,10 +224,7 @@ function MainMenu() {
         />
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <select className="p-2 border rounded text-[10px] font-bold uppercase outline-none focus:border-map-ink-blue" value={filterCountry} onChange={e => setFilterCountry(e.target.value)}>
-          <option value="all">Všechny země</option>
-          {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <MultiCountryFilter countries={countries} selected={filterCountries} onChange={setFilterCountries} />
         <select className="p-2 border rounded text-[10px] font-bold uppercase outline-none focus:border-map-ink-blue" value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)}>
           <option value="all">Všechny kampaně</option>
           {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
