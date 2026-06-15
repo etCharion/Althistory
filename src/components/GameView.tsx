@@ -202,6 +202,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none'); const [hovered, setHovered] = useState(null);
   const [dismissedOverlay, setDismissedOverlay] = useState(false);
   const [showPhaseInfo, setShowPhaseInfo] = useState(false);
+  const [showGoals, setShowGoals] = useState(false);
   const [hoveredVP, setHoveredVP] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [victoryDismissed, setVictoryDismissed] = useState(false);
@@ -573,6 +574,28 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
                 </div>
               )}
            </div>
+
+           {sc.victoryGoals && (
+             <div className="relative pointer-events-auto group">
+                <div
+                  onClick={() => setShowGoals(g => !g)}
+                  onMouseEnter={() => setShowGoals(true)}
+                  className="bg-white/80 border-2 border-map-ink-blue px-3 py-1.5 rounded-lg shadow-md cursor-help flex items-center gap-2"
+                >
+                  <Target size={14} className="text-map-ink-blue" />
+                  <span className="font-bold uppercase text-[10px] whitespace-nowrap text-map-ink-blue">Cíle vítězství</span>
+                </div>
+                {showGoals && (
+                  <div
+                    onMouseLeave={() => setShowGoals(false)}
+                    className="absolute bottom-full left-0 mb-3 w-80 bg-white border-2 border-map-ink-blue p-4 shadow-2xl rounded-lg animate-in fade-in slide-in-from-bottom-2 duration-200 z-50"
+                  >
+                     <h4 className="font-bold font-handwriting text-xl border-b-2 border-map-ink-blue pb-1 mb-2 flex items-center gap-2"><Target size={18} /> Cíle vítězství</h4>
+                     <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{sc.victoryGoals}</p>
+                  </div>
+                )}
+             </div>
+           )}
         </div>
       {combatResult && <DiceAnimation dice={combatResult.dice} onComplete={() => dismissCombat()} />}
       {gameState.winner && !victoryDismissed && (

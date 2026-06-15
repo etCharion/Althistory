@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { HashRouter, Routes, Route, useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Search, Filter, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, Maximize2, X, ChevronDown } from 'lucide-react';
+import { Search, Filter, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, Maximize2, X, ChevronDown, Target } from 'lucide-react';
 import ScenarioEditor from './components/ScenarioEditor';
 import GameView from './components/GameView';
 import Customization from './components/Customization';
@@ -120,6 +120,16 @@ function ScenarioCard({ s, countries, campaigns, onLocal, onOnline }) {
       {s.description && (
         <div className="mt-2 text-[10px] text-gray-400 italic line-clamp-1 group-hover:line-clamp-none transition-all">
           {s.description}
+        </div>
+      )}
+      {s.victoryGoals && (
+        <div className="mt-2 pt-2 border-t border-gray-100">
+          <div className="text-[9px] font-bold uppercase text-map-ink-blue flex items-center gap-1 mb-1">
+            <Target size={10} /> Cíle vítězství
+          </div>
+          <div className="text-[10px] text-gray-500 whitespace-pre-line line-clamp-2 group-hover:line-clamp-none transition-all">
+            {s.victoryGoals}
+          </div>
         </div>
       )}
     </div>

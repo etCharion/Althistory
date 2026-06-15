@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, X, Globe, Calendar, Flag, BookOpen, Layers } from 'lucide-react';
+import { Plus, Trash2, Save, X, Globe, Calendar, Flag, BookOpen, Layers, Target, Sparkles, Tag } from 'lucide-react';
 import { getAllTerrainTypes, getAllUnitTypes, getAllCountries, getAllCampaigns, getAllOverlayTypes, saveScenario, saveCountry, saveCampaign, getScenarioCountryIds } from '../data/typeUtils';
+import { generateVictoryGoals } from '../logic/victoryGoals';
 import HexGrid from './HexGrid';
 
 const ScenarioEditor = ({ onBack, initialScenario }) => {
@@ -8,6 +9,7 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
     id: '',
     name: 'Nový scénář',
     description: '',
+    victoryGoals: '',
     boardWidth: 13,
     boardHeight: 9,
     sections: { leftWidth: 4, centerWidth: 5, rightWidth: 4 },
@@ -35,6 +37,7 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
   const [hexes, setHexes] = useState({});
   const [units, setUnits] = useState({});
   const [objSettings, setObjSettings] = useState({ name: 'Cíl', type: 'permanent', timing: 'immediate', points: 1, validFor: 'both' as any, groupId: '', condition: 'all' as any });
+  const [labelText, setLabelText] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -82,6 +85,10 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
         ? { name, type, timing, points, validFor, groupId, condition }
         : { name, type, timing, points, validFor };
       setHexes({ ...hexes, [key]: { ...ex, objective: ex.objective ? undefined : obj } });
+    } else if (tool.type === 'label') {
+      const text = labelText.trim();
+      // Stejný popisek znovu = odebrání; jinak nastav/přepiš text na poli.
+      setHexes({ ...hexes, [key]: { ...ex, label: (!text || ex.label === text) ? undefined : text } });
     } else if (tool.type === 'unit') {
       const uid = `unit-${Date.now()}`;
       const type = unitTypes.find(u => u.id === tool.id);
@@ -100,8 +107,8 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
       });
       setHexes({ ...hexes, [key]: { ...ex, unitId: uid } });
     } else if (tool.type === 'delete' && hexes[key]) {
-      const { unitId, objective, overlayTypeId, ...rest } = hexes[key];
-      setHexes({ ...hexes, [key]: { ...rest, unitId: undefined, objective: undefined, overlayTypeId: undefined } });
+      const { unitId, objective, overlayTypeId, label, ...rest } = hexes[key];
+      setHexes({ ...hexes, [key]: { ...rest, unitId: undefined, objective: undefined, overlayTypeId: undefined, label: undefined } });
     }
   };
 
@@ -160,6 +167,21 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
             <h3 className="font-bold uppercase text-xs text-map-ink-blue border-b border-map-ink-blue/20 pb-1 flex items-center gap-1"><BookOpen size={12} /> Základní informace</h3>
             <input className="w-full p-2 border-2 border-gray-100 focus:border-map-ink-blue outline-none rounded font-bold" placeholder="Název scénáře" value={scenario.name} onChange={e => setScenario({ ...scenario, name: e.target.value })} />
             <textarea className="w-full p-2 border-2 border-gray-100 focus:border-map-ink-blue outline-none rounded text-xs" rows={3} placeholder="Popis scénáře..." value={scenario.description} onChange={e => setScenario({ ...scenario, description: e.target.value })} />
+
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-[10px] font-bold uppercase text-gray-500 flex items-center gap-1"><Target size={10} /> Cíle vítězství</label>
+                <button
+                  type="button"
+                  onClick={() => setScenario({ ...scenario, victoryGoals: generateVictoryGoals({ ...scenario, initialHexes: Object.values(hexes) }) })}
+                  className="flex items-center gap-1 text-[9px] font-bold uppercase bg-map-ink-green text-white px-2 py-1 rounded hover:bg-opacity-90 transition-colors"
+                  title="Vygenerovat z rozmístěných objektivů na mapě"
+                >
+                  <Sparkles size={11} /> Generovat
+                </button>
+              </div>
+              <textarea className="w-full p-2 border-2 border-gray-100 focus:border-map-ink-blue outline-none rounded text-xs" rows={5} placeholder="Popis cílů a podmínek vítězství (lze vygenerovat z objektivů)..." value={scenario.victoryGoals || ''} onChange={e => setScenario({ ...scenario, victoryGoals: e.target.value })} />
+            </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div className="flex items-center gap-2 p-2 border rounded bg-white">
@@ -349,6 +371,26 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
                >
                  Nastavit cíl
                </button>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="font-bold mb-2 uppercase text-xs text-map-ink-blue border-b border-map-ink-blue/20 pb-1 flex items-center gap-1"><Tag size={12} /> Popisky políček</h3>
+            <div className="bg-white p-2 border rounded space-y-2 text-[10px]">
+              <input
+                type="text"
+                className="w-full border rounded p-1.5"
+                placeholder="Text popisku (např. název města)"
+                value={labelText}
+                onChange={e => setLabelText(e.target.value)}
+              />
+              <button
+                onClick={() => setTool({ type: 'label', id: 'label' })}
+                className={`w-full p-2 border-2 font-bold uppercase rounded transition-all ${tool.type === 'label' ? 'bg-map-ink-blue text-white border-map-ink-blue' : 'bg-white border-gray-100'}`}
+              >
+                Umístit popisek
+              </button>
+              <p className="text-gray-400 leading-tight">Klikni na políčko pro přidání popisku. Klik na políčko se stejným textem ho odebere.</p>
             </div>
           </section>
 

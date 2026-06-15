@@ -85,6 +85,13 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], on
                {unit.resources > 0 && <g transform="translate(0, -20)">{Array.from({ length: unit.resources }).map((_, i) => <circle key={i} cx={(i - (unit.resources-1)/2) * 8} cy="0" r="3" fill="#006400" stroke="white" strokeWidth="0.5" />)}</g>}
             </g>
           )}
+          {hex?.label && (
+            <text x={x} y={y + 42} textAnchor="middle" fontSize="12" fontWeight="bold"
+                  fill="#1a3a5f" stroke="white" strokeWidth="3" paintOrder="stroke"
+                  className="select-none pointer-events-none font-handwriting">
+              {hex.label}
+            </text>
+          )}
           {isSelected && activePhase === 'distribution-units' && unitSections?.length > 1 && (
             <g transform={`translate(${x}, ${y})`} style={{ zIndex: 100 }}>
                <g onClick={(e) => { e.stopPropagation(); onSectionSelect?.(unitSections[0]); }} className="cursor-pointer hover:scale-110 transition-transform">
