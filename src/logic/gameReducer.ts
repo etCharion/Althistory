@@ -1,4 +1,4 @@
-import { getDistance, getUnitSections, getNeighbors, getTargetableUnits, getDiceCount } from './hexGrid';
+import { getDistance, getUnitSections, getNeighbors, getTargetableUnits, getDiceCount, isImpassableForUnit } from './hexGrid';
 import { rollDice } from './dice';
 import type { GameState, PlayerId, SectionId, Seats } from '../types/game';
 
@@ -368,6 +368,21 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       const utype = unitTypes.find(ut => ut.id === unit.typeId);
       if (!utype || (unit.movementUsed + dist) > utype.movement || state.grid[`${tq},${tr}`]?.unitId) return state;
 
+      // ---- Omezení terénu (neprůchodnost a omezený vstup/výstup) ----
+      const moveCategory = utype.category || (utype.id === 'tank' ? 'tank' : (utype.id === 'artillery' ? 'artillery' : 'infantry'));
+      const tHex = state.grid[`${tq},${tr}`];
+      // Cíl je pro tuto jednotku zcela neprůchozí (typ jednotky / strana).
+      if (isImpassableForUnit(tHex, terrainTypes, overlayTypes, moveCategory, unit.ownerId)) return state;
+      const tTerrain = terrainTypes.find(t => t.id === tHex?.terrainTypeId);
+      const tOverlay = overlayTypes.find(o => o.id === tHex?.overlayTypeId);
+      const fTerrain = terrainTypes.find(t => t.id === (fHex as any)?.terrainTypeId);
+      const fOverlay = overlayTypes.find(o => o.id === (fHex as any)?.overlayTypeId);
+      // Vstup na cílové pole je povolen jen z vedlejšího pole.
+      if ((tTerrain?.entryFromAdjacentOnly || tOverlay?.entryFromAdjacentOnly) && dist !== 1) return state;
+      // Z výchozího pole lze vystoupit jen na vedlejší pole.
+      const exitAdjacentOnly = !!(fTerrain?.exitToAdjacentOnly || fOverlay?.exitToAdjacentOnly);
+      if (exitAdjacentOnly && dist !== 1) return state;
+
       const nGrid = { ...state.grid } as any;
       const fromHex = nGrid[`${(fHex as any).q},${(fHex as any).r}`];
       const targetHex = nGrid[`${tq},${tr}`];
@@ -386,7 +401,9 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
         allowAttackAfterStop = true;
         if (utype.category === 'tank') targetHex.overlayTypeId = undefined;
       }
-      const finalMovementUsed = isStopTerrain ? utype.movement : totalDist;
+      // Výstup z výchozího pole jen na vedlejší pole spotřebuje veškerý pohyb
+      // (po vystoupení už nelze pokračovat), neovlivňuje však možnost útoku.
+      const finalMovementUsed = (isStopTerrain || exitAdjacentOnly) ? utype.movement : totalDist;
       const hasAttacked = (isStopTerrain && !allowAttackAfterStop) || (totalDist > utype.canShootAfterMovingMax ? true : unit.hasAttacked);
 
       const newStats = { ...state.unitStats } as any;

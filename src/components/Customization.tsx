@@ -291,6 +291,40 @@ const Customization = ({ onBack, onEditScenario }) => {
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs mb-4">
+                    <div className="border-l pl-4">
+                      <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Neprůchodné pro jednotky</label>
+                      <div className="flex flex-wrap gap-3">
+                        {([['infantry', 'Pěchota'], ['tank', 'Tank'], ['artillery', 'Dělostřelectvo']] as const).map(([cat, label]) => (
+                          <label key={cat} className="flex items-center gap-1">
+                            <input type="checkbox" checked={(t.impassableForCategories || []).includes(cat)} onChange={e => {
+                              const cats = t.impassableForCategories || [];
+                              const next = e.target.checked ? [...cats, cat] : cats.filter(c => c !== cat);
+                              updateTerrain({ ...t, impassableForCategories: next });
+                            }} />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <label className="block text-[10px] font-bold uppercase text-gray-400 mt-3">Neprůchodné pro stranu</label>
+                      <select className="w-full border p-1 rounded mt-1" value={t.impassableForPlayer || ''} onChange={e => updateTerrain({ ...t, impassableForPlayer: (e.target.value || undefined) as any })}>
+                        <option value="">Žádnou</option>
+                        <option value="player1">Strana 1</option>
+                        <option value="player2">Strana 2</option>
+                      </select>
+                    </div>
+                    <div className="border-l pl-4 space-y-2">
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={!!t.entryFromAdjacentOnly} onChange={e => updateTerrain({ ...t, entryFromAdjacentOnly: e.target.checked })} />
+                        <span className="text-[10px] font-bold uppercase text-gray-600">Vstup jen z vedlejšího pole</span>
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={!!t.exitToAdjacentOnly} onChange={e => updateTerrain({ ...t, exitToAdjacentOnly: e.target.checked })} />
+                        <span className="text-[10px] font-bold uppercase text-gray-600">Výstup jen na vedlejší pole</span>
+                      </label>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="text-[10px] font-bold uppercase text-gray-400">Popis</label>
                     <textarea className="w-full border p-2 rounded mt-1 text-xs" rows={2} value={t.description || ''} onChange={e => updateTerrain({ ...t, description: e.target.value })} />
@@ -366,6 +400,40 @@ const Customization = ({ onBack, onEditScenario }) => {
                         <span className="text-[10px] w-12">Děl:</span>
                         <input type="number" className="w-full border p-1 rounded" value={o.diceModifierAttackArtillery || 0} onChange={e => updateOverlay({ ...o, diceModifierAttackArtillery: parseInt(e.target.value) || 0 })} />
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs mb-4">
+                    <div className="border-l pl-4">
+                      <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Neprůchodné pro jednotky</label>
+                      <div className="flex flex-wrap gap-3">
+                        {([['infantry', 'Pěchota'], ['tank', 'Tank'], ['artillery', 'Dělostřelectvo']] as const).map(([cat, label]) => (
+                          <label key={cat} className="flex items-center gap-1">
+                            <input type="checkbox" checked={(o.impassableForCategories || []).includes(cat)} onChange={e => {
+                              const cats = o.impassableForCategories || [];
+                              const next = e.target.checked ? [...cats, cat] : cats.filter(c => c !== cat);
+                              updateOverlay({ ...o, impassableForCategories: next });
+                            }} />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <label className="block text-[10px] font-bold uppercase text-gray-400 mt-3">Neprůchodné pro stranu</label>
+                      <select className="w-full border p-1 rounded mt-1" value={o.impassableForPlayer || ''} onChange={e => updateOverlay({ ...o, impassableForPlayer: (e.target.value || undefined) as any })}>
+                        <option value="">Žádnou</option>
+                        <option value="player1">Strana 1</option>
+                        <option value="player2">Strana 2</option>
+                      </select>
+                    </div>
+                    <div className="border-l pl-4 space-y-2">
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={!!o.entryFromAdjacentOnly} onChange={e => updateOverlay({ ...o, entryFromAdjacentOnly: e.target.checked })} />
+                        <span className="text-[10px] font-bold uppercase text-gray-600">Vstup jen z vedlejšího pole</span>
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={!!o.exitToAdjacentOnly} onChange={e => updateOverlay({ ...o, exitToAdjacentOnly: e.target.checked })} />
+                        <span className="text-[10px] font-bold uppercase text-gray-600">Výstup jen na vedlejší pole</span>
+                      </label>
                     </div>
                   </div>
 

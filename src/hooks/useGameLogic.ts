@@ -62,7 +62,8 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     const utype = unitTypes.find(u => u.id === unit.typeId);
     const limit = utype.movement - unit.movementUsed;
     if (limit <= 0 || (!unit.hasMoved && unit.resources <= 0)) return [];
-    return getReachableHexes((hex as any).q, (hex as any).r, limit, gameState.grid, terrainTypes, overlayTypes);
+    const category = utype?.category || (utype?.id === 'tank' ? 'tank' : (utype?.id === 'artillery' ? 'artillery' : 'infantry'));
+    return getReachableHexes((hex as any).q, (hex as any).r, limit, gameState.grid, terrainTypes, overlayTypes, { unitCategory: category, ownerId: unit.ownerId });
   };
 
   const getSelectedTargetable = (uid) => {
