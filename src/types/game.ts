@@ -96,12 +96,17 @@ export type Hex = {
   overlayTypeId?: string;
   unitId?: string;
   objective?: Objective;
+  // Volitelný textový popisek vykreslený na políčku (např. jméno města/řeky).
+  label?: string;
 };
 
 export type Scenario = {
   id: string;
   name: string;
   description: string;
+  // Slovní popis cílů a podmínek vítězství. Lze ho vyplnit ručně nebo nechat
+  // automaticky vygenerovat z objektivů rozmístěných na mapě.
+  victoryGoals?: string;
   boardWidth: number;
   boardHeight: number;
   sections: { leftWidth: number; centerWidth: number; rightWidth: number; };
