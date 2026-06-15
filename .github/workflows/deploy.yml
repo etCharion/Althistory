@@ -2,12 +2,20 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["**"]
+    branches: ["memoir-44-clone-implementation-v2-11093415050380126890"]
+  workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the
+# run in-progress and latest queued. Do not cancel in-progress runs so a
+# deployment is never left half-finished.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   build_site:

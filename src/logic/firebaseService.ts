@@ -7,9 +7,13 @@ import {
   onSnapshot,
   query,
   limit,
-  deleteDoc
+  deleteDoc,
+  runTransaction
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { reducer, createInitialGameState } from "./gameReducer";
+import type { Action, Rules } from "./gameReducer";
+import type { PlayerId, Role } from "../types/game";
 import {
   DEFAULT_UNIT_TYPES,
   DEFAULT_TERRAIN_TYPES,
@@ -101,4 +105,69 @@ export async function getGameState(gameId: string) {
   const docRef = doc(db, "games", gameId);
   const docSnap = await getDoc(docRef);
   return docSnap.exists() ? docSnap.data() : null;
+}
+
+// Create the shared game document (with empty seats) if it doesn't exist yet.
+// Called by the first client that has the scenario in hand.
+export async function createGameIfMissing(gameId: string, scenario: any) {
+  const ref = doc(db, "games", gameId);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists()) return;
+    const initial = createInitialGameState(scenario, { online: true });
+    tx.set(ref, { ...sanitizeData(initial), updatedAt: new Date().toISOString() });
+  });
+}
+
+// Apply a single game action atomically so concurrent commanders never clobber
+// each other's writes. The pure reducer runs inside the transaction.
+export async function applyAction(gameId: string, action: Action, rules: Rules) {
+  const ref = doc(db, "games", gameId);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return;
+    const next = reducer(snap.data() as any, action, rules);
+    tx.set(ref, { ...sanitizeData(next), updatedAt: new Date().toISOString() });
+  });
+}
+
+// Seat management. A client holds at most one seat per game; claiming a new seat
+// releases any seat that client previously held.
+export async function claimSeat(gameId: string, team: PlayerId, role: Role, clientId: string) {
+  const ref = doc(db, "games", gameId);
+  let ok = false;
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return;
+    const data: any = snap.data();
+    const seats = data.seats || { player1: {}, player2: {} };
+    // Reject if the target seat is taken by someone else.
+    if (seats[team]?.[role] && seats[team][role] !== clientId) { ok = false; return; }
+    // Release any seat currently held by this client.
+    (['player1', 'player2'] as PlayerId[]).forEach((t) => {
+      const teamSeats = seats[t] || {};
+      Object.keys(teamSeats).forEach((r) => { if (teamSeats[r] === clientId) delete teamSeats[r]; });
+      seats[t] = teamSeats;
+    });
+    seats[team] = { ...(seats[team] || {}), [role]: clientId };
+    tx.set(ref, { ...data, seats: sanitizeData(seats), updatedAt: new Date().toISOString() });
+    ok = true;
+  });
+  return ok;
+}
+
+export async function releaseSeat(gameId: string, clientId: string) {
+  const ref = doc(db, "games", gameId);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return;
+    const data: any = snap.data();
+    const seats = data.seats || { player1: {}, player2: {} };
+    (['player1', 'player2'] as PlayerId[]).forEach((t) => {
+      const teamSeats = seats[t] || {};
+      Object.keys(teamSeats).forEach((r) => { if (teamSeats[r] === clientId) delete teamSeats[r]; });
+      seats[t] = teamSeats;
+    });
+    tx.set(ref, { ...data, seats: sanitizeData(seats), updatedAt: new Date().toISOString() });
+  });
 }

@@ -1,7 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils'; import { getUnitSections, axialToOffset, getSection } from '../logic/hexGrid';
 import NatoSymbol from './NatoSymbol';
-import { Menu, Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check } from 'lucide-react';
+import { Menu, Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check, Crown, Shield, Eye } from 'lucide-react';
 import { getGameState } from '../logic/firebaseService';
+import { controlsSection, isGeneral } from '../logic/gameReducer';
+
+const ROLE_LABELS: Record<string, string> = { general: 'Generál', left: 'Levá sekce', center: 'Střed', right: 'Pravá sekce' };
 
 const ResourceCube = () => (
   <div className="w-4 h-5 bg-green-600 border-2 border-green-800 rounded shadow-[0_2px_0_0_rgba(0,0,0,0.2)] animate-in zoom-in duration-300 flex-shrink-0" />
@@ -161,7 +164,9 @@ const PHASE_DESCRIPTIONS = {
   }
 };
 
-const GameView = ({ scenario: initialScenario, gameId, onExit }) => {
+const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clientId = 'local', seat = null, onChangeSeat = null }) => {
+  const online = !!gameId;
+  const spectator = !!seat?.spectator;
   const [uTypes, setUTypes] = useState([]);
   const [tTypes, setTTypes] = useState([]);
   const [oTypes, setOTypes] = useState([]);
@@ -191,7 +196,7 @@ const GameView = ({ scenario: initialScenario, gameId, onExit }) => {
     load();
   }, [gameId, initialScenario]);
 
-  const { gameState, combatResult, retreatingUnitId, setCombatResult, takeGroundOption, setTakeGroundOption, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId);
+  const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId);
   const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none'); const [hovered, setHovered] = useState(null);
   const [dismissedOverlay, setDismissedOverlay] = useState(false);
   const [showPhaseInfo, setShowPhaseInfo] = useState(false);
@@ -206,8 +211,16 @@ const GameView = ({ scenario: initialScenario, gameId, onExit }) => {
     }
   }, [retreatingUnitId?.unitId, takeGroundOption?.unitId]);
 
+  // Clear the shared dice animation after a short delay so it disappears for everyone.
+  const combatSig = combatResult ? `${combatResult.attackerId}-${combatResult.targetId}-${combatResult.dice.length}` : '';
+  useEffect(() => {
+    if (!combatResult) return;
+    const t = setTimeout(() => dismissCombat(), 2500);
+    return () => clearTimeout(t);
+  }, [combatSig]);
+
   const highlightedHexes = useMemo(() => {
-    if (!gameState.scenario) return {};
+    if (!gameState || !gameState.scenario) return {};
     const h = {};
     if (retreatingUnitId) {
       getRetreatHexes(retreatingUnitId.unitId).forEach(k => h[k] = 'move');
@@ -224,52 +237,70 @@ const GameView = ({ scenario: initialScenario, gameId, onExit }) => {
       getSelectedTargetable(selected).forEach(uid => { const hex = getUnitHex(uid); if (hex) h[`${hex.q},${hex.r}`] = 'attack'; });
     }
     return h;
-  }, [selected, actType, gameState.phase, gameState.units, gameState.grid, retreatingUnitId, takeGroundOption, gameState.scenario]);
+  }, [selected, actType, gameState?.phase, gameState?.units, gameState?.grid, retreatingUnitId, takeGroundOption, gameState?.scenario]);
 
   const currentUnitSections = useMemo(() => {
-    if (!selected || gameState.phase !== 'distribution-units' || !gameState.scenario) return [];
+    if (!gameState || !selected || gameState.phase !== 'distribution-units' || !gameState.scenario) return [];
     const hex = getUnitHex(selected); if (!hex) return [];
     return getUnitSections(hex.q, hex.r, gameState.scenario);
-  }, [selected, gameState.phase, gameState.scenario]);
+  }, [selected, gameState?.phase, gameState?.scenario]);
 
-  if (loading || !gameState.scenario) return <div className="h-screen w-screen flex items-center justify-center bg-map-paper font-military uppercase font-bold text-map-ink-blue">Načítám bitevní pole...</div>;
+  if (loading || !gameState || !gameState.scenario) return <div className="h-screen w-screen flex items-center justify-center bg-map-paper font-military uppercase font-bold text-map-ink-blue">Načítám bitevní pole...</div>;
 
+  const sc = gameState.scenario;
   const activeP = gameState.activePlayerId;
   const res = gameState.sectionResources[activeP];
   const wh = gameState.centralWarehouse[activeP];
 
+  // --- Role-based permissions (local hot-seat games grant full control) ---
+  const myTeam: 'player1' | 'player2' | null = online && !spectator ? seat?.team : null;
+  const isMyTurn = !online || (!spectator && myTeam === activeP);
+  const iAmGeneral = !online || (!spectator && isGeneral(gameState, clientId, activeP));
+  const canDistribute = isMyTurn && iAmGeneral;
+  const canControlUnit = (uid: string) => {
+    if (!online) return true;
+    if (spectator) return false;
+    const unit = gameState.units[uid]; if (!unit) return false;
+    const hex = getUnitHex(uid); if (!hex) return false;
+    const secs = getUnitSections((hex as any).q, (hex as any).r, gameState.scenario);
+    return secs.some((s: any) => controlsSection(gameState, clientId, unit.ownerId, s));
+  };
+  const myRoleLabel = spectator ? 'Divák' : seat?.role ? ROLE_LABELS[seat.role] : null;
+
   const handleHexClick = (q, r) => {
-    if (retreatingUnitId) { retreatUnit(retreatingUnitId.unitId, q, r); return; }
-    if (takeGroundOption) { takeGround(takeGroundOption.unitId, q, r); return; }
+    if (retreatingUnitId) { if (canControlUnit(retreatingUnitId.unitId)) retreatUnit(retreatingUnitId.unitId, q, r); return; }
+    if (takeGroundOption) { if (canControlUnit(takeGroundOption.unitId)) takeGround(takeGroundOption.unitId, q, r); return; }
+    if (spectator) return;
     const hex = gameState.grid[`${q},${r}`];
     const unitAtHex = hex?.unitId ? gameState.units[hex.unitId] : null;
 
     if (gameState.phase === 'distribution-sections') {
+      if (!canDistribute) return;
       const { col } = axialToOffset(q, r);
       const section = getSection(col, gameState.scenario.sections.leftWidth, gameState.scenario.sections.centerWidth);
       distributeResource(activeP, section);
     } else if (gameState.phase === 'movement') {
-      if (unitAtHex && unitAtHex.ownerId === activeP) {
+      if (unitAtHex && unitAtHex.ownerId === activeP && canControlUnit(hex.unitId)) {
         setSelected(hex.unitId);
         setActType('move');
-      } else if (selected && !unitAtHex) {
+      } else if (selected && !unitAtHex && canControlUnit(selected)) {
         moveUnit(selected, q, r);
       } else {
         setSelected(null);
         setActType('none');
       }
     } else if (gameState.phase === 'attack') {
-      if (unitAtHex && unitAtHex.ownerId === activeP) {
+      if (unitAtHex && unitAtHex.ownerId === activeP && canControlUnit(hex.unitId)) {
         setSelected(hex.unitId);
         setActType('attack');
-      } else if (selected && unitAtHex && unitAtHex.ownerId !== activeP) {
+      } else if (selected && unitAtHex && unitAtHex.ownerId !== activeP && canControlUnit(selected)) {
         attackUnit(selected, hex.unitId);
       } else {
         setSelected(null);
         setActType('none');
       }
     } else if (gameState.phase === 'distribution-units') {
-      if (unitAtHex && unitAtHex.ownerId === activeP) {
+      if (unitAtHex && unitAtHex.ownerId === activeP && canControlUnit(hex.unitId)) {
         setSelected(hex.unitId);
         assignResourceToUnit(hex.unitId);
       } else {
@@ -325,9 +356,9 @@ const GameView = ({ scenario: initialScenario, gameId, onExit }) => {
         <div className="flex-1 relative flex flex-col overflow-hidden">
           <div className="flex-1 relative overflow-auto pb-16">
           <HexGrid
-            width={scenario.boardWidth} height={scenario.boardHeight} hexes={gameState.grid} units={gameState.units}
+            width={sc.boardWidth} height={sc.boardHeight} hexes={gameState.grid} units={gameState.units}
             terrainTypes={tTypes} unitTypes={uTypes} onHexClick={handleHexClick} onHexMouseEnter={(q,r) => setHovered(`${q},${r}`)} onHexMouseLeave={() => setHovered(null)}
-            leftWidth={scenario.sections.leftWidth} centerWidth={scenario.sections.centerWidth} selectedUnitId={selected}
+            leftWidth={sc.sections.leftWidth} centerWidth={sc.sections.centerWidth} selectedUnitId={selected}
             highlightedHexes={highlightedHexes} hoveredHex={hovered} activePhase={gameState.phase}
             unitSections={currentUnitSections} onSectionSelect={(s) => assignResourceToUnit(selected, s)}
           />
@@ -352,7 +383,7 @@ const GameView = ({ scenario: initialScenario, gameId, onExit }) => {
                   <button onClick={() => setDismissedOverlay(!dismissedOverlay)} className="bg-blue-600 text-white px-6 py-2 text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors">
                     {dismissedOverlay ? 'Zobrazit' : 'Vyřešit'}
                   </button>
-                  <button onClick={() => setTakeGroundOption(null)} className="bg-gray-200 text-slate-800 px-6 py-2 text-sm font-bold rounded-lg hover:bg-gray-300 transition-colors">Zrušit</button>
+                  <button onClick={() => cancelTakeGround()} className="bg-gray-200 text-slate-800 px-6 py-2 text-sm font-bold rounded-lg hover:bg-gray-300 transition-colors">Zrušit</button>
                 </div>
               </div>
             </div>
@@ -438,8 +469,8 @@ const GameView = ({ scenario: initialScenario, gameId, onExit }) => {
                         {[1, 2, 3, 'Max'].map(v => (
                           <button
                             key={v}
-                            disabled={wh <= 0}
-                            onClick={() => distributeResource(activeP, section, v === 'Max' ? 'max' : v)}
+                            disabled={wh <= 0 || !canDistribute}
+                            onClick={() => distributeResource(activeP, section, v === 'Max' ? 'max' : (v as number))}
                             className="px-2 py-1 bg-slate-800 text-white border border-slate-900 rounded-md text-[10px] font-black hover:bg-slate-700 hover:scale-105 active:scale-95 transition-all shadow-md uppercase disabled:opacity-30 disabled:hover:scale-100"
                           >
                             {v}
@@ -473,7 +504,7 @@ const GameView = ({ scenario: initialScenario, gameId, onExit }) => {
                   <Trophy size={20} className="text-white" />
                 </button>
               )}
-              <button onClick={() => {
+              {(gameState.winner || (isMyTurn && iAmGeneral)) && <button onClick={() => {
                   if (gameState.winner) { onExit(); return; }
                   if (hasAvailableActions()) { setShowConfirm(true); }
                   else { if (gameState.phase === 'attack') endTurn(); else nextPhase(); setSelected(null); setActType('none'); }
@@ -488,8 +519,19 @@ const GameView = ({ scenario: initialScenario, gameId, onExit }) => {
                     default: return 'Další';
                   }
                 })()}
-              </button>
+              </button>}
            </div>
+
+           {online && (
+             <div className="pointer-events-auto bg-white/90 border-2 border-slate-800 px-3 py-1.5 rounded-lg shadow-md flex items-center gap-2 text-[10px] font-black uppercase tracking-wide">
+               {spectator ? <Eye size={14} /> : seat?.role === 'general' ? <Crown size={14} /> : <Shield size={14} />}
+               <span className="text-slate-800">{myRoleLabel}{!spectator && ` · ${gameState.scenario[myTeam!]?.name}`}</span>
+               <span className={`ml-1 px-1.5 py-0.5 rounded ${isMyTurn ? 'bg-map-ink-green text-white' : 'bg-slate-200 text-slate-600'}`}>
+                 {isMyTurn ? 'VÁŠ TAH' : `NA TAHU: ${gameState.scenario[activeP]?.name}`}
+               </span>
+               {onChangeSeat && <button onClick={onChangeSeat} className="ml-1 text-blue-600 hover:underline normal-case font-bold">změnit</button>}
+             </div>
+           )}
 
            <div className="relative pointer-events-auto group">
               <div
@@ -511,7 +553,7 @@ const GameView = ({ scenario: initialScenario, gameId, onExit }) => {
               )}
            </div>
         </div>
-      {combatResult && <DiceAnimation dice={combatResult.dice} onComplete={() => setCombatResult(null)} />}
+      {combatResult && <DiceAnimation dice={combatResult.dice} onComplete={() => dismissCombat()} />}
       {gameState.winner && !victoryDismissed && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] animate-in fade-in duration-500">
           <div className="bg-white p-12 rounded-3xl text-center border-8 border-map-paper shadow-2xl max-w-lg w-full">

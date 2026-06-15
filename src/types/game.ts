@@ -10,7 +10,15 @@ export type UnitType = {
   natoSymbol: string;
   category: 'infantry' | 'tank' | 'artillery';
 };
-export type Unit = { id: string; typeId: string; ownerId: PlayerId; figures: number; resources: number; hasMoved: boolean; hasAttacked: boolean; movementUsed: number; };
+export type Unit = { id: string; typeId: string; ownerId: PlayerId; figures: number; resources: number; hasMoved: boolean; hasAttacked: boolean; movementUsed: number; resourceOrigins?: SectionId[]; };
+
+// --- Multiplayer roles & seats ---
+export type Role = 'general' | 'left' | 'center' | 'right';
+export type Actor = { team: PlayerId; role: Role };
+export type Seats = {
+  player1: Partial<Record<Role, string>>;
+  player2: Partial<Record<Role, string>>;
+};
 
 export type Country = { id: string; name: string; };
 export type Campaign = { id: string; name: string; };
@@ -105,4 +113,27 @@ export type VPDetail = {
 };
 
 export type GamePhase = 'distribution-sections' | 'distribution-units' | 'movement' | 'attack' | 'gameOver';
-export type GameState = { scenario: Scenario; currentTurn: number; activePlayerId: PlayerId; phase: GamePhase; sectionResources: { player1: { left: number; center: number; right: number }; player2: { left: number; center: number; right: number }; }; centralWarehouse: { player1: number; player2: number; }; units: Record<string, Unit>; grid: Record<string, Hex>; winner?: PlayerId; victoryPoints: { player1: VPDetail[]; player2: VPDetail[]; }; unitStats: Record<string, UnitStats>; };
+
+// Shared combat state so dice rolls / retreats are visible to every connected player.
+export type PendingCombat = { attackerId: string; targetId: string; dice: string[]; hits: number; flags: number };
+export type PendingRetreat = { unitId: string; count: number; attackerId: string; targetHex: { q: number; r: number } };
+export type PendingTakeGround = { unitId: string; hex: { q: number; r: number } };
+
+export type GameState = {
+  scenario: Scenario;
+  currentTurn: number;
+  activePlayerId: PlayerId;
+  phase: GamePhase;
+  sectionResources: { player1: { left: number; center: number; right: number }; player2: { left: number; center: number; right: number }; };
+  centralWarehouse: { player1: number; player2: number; };
+  units: Record<string, Unit>;
+  grid: Record<string, Hex>;
+  winner?: PlayerId;
+  victoryPoints: { player1: VPDetail[]; player2: VPDetail[]; };
+  unitStats: Record<string, UnitStats>;
+  // --- Online multiplayer (absent => local hot-seat game with full control) ---
+  seats?: Seats;
+  pendingCombat?: PendingCombat | null;
+  pendingRetreat?: PendingRetreat | null;
+  pendingTakeGround?: PendingTakeGround | null;
+};
