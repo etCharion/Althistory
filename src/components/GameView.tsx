@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils'; import { getUnitSections, axialToOffset, getSection } from '../logic/hexGrid';
 import NatoSymbol from './NatoSymbol';
-import { Menu, Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check, Crown, Shield, Eye, QrCode, Undo2 } from 'lucide-react';
+import { Menu, Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check, Crown, Shield, Eye, EyeOff, QrCode, Undo2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { getGameState } from '../logic/firebaseService';
 import { controlsSection, isGeneral } from '../logic/gameReducer';
@@ -203,6 +203,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const [dismissedOverlay, setDismissedOverlay] = useState(false);
   const [showPhaseInfo, setShowPhaseInfo] = useState(false);
   const [showGoals, setShowGoals] = useState(false);
+  const [showLabels, setShowLabels] = useState(true);
   const [hoveredVP, setHoveredVP] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [victoryDismissed, setVictoryDismissed] = useState(false);
@@ -373,6 +374,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
             leftWidth={sc.sections.leftWidth} centerWidth={sc.sections.centerWidth} selectedUnitId={selected}
             highlightedHexes={highlightedHexes} hoveredHex={hovered} activePhase={gameState.phase}
             unitSections={currentUnitSections} onSectionSelect={(s) => assignResourceToUnit(selected, s)}
+            showLabels={showLabels}
           />
           {retreatingUnitId && (
             <div className={`absolute left-1/2 -translate-x-1/2 z-50 text-center uppercase transition-all duration-300 ${dismissedOverlay ? 'top-2' : 'top-1/2 -translate-y-1/2'}`}>
@@ -510,6 +512,9 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
            <div className="flex gap-2 pointer-events-auto">
               <button onClick={onExit} title="Menu" className="p-2 bg-slate-800 border-2 border-slate-800 rounded-lg shadow-lg hover:bg-slate-700 transition-colors">
                 <Menu size={20} className="text-white" />
+              </button>
+              <button onClick={() => setShowLabels(v => !v)} title={showLabels ? 'Skrýt popisky políček' : 'Zobrazit popisky políček'} className="p-2 bg-slate-800 border-2 border-slate-800 rounded-lg shadow-lg hover:bg-slate-700 transition-colors">
+                {showLabels ? <Eye size={20} className="text-white" /> : <EyeOff size={20} className="text-white" />}
               </button>
               {gameState.winner && (
                 <button onClick={() => setShowStats(true)} title="Statistiky" className="p-2 bg-slate-800 border-2 border-slate-800 rounded-lg shadow-lg hover:bg-slate-700 transition-colors">

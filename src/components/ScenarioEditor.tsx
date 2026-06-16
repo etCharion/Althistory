@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, X, Globe, Calendar, Flag, BookOpen, Layers, Target, Sparkles, Tag } from 'lucide-react';
+import { Plus, Trash2, Save, X, Globe, Calendar, Flag, BookOpen, Layers, Target, Sparkles, Tag, Eye, EyeOff } from 'lucide-react';
 import { getAllTerrainTypes, getAllUnitTypes, getAllCountries, getAllCampaigns, getAllOverlayTypes, saveScenario, saveCountry, saveCampaign, getScenarioCountryIds } from '../data/typeUtils';
 import { generateVictoryGoals } from '../logic/victoryGoals';
 import HexGrid from './HexGrid';
@@ -38,6 +38,7 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
   const [units, setUnits] = useState({});
   const [objSettings, setObjSettings] = useState({ name: 'Cíl', type: 'permanent', timing: 'immediate', points: 1, validFor: 'both' as any, groupId: '', condition: 'all' as any });
   const [labelText, setLabelText] = useState('');
+  const [showLabels, setShowLabels] = useState(true);
 
   useEffect(() => {
     const load = async () => {
@@ -426,6 +427,13 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
             Nástroj: <span className="text-map-ink-blue uppercase">{tool.type === 'delete' ? 'Smazat' : tool.id}</span>
             {tool.type === 'unit' && <span className={player === 'player1' ? ' text-blue-600' : ' text-red-600'}> ({player === 'player1' ? 'SPOJ' : 'OSA'})</span>}
           </div>
+          <button
+            onClick={() => setShowLabels(v => !v)}
+            className="absolute top-4 left-4 bg-white/80 p-2 rounded text-[10px] font-bold border border-map-ink-blue z-10 shadow-sm flex items-center gap-1 hover:bg-white transition-colors"
+            title={showLabels ? 'Skrýt popisky políček' : 'Zobrazit popisky políček'}
+          >
+            {showLabels ? <Eye size={12} /> : <EyeOff size={12} />} Popisky
+          </button>
           <div className="h-full w-full flex items-center justify-center">
             <HexGrid
               width={scenario.boardWidth}
@@ -437,6 +445,7 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
               onHexClick={handleHexClick}
               leftWidth={scenario.sections.leftWidth}
               centerWidth={scenario.sections.centerWidth}
+              showLabels={showLabels}
             />
           </div>
         </div>
