@@ -159,6 +159,20 @@ export type PendingCombat = { attackerId: string; targetId: string; dice: string
 export type PendingRetreat = { unitId: string; count: number; attackerId: string; targetHex: { q: number; r: number } };
 export type PendingTakeGround = { unitId: string; hex: { q: number; r: number } };
 
+// A snapshot of the mutable, per-phase state taken before a reversible action
+// (distributing resources to sections, moving a unit). Popping it restores the
+// state to just before that action, letting a player undo within an open phase.
+export type UndoSnapshot = {
+  clientId: string;
+  phase: GamePhase;
+  units: Record<string, Unit>;
+  grid: Record<string, Hex>;
+  unitStats: Record<string, UnitStats>;
+  victoryPoints: { player1: VPDetail[]; player2: VPDetail[]; };
+  sectionResources: { player1: { left: number; center: number; right: number }; player2: { left: number; center: number; right: number }; };
+  centralWarehouse: { player1: number; player2: number; };
+};
+
 export type GameState = {
   scenario: Scenario;
   currentTurn: number;
@@ -176,4 +190,7 @@ export type GameState = {
   pendingCombat?: PendingCombat | null;
   pendingRetreat?: PendingRetreat | null;
   pendingTakeGround?: PendingTakeGround | null;
+  // Reversible actions within the current (unclosed) phase. Cleared on every
+  // phase change / end of turn.
+  undoStack?: UndoSnapshot[];
 };
