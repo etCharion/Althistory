@@ -9,13 +9,14 @@ const getHexPoints = (radius) => {
   }
   return pts;
 };
-const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], onHexClick, onHexMouseEnter, onHexMouseLeave, leftWidth, centerWidth, selectedUnitId, highlightedHexes, hoveredHex, activePhase, unitSections, onSectionSelect, showLabels = true }) => {
+const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], onHexClick, onHexMouseEnter, onHexMouseLeave, leftWidth, centerWidth, selectedUnitId, highlightedHexes, hoveredHex, activePhase, unitSections, onSectionSelect, labelMode = 'below' }) => {
   const getTerrain = (id) => terrainTypes.find(t => t.id === id) || terrainTypes[0];
   const getUnitSymbol = (typeId) => unitTypes.find(ut => ut.id === typeId)?.natoSymbol || typeId;
   const padding = 60; const viewBoxWidth = (width + 0.5) * HEX_SIZE * Math.sqrt(3) + padding; const viewBoxHeight = (height * 1.5 - 0.5) * HEX_SIZE + padding;
   // Tři vrstvy kreslené v tomto pořadí: terén (interaktivní políčka) → popisky →
-  // jednotky. Díky tomu popisky přesahují přes okraje sousedních políček (nejsou
-  // ořezané) a zároveň zůstávají pod jednotkami.
+  // jednotky. Popisky vždy přesahují přes okraje sousedních políček (nejsou
+  // ořezané); podle `labelMode` se kreslí buď pod jednotkami ('below'), nad nimi
+  // ('above'), nebo se nekreslí vůbec ('hidden').
   const terrainLayer = [];
   const labelLayer = [];
   const unitLayer = [];
@@ -89,7 +90,7 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], on
       // Popisek políčka – vlastní vrstva nad terénem, ať přesahuje přes okraje
       // sousedních políček a není ořezaný. Nenápadný styl s lehkým bílým lemem
       // pro čitelnost; neblokuje kliknutí na políčko.
-      if (showLabels && hex?.label) {
+      if (labelMode !== 'hidden' && hex?.label) {
         labelLayer.push(
           <text key={`lbl-${key}`} x={x} y={y} textAnchor="middle" dominantBaseline="middle"
                 fontSize="9" fontWeight="500" letterSpacing="0.3" fill="#3f3f46"
@@ -130,8 +131,9 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], on
         {terrainLayer}
         <line x1={dX1} y1={-HEX_SIZE} x2={dX1} y2={viewBoxHeight} stroke="#1a3a5f" strokeWidth="3" strokeDasharray="10,5" opacity="0.3" className="pointer-events-none" />
         <line x1={dX2} y1={-HEX_SIZE} x2={dX2} y2={viewBoxHeight} stroke="#1a3a5f" strokeWidth="3" strokeDasharray="10,5" opacity="0.3" className="pointer-events-none" />
-        {labelLayer}
+        {labelMode === 'below' && labelLayer}
         {unitLayer}
+        {labelMode === 'above' && labelLayer}
       </g>
     </svg>
   );

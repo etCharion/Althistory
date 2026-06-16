@@ -203,7 +203,8 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const [dismissedOverlay, setDismissedOverlay] = useState(false);
   const [showPhaseInfo, setShowPhaseInfo] = useState(false);
   const [showGoals, setShowGoals] = useState(false);
-  const [showLabels, setShowLabels] = useState(true);
+  // Režim zobrazení popisků políček: 'hidden' | 'below' (pod jednotkami) | 'above' (nad jednotkami)
+  const [labelMode, setLabelMode] = useState('below');
   const [hoveredVP, setHoveredVP] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [victoryDismissed, setVictoryDismissed] = useState(false);
@@ -374,7 +375,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
             leftWidth={sc.sections.leftWidth} centerWidth={sc.sections.centerWidth} selectedUnitId={selected}
             highlightedHexes={highlightedHexes} hoveredHex={hovered} activePhase={gameState.phase}
             unitSections={currentUnitSections} onSectionSelect={(s) => assignResourceToUnit(selected, s)}
-            showLabels={showLabels}
+            labelMode={labelMode}
           />
           {retreatingUnitId && (
             <div className={`absolute left-1/2 -translate-x-1/2 z-50 text-center uppercase transition-all duration-300 ${dismissedOverlay ? 'top-2' : 'top-1/2 -translate-y-1/2'}`}>
@@ -513,8 +514,12 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
               <button onClick={onExit} title="Menu" className="p-2 bg-slate-800 border-2 border-slate-800 rounded-lg shadow-lg hover:bg-slate-700 transition-colors">
                 <Menu size={20} className="text-white" />
               </button>
-              <button onClick={() => setShowLabels(v => !v)} title={showLabels ? 'Skrýt popisky políček' : 'Zobrazit popisky políček'} className="p-2 bg-slate-800 border-2 border-slate-800 rounded-lg shadow-lg hover:bg-slate-700 transition-colors">
-                {showLabels ? <Eye size={20} className="text-white" /> : <EyeOff size={20} className="text-white" />}
+              <button
+                onClick={() => setLabelMode(m => m === 'hidden' ? 'below' : m === 'below' ? 'above' : 'hidden')}
+                title={labelMode === 'hidden' ? 'Popisky políček: skryté (klikni pro zobrazení pod jednotkami)' : labelMode === 'below' ? 'Popisky políček: pod jednotkami (klikni pro zobrazení nad jednotkami)' : 'Popisky políček: nad jednotkami (klikni pro skrytí)'}
+                className="p-2 bg-slate-800 border-2 border-slate-800 rounded-lg shadow-lg hover:bg-slate-700 transition-colors"
+              >
+                {labelMode === 'hidden' ? <EyeOff size={20} className="text-white" /> : <Eye size={20} className={labelMode === 'above' ? 'text-amber-300' : 'text-white'} />}
               </button>
               {gameState.winner && (
                 <button onClick={() => setShowStats(true)} title="Statistiky" className="p-2 bg-slate-800 border-2 border-slate-800 rounded-lg shadow-lg hover:bg-slate-700 transition-colors">
