@@ -1,4 +1,4 @@
-import React from 'react'; import { axialToPixel, HEX_SIZE, getSection, terrainColor } from '../logic/hexGrid';
+import React from 'react'; import { axialToPixel, HEX_SIZE } from '../logic/hexGrid';
 import NatoSymbol from './NatoSymbol';
 
 const getHexPoints = (radius) => {
@@ -27,18 +27,14 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], on
       const isSelected = hex?.unitId && hex.unitId === selectedUnitId;
       const highlight = highlightedHexes?.[key];
       const isHovered = hoveredHex === key;
-      const band = getSection(col, leftWidth, centerWidth);
-      const sectionTint = band === 'left' ? 'rgba(47,109,176,0.10)' : band === 'center' ? 'rgba(245,197,24,0.13)' : 'rgba(192,57,43,0.10)';
       const pts = []; for (let i = 0; i < 6; i++) { const a = (Math.PI / 180) * (60 * i - 30); pts.push(`${x + HEX_SIZE * Math.cos(a)},${y + HEX_SIZE * Math.sin(a)}`); }
       terrainLayer.push(
         <g key={key} data-testid={`hex-${q}-${r}`} onClick={() => onHexClick?.(q, r)} onMouseEnter={() => onHexMouseEnter?.(q, r)} onMouseLeave={() => onHexMouseLeave?.(q, r)} className="cursor-pointer">
-          <polygon points={pts.join(' ')} fill={terrainColor(terrain?.color)} stroke="#5b4f37" strokeWidth="0.8" className="transition-[filter] hover:brightness-110" />
-          <polygon points={pts.join(' ')} fill={sectionTint} stroke="none" className="pointer-events-none" />
-          {highlight && <polygon points={pts.join(' ')} fill={highlight === 'move' ? "rgba(58,166,87,0.32)" : "rgba(192,57,43,0.28)"} stroke={highlight === 'move' ? "#2c7d42" : "#c0392b"} strokeWidth={highlight === 'move' ? "2.5" : "3"} className="pointer-events-none" />}
-          {isHovered && !highlight && (activePhase === 'movement' || activePhase === 'attack') && selectedUnitId && <polygon points={pts.join(' ')} fill="rgba(192,57,43,0.4)" className="pointer-events-none" />}
-          {isHovered && highlight && <polygon points={pts.join(' ')} fill={highlight === 'move' ? "rgba(58,166,87,0.5)" : "rgba(192,57,43,0.5)"} className="pointer-events-none" />}
-          {isSelected && <polygon points={pts.join(' ')} fill="none" stroke="#ffce4a" strokeWidth="7" opacity="0.65" className="pointer-events-none" />}
-          {isSelected && <polygon points={pts.join(' ')} fill="none" stroke="#fff" strokeWidth="3" className="pointer-events-none" />}
+          <polygon points={pts.join(' ')} fill={terrain?.color || '#91b94d'} stroke={isSelected ? "white" : "#444"} strokeWidth={isSelected ? "4" : "0.5"} className="hover:filter hover:brightness-110" />
+          {highlight && <polygon points={pts.join(' ')} fill={highlight === 'move' ? "rgba(34, 197, 94, 0.3)" : "rgba(239, 68, 68, 0.3)"} stroke={highlight === 'move' ? "#22c55e" : "#ef4444"} strokeWidth="2" strokeDasharray="4,2" />}
+          {isHovered && !highlight && (activePhase === 'movement' || activePhase === 'attack') && selectedUnitId && <polygon points={pts.join(' ')} fill="rgba(239, 68, 68, 0.5)" />}
+          {isHovered && highlight && <polygon points={pts.join(' ')} fill={highlight === 'move' ? "rgba(34, 197, 94, 0.5)" : "rgba(239, 68, 68, 0.5)"} />}
+          {isSelected && <polygon points={pts.join(' ')} fill="none" stroke="black" strokeWidth="1" opacity="0.5" />}
           {hex?.overlayTypeId === 'sandbags' && (
             <g transform={`translate(${x}, ${y})`}>
               <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#8b4513" strokeWidth="8" strokeDasharray="12,4" strokeLinecap="round" />
@@ -109,8 +105,8 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], on
         unitLayer.push(
           <g key={`unit-${key}`} transform={`translate(${x}, ${y})`} style={{ pointerEvents: 'none' }}>
              <NatoSymbol type={getUnitSymbol(unit.typeId)} owner={unit.ownerId} />
-             <g transform="translate(0, 18)">{Array.from({ length: unit.figures }).map((_, i) => <circle key={i} cx={(i - (unit.figures-1)/2) * 6} cy="0" r="2.2" fill={unit.ownerId === 'player1' ? '#1e40af' : '#b91c1c'} />)}</g>
-             {unit.resources > 0 && <g transform="translate(0, -20)">{Array.from({ length: unit.resources }).map((_, i) => <rect key={i} x={(i - (unit.resources-1)/2) * 7 - 2.5} y="-2.5" width="5" height="5" rx="1" fill="#3aa657" stroke="#2c7d42" strokeWidth="0.8" />)}</g>}
+             <g transform="translate(0, 18)">{Array.from({ length: unit.figures }).map((_, i) => <circle key={i} cx={(i - (unit.figures-1)/2) * 6} cy="0" r="2" fill="black" />)}</g>
+             {unit.resources > 0 && <g transform="translate(0, -20)">{Array.from({ length: unit.resources }).map((_, i) => <circle key={i} cx={(i - (unit.resources-1)/2) * 8} cy="0" r="3" fill="#006400" stroke="white" strokeWidth="0.5" />)}</g>}
           </g>
         );
       }
@@ -128,25 +124,13 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], on
       }
     }
   }
-  const sqrt3 = Math.sqrt(3);
-  const dX1 = (leftWidth - 0.5) * HEX_SIZE * sqrt3; const dX2 = (leftWidth + centerWidth - 0.5) * HEX_SIZE * sqrt3;
-  const rightEdgeX = (width - 0.5) * HEX_SIZE * sqrt3;
-  // Headroom above the board so the LEVÁ / STŘED / PRAVÁ section labels are not clipped.
-  const labelSpace = 48;
-  const sectionLabels = [
-    { t: 'LEVÁ', x: dX1 / 2 },
-    { t: 'STŘED', x: (dX1 + dX2) / 2 },
-    { t: 'PRAVÁ', x: (dX2 + rightEdgeX) / 2 },
-  ];
+  const dX1 = (leftWidth - 0.5) * HEX_SIZE * Math.sqrt(3); const dX2 = (leftWidth + centerWidth - 0.5) * HEX_SIZE * Math.sqrt(3);
   return (
-    <svg width="100%" height="100%" viewBox={`0 ${-labelSpace} ${viewBoxWidth} ${viewBoxHeight + labelSpace}`} className="max-h-full mx-auto bg-transparent" style={{ filter: 'drop-shadow(0 8px 14px rgba(60,45,20,.22))' }}>
+    <svg width="100%" height="100%" viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`} className="max-h-full mx-auto drop-shadow-md bg-transparent">
       <g transform={`translate(${padding/2}, ${padding/2})`}>
         {terrainLayer}
-        <line x1={dX1} y1={-HEX_SIZE} x2={dX1} y2={viewBoxHeight} stroke="#1c3f6b" strokeWidth="2.5" strokeDasharray="9,6" opacity="0.34" className="pointer-events-none" />
-        <line x1={dX2} y1={-HEX_SIZE} x2={dX2} y2={viewBoxHeight} stroke="#1c3f6b" strokeWidth="2.5" strokeDasharray="9,6" opacity="0.34" className="pointer-events-none" />
-        {sectionLabels.map(s => (
-          <text key={s.t} x={s.x} y={-(labelSpace - 16) - padding / 2} textAnchor="middle" fontFamily="'Barlow Condensed', sans-serif" fontSize="15" fontWeight="800" letterSpacing="3" fill="#8a7a52" className="pointer-events-none select-none">{s.t}</text>
-        ))}
+        <line x1={dX1} y1={-HEX_SIZE} x2={dX1} y2={viewBoxHeight} stroke="#1a3a5f" strokeWidth="3" strokeDasharray="10,5" opacity="0.3" className="pointer-events-none" />
+        <line x1={dX2} y1={-HEX_SIZE} x2={dX2} y2={viewBoxHeight} stroke="#1a3a5f" strokeWidth="3" strokeDasharray="10,5" opacity="0.3" className="pointer-events-none" />
         {labelMode === 'below' && labelLayer}
         {unitLayer}
         {labelMode === 'above' && labelLayer}

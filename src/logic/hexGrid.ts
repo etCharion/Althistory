@@ -18,6 +18,23 @@ export function getLine(a, b) {
 }
 export function getSection(col, lW, cW) { if (col < lW) return 'left'; if (col < lW + cW) return 'center'; return 'right'; }
 
+// Maps the legacy built-in terrain colours onto the muted "field map" palette
+// from the redesign. Custom colours (anything not in this map) pass through
+// unchanged, so user-edited terrain keeps its chosen colour even on databases
+// that were seeded before the redesign.
+const TERRAIN_COLOR_REMAP: Record<string, string> = {
+  '#91b94d': '#9caa5e', // grass
+  '#4d7c2a': '#5e7d44', // forest
+  '#9e9e9e': '#9c8e80', // town
+  '#d2b48c': '#c2a96a', // hill
+  '#3b82f6': '#6fa0c2', // river
+  '#a0522d': '#a0764a', // bridge
+};
+export function terrainColor(color?: string): string {
+  if (!color) return '#9caa5e';
+  return TERRAIN_COLOR_REMAP[color.toLowerCase()] || color;
+}
+
 export function getUnitSections(q, r, scenario) {
   const { col } = axialToOffset(q, r);
   const lW = scenario.sections.leftWidth;

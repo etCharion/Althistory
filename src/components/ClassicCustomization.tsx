@@ -127,18 +127,18 @@ const Customization = ({ onBack, onEditScenario }) => {
 
   return (
     <div className="min-h-screen bg-map-paper p-4 md:p-8 font-military overflow-y-auto">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6 border-b-2 border-ally pb-4">
-          <h1 className="text-[34px] font-condensed font-extrabold uppercase tracking-[0.02em] text-ally">Administrace</h1>
-          <button onClick={onBack} className="bg-ally text-white px-[22px] py-2.5 rounded-[10px] uppercase font-condensed font-extrabold text-sm tracking-[0.06em] hover:opacity-90 transition-opacity shadow-md">Zpět</button>
+      <div className="max-w-6xl mx-auto bg-white/90 p-4 md:p-8 rounded shadow-2xl border-2 border-map-ink-blue">
+        <div className="flex justify-between items-center mb-8 border-b-2 border-map-ink-blue pb-4">
+          <h1 className="text-3xl font-bold font-handwriting uppercase tracking-widest text-map-ink-blue">Administrace</h1>
+          <button onClick={onBack} className="bg-map-ink-blue text-white px-6 py-2 rounded uppercase font-bold text-sm hover:bg-opacity-90 transition-all shadow-md">Zpět</button>
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-7">
+        <div className="flex flex-wrap gap-2 mb-8">
           {['scenarios', 'units', 'terrains', 'overlays', 'countries', 'campaigns'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-[18px] py-2.5 rounded-[9px] font-condensed font-extrabold uppercase text-sm tracking-[0.05em] transition-all ${activeTab === tab ? 'bg-ally text-white shadow-md' : 'bg-white/50 text-ally border-[1.5px] border-ally hover:bg-ally/10'}`}
+              className={`px-4 py-2 rounded font-bold uppercase text-xs transition-all ${activeTab === tab ? 'bg-map-ink-blue text-white shadow-md scale-105' : 'bg-white text-map-ink-blue border border-map-ink-blue hover:bg-map-ink-blue/10'}`}
             >
               {tab === 'scenarios' ? 'Scénáře' : tab === 'units' ? 'Jednotky' : tab === 'terrains' ? 'Terén' : tab === 'overlays' ? 'Překážky' : tab === 'countries' ? 'Země' : 'Kampaně'}
             </button>
@@ -152,7 +152,7 @@ const Customization = ({ onBack, onEditScenario }) => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {scenarios.map(s => (
-                <div key={s.id} className="p-4 border-2 border-tan-border rounded-[12px] bg-parchment-card shadow-sm flex flex-col justify-between hover:border-map-ink-blue transition-colors group">
+                <div key={s.id} className="p-4 border-2 border-gray-200 rounded bg-white shadow-sm flex flex-col justify-between hover:border-map-ink-blue transition-colors group">
                   <div>
                     <h3 className="font-bold text-lg text-map-ink-blue uppercase mb-1">{s.name}</h3>
                     <p className="text-[10px] text-gray-500 italic mb-2 line-clamp-2">{s.description || 'Bez popisu.'}</p>
@@ -182,7 +182,7 @@ const Customization = ({ onBack, onEditScenario }) => {
             </div>
             <div className="space-y-4">
               {units.map((u, idx) => (
-                <div key={u.id} className="p-4 border-2 border-tan-border rounded-[12px] bg-parchment-card shadow-sm">
+                <div key={u.id} className="p-4 border-2 border-gray-200 rounded bg-white shadow-sm">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                     <div className="flex flex-col items-center justify-center bg-gray-50 rounded border-2 border-gray-100 p-2 cursor-pointer hover:border-map-ink-blue transition-all group relative" onClick={() => setSelectedUnitForSymbol(u)}>
                       <svg viewBox="-20 -15 40 30" className="w-16 h-12">
@@ -241,7 +241,7 @@ const Customization = ({ onBack, onEditScenario }) => {
             </div>
             <div className="space-y-4">
               {terrains.map((t, idx) => (
-                <div key={t.id} className="p-4 border-2 border-tan-border rounded-[12px] bg-parchment-card shadow-sm">
+                <div key={t.id} className="p-4 border-2 border-gray-200 rounded bg-white shadow-sm">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                     <div className="md:col-span-2">
                       <label className="text-[10px] font-bold uppercase text-gray-400">Název terénu</label>
@@ -356,7 +356,7 @@ const Customization = ({ onBack, onEditScenario }) => {
             </div>
             <div className="space-y-4">
               {overlays.map((o, idx) => (
-                <div key={o.id} className="p-4 border-2 border-tan-border rounded-[12px] bg-parchment-card shadow-sm">
+                <div key={o.id} className="p-4 border-2 border-gray-200 rounded bg-white shadow-sm">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                     <div className="md:col-span-2">
                       <label className="text-[10px] font-bold uppercase text-gray-400">Název překážky</label>
@@ -468,7 +468,7 @@ const Customization = ({ onBack, onEditScenario }) => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {countries.map((c, idx) => (
-                <div key={c.id} className="flex gap-2 p-2 border-2 border-tan-border rounded-[11px] bg-parchment-card items-center shadow-sm">
+                <div key={c.id} className="flex gap-2 p-2 border-2 border-gray-100 rounded bg-white items-center shadow-sm">
                   <input className="flex-1 font-bold outline-none border-b-2 border-transparent focus:border-map-ink-blue" value={c.name} onChange={e => updateCountry({ ...c, name: e.target.value })} />
                   <button onClick={() => deleteItem('countries', setCountries, countries, c.id)} className="text-red-600 p-2"><Trash2 size={16} /></button>
                 </div>
@@ -517,7 +517,7 @@ const Customization = ({ onBack, onEditScenario }) => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {campaigns.map((c, idx) => (
-                <div key={c.id} className="flex gap-2 p-2 border-2 border-tan-border rounded-[11px] bg-parchment-card items-center shadow-sm">
+                <div key={c.id} className="flex gap-2 p-2 border-2 border-gray-100 rounded bg-white items-center shadow-sm">
                   <input className="flex-1 font-bold outline-none border-b-2 border-transparent focus:border-map-ink-blue" value={c.name} onChange={e => updateCampaign({ ...c, name: e.target.value })} />
                   <button onClick={() => deleteItem('campaigns', setCampaigns, campaigns, c.id)} className="text-red-600 p-2"><Trash2 size={16} /></button>
                 </div>
