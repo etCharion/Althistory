@@ -2,7 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { --map-bg: #efe4c9; }
+/* ---- Theme tokens (default = "field" / new look). Colours are stored as
+   space-separated RGB triples so Tailwind's /opacity modifiers keep working. ---- */
+:root {
+  --color-map-paper: 239 228 201;   /* #efe4c9 */
+  --color-map-ink-blue: 28 63 107;  /* #1c3f6b */
+  --color-map-ink-red: 124 32 24;   /* #7c2018 */
+  --color-map-ink-green: 44 125 66; /* #2c7d42 */
+  --font-display: 'Barlow Condensed', sans-serif;
+  --font-body: 'Barlow', sans-serif;
+}
+
+/* ---- "Classic" / original look ---- */
+[data-ui-theme="classic"] {
+  --color-map-paper: 244 228 188;   /* #f4e4bc */
+  --color-map-ink-blue: 26 58 95;   /* #1a3a5f */
+  --color-map-ink-red: 139 0 0;     /* #8b0000 */
+  --color-map-ink-green: 0 100 0;   /* #006400 */
+  --font-display: 'Permanent Marker', cursive;
+  --font-body: 'Courier Prime', monospace;
+}
 
 * { box-sizing: border-box; }
 
@@ -11,8 +30,12 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   color: #1f2733;
-  font-family: 'Barlow', sans-serif;
-  background-color: var(--map-bg);
+  font-family: var(--font-body);
+  background-color: rgb(var(--color-map-paper));
+}
+
+/* The parchment gradient belongs to the field look only. */
+html:not([data-ui-theme="classic"]) body {
   background-image:
     radial-gradient(circle at 18% 10%, rgba(255, 255, 255, .55), transparent 42%),
     radial-gradient(circle at 88% 92%, rgba(120, 96, 52, .13), transparent 52%);
