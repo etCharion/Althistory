@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { HashRouter, Routes, Route, useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Search, Filter, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, Maximize2, X, ChevronDown, Target } from 'lucide-react';
+import { Search, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, ChevronDown, Target, Play } from 'lucide-react';
 import ScenarioEditor from './components/ScenarioEditor';
 import GameView from './components/GameView';
 import Customization from './components/Customization';
@@ -23,28 +23,28 @@ function MultiCountryFilter({ countries, selected, onChange }) {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full p-2 border rounded text-[10px] font-bold uppercase outline-none focus:border-map-ink-blue bg-white flex items-center justify-between gap-1"
+        className="w-full px-3 py-2.5 border-2 border-tan-line rounded-[10px] text-[12px] font-condensed font-bold uppercase tracking-wide outline-none focus:border-ally bg-white flex items-center justify-between gap-1 text-ink"
       >
         <span className="truncate">{label}</span>
-        <ChevronDown size={12} className="shrink-0" />
+        <ChevronDown size={14} className="shrink-0 text-tan" />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white border-2 border-map-ink-blue rounded-lg shadow-xl custom-scrollbar">
+          <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white border-2 border-ally rounded-lg shadow-xl custom-scrollbar">
             <button
               type="button"
               onClick={() => onChange([])}
-              className="w-full text-left px-3 py-2 text-[10px] font-bold uppercase hover:bg-map-ink-blue/10 border-b border-gray-100"
+              className="w-full text-left px-3 py-2 text-[11px] font-condensed font-bold uppercase hover:bg-ally/10 border-b border-tan-border/50"
             >
               Všechny země
             </button>
             {countries.map(c => (
               <label
                 key={c.id}
-                className="flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase hover:bg-map-ink-blue/10 cursor-pointer"
+                className="flex items-center gap-2 px-3 py-2 text-[11px] font-condensed font-bold uppercase hover:bg-ally/10 cursor-pointer"
               >
-                <input type="checkbox" checked={selected.includes(c.id)} onChange={() => toggle(c.id)} />
+                <input type="checkbox" className="accent-ally" checked={selected.includes(c.id)} onChange={() => toggle(c.id)} />
                 <span className="truncate">{c.name}</span>
               </label>
             ))}
@@ -54,6 +54,9 @@ function MultiCountryFilter({ countries, selected, onChange }) {
     </div>
   );
 }
+
+const SELECT_CLASS =
+  "px-3 py-2.5 border-2 border-tan-line rounded-[10px] text-[12px] font-condensed font-bold uppercase tracking-wide outline-none focus:border-ally bg-white text-ink cursor-pointer";
 
 // Stable per-browser identity used to claim a seat in online games.
 function getClientId(): string {
@@ -65,73 +68,65 @@ function getClientId(): string {
   return id;
 }
 
-// A single operation/scenario card, reused in both the compact list and the
-// full-screen browser overlay.
+// A single operation/scenario card in the field-map menu grid.
 function ScenarioCard({ s, countries, campaigns, onLocal, onOnline }) {
   const [showOnlineHelp, setShowOnlineHelp] = useState(false);
   return (
-    <div className="p-4 border-2 border-gray-100 rounded-xl bg-white hover:border-map-ink-blue transition-all group shadow-sm flex flex-col">
-      <div className="flex justify-between items-start mb-2 gap-3">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="font-bold uppercase text-map-ink-blue">{s.name}</h3>
-            {s.isRealBattle && <span className="bg-red-100 text-red-600 text-[8px] px-1 rounded font-bold uppercase">Historická</span>}
-          </div>
-          <div className="flex gap-2 text-[9px] text-gray-500 font-bold uppercase mt-1">
-            <span>{getScenarioCountryNames(s, countries) || 'Neznámá země'}</span>
-            <span>•</span>
-            <span>{s.year || '????'}</span>
-          </div>
-        </div>
-        <div className="flex flex-col gap-2 shrink-0">
-          <button
-            onClick={() => onLocal(s)}
-            className="bg-map-ink-green text-white px-6 py-2 rounded-lg font-bold uppercase hover:bg-opacity-90 transition-transform active:scale-95 shadow-md flex items-center gap-2"
-          >
-            Místní hra
-          </button>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => onOnline(s)}
-              className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg font-bold uppercase text-[10px] hover:bg-blue-700 transition-all shadow-md flex items-center justify-center gap-2"
-            >
-              <Wifi size={12} /> Online hra
-            </button>
-            <button
-              onMouseEnter={() => setShowOnlineHelp(true)}
-              onMouseLeave={() => setShowOnlineHelp(false)}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors relative"
-            >
-              <HelpCircle size={16} />
-              {showOnlineHelp && (
-                <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-white border-2 border-blue-600 rounded-xl shadow-2xl z-[100] normal-case font-bold text-xs text-slate-700 animate-in fade-in slide-in-from-bottom-2">
-                  Online hra se ukládá do cloudu a synchronizuje v reálném čase. Po spuštění stačí zkopírovat URL adresu z prohlížeče a poslat ji spoluhráči.
-                </div>
-              )}
-            </button>
-          </div>
-        </div>
+    <div className="bg-parchment-card border-2 border-tan-border rounded-[15px] p-[18px_19px] flex flex-col shadow-[0_12px_30px_-22px_rgba(60,45,20,0.55)] hover:border-ally transition-colors">
+      <div className="flex items-start justify-between gap-2.5 mb-[7px]">
+        <h3 className="m-0 font-condensed font-extrabold text-[23px] leading-tight tracking-tight text-ally uppercase">{s.name}</h3>
+        {s.isRealBattle && (
+          <span className="shrink-0 bg-[#f3dada] text-[#a3382b] font-condensed font-extrabold text-[10px] tracking-[0.1em] uppercase px-2 py-1 rounded-md">Historická</span>
+        )}
+      </div>
+      <div className="flex gap-2 font-condensed font-bold text-[12px] tracking-[0.08em] uppercase text-tan mb-2.5">
+        <span>{getScenarioCountryNames(s, countries) || 'Neznámá země'}</span>
+        <span>·</span>
+        <span>{s.year || '????'}</span>
       </div>
       {s.campaignId && (
-        <div className="text-[9px] bg-gray-50 p-1 rounded inline-flex items-center gap-1 font-bold text-gray-600 uppercase self-start">
-          <Globe size={10} /> {campaigns.find(c => c.id === s.campaignId)?.name} (Fáze {s.campaignNumber})
+        <div className="text-[10px] mb-2 bg-[#f4ecd7] px-2 py-1 rounded-md inline-flex items-center gap-1 font-condensed font-bold text-tan-text uppercase self-start">
+          <Globe size={11} /> {campaigns.find(c => c.id === s.campaignId)?.name} (Fáze {s.campaignNumber})
         </div>
       )}
       {s.description && (
-        <div className="mt-2 text-[10px] text-gray-400 italic line-clamp-1 group-hover:line-clamp-none transition-all">
-          {s.description}
-        </div>
+        <p className="m-0 mb-3 text-[13px] leading-[1.5] text-tan-text">{s.description}</p>
       )}
       {s.victoryGoals && (
-        <div className="mt-2 pt-2 border-t border-gray-100">
-          <div className="text-[9px] font-bold uppercase text-map-ink-blue flex items-center gap-1 mb-1">
-            <Target size={10} /> Cíle vítězství
+        <div className="mt-auto p-[10px_12px] bg-[#f4ecd7] rounded-[10px] mb-[13px]">
+          <div className="flex items-center gap-1.5 font-condensed font-extrabold text-[11px] tracking-[0.1em] uppercase text-ally mb-1">
+            <Target size={12} /> Cíle vítězství
           </div>
-          <div className="text-[10px] text-gray-500 whitespace-pre-line line-clamp-2 group-hover:line-clamp-none transition-all">
-            {s.victoryGoals}
-          </div>
+          <span className="text-[12px] leading-[1.4] text-[#7a6f55] whitespace-pre-line">{s.victoryGoals}</span>
         </div>
       )}
+      <div className={`flex gap-2.5 ${s.victoryGoals ? '' : 'mt-auto pt-1'}`}>
+        <button
+          onClick={() => onLocal(s)}
+          className="flex-1 flex items-center justify-center gap-1.5 py-[11px] rounded-[10px] bg-army text-white font-condensed font-extrabold text-[14px] tracking-[0.05em] uppercase hover:bg-opacity-90 transition-all active:scale-95"
+        >
+          <Play size={15} fill="currentColor" strokeWidth={0} /> Místní hra
+        </button>
+        <button
+          onClick={() => onOnline(s)}
+          className="flex items-center justify-center gap-1.5 py-[11px] px-[15px] rounded-[10px] border-2 border-ally-soft bg-ally-soft/[0.08] text-ally-soft font-condensed font-extrabold text-[13px] tracking-[0.04em] uppercase hover:bg-ally-soft hover:text-white transition-colors"
+        >
+          <Wifi size={15} /> Online
+        </button>
+        <button
+          onMouseEnter={() => setShowOnlineHelp(true)}
+          onMouseLeave={() => setShowOnlineHelp(false)}
+          className="p-2 text-ally-soft hover:bg-ally-soft/10 rounded-full transition-colors relative"
+          aria-label="Nápověda k online hře"
+        >
+          <HelpCircle size={16} />
+          {showOnlineHelp && (
+            <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-white border-2 border-ally-soft rounded-xl shadow-2xl z-[100] normal-case font-semibold text-xs text-slate-700 text-left">
+              Online hra se ukládá do cloudu a synchronizuje v reálném čase. Po spuštění stačí zkopírovat URL adresu z prohlížeče a poslat ji spoluhráči.
+            </div>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
@@ -198,11 +193,8 @@ function MainMenu() {
     setMode('editor');
   };
 
-  const [showBrowser, setShowBrowser] = useState(false);
-
   const startLocalGame = (scenario) => {
     setCurrentScenario(scenario);
-    setShowBrowser(false);
     setMode('game');
   };
 
@@ -221,135 +213,91 @@ function MainMenu() {
   if (mode === 'custom') return <Customization onBack={() => setMode('menu')} onEditScenario={handleEditScenario} />;
   if (mode === 'game' && currentScenario) return <GameView scenario={currentScenario} onExit={() => setMode('menu')} />;
 
-  // Search + filter controls, reused in the compact list and the full-screen browser.
-  const filterControls = (
-    <div className="flex flex-col gap-4">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-        <input
-          className="w-full pl-10 pr-4 py-2 border-2 border-gray-100 rounded-lg focus:border-map-ink-blue outline-none font-bold"
-          placeholder="Hledat operaci..."
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-        />
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <MultiCountryFilter countries={countries} selected={filterCountries} onChange={setFilterCountries} />
-        <select className="p-2 border rounded text-[10px] font-bold uppercase outline-none focus:border-map-ink-blue" value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)}>
-          <option value="all">Všechny kampaně</option>
-          {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <select className="p-2 border rounded text-[10px] font-bold uppercase outline-none focus:border-map-ink-blue" value={filterReal} onChange={e => setFilterReal(e.target.value)}>
-          <option value="all">Typ bitvy</option>
-          <option value="real">Reálná</option>
-          <option value="fictional">Fiktivní</option>
-        </select>
-        <select className="p-2 border rounded text-[10px] font-bold uppercase outline-none focus:border-map-ink-blue" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-          <option value="name">Podle názvu</option>
-          <option value="year">Podle roku</option>
-          <option value="campaign">Podle kampaně</option>
-        </select>
-      </div>
-    </div>
-  );
-
-  const emptyState = (
-    <div className="text-center py-10 text-gray-400 italic">
-      <Info className="mx-auto mb-2 opacity-20" size={32} />
-      Žádné operace neodpovídají filtrům.
-    </div>
-  );
-
   return (
-    <div className="min-h-screen bg-map-paper flex flex-col items-center justify-center p-4 font-military overflow-y-auto">
-      <div className="max-w-2xl w-full bg-white/90 p-6 md:p-10 rounded-xl shadow-2xl border-2 border-map-ink-blue">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-bold text-map-ink-blue font-handwriting uppercase tracking-widest flex items-center justify-center gap-3">
-            <Sword size={32} /> Memoir '44 Clone
-          </h1>
-          <p className="text-xs text-gray-500 uppercase tracking-tighter mt-2 font-bold">Generální štáb - Plánování operací</p>
+    <div className="min-h-screen text-ink">
+      <div className="max-w-[1180px] mx-auto px-7 pt-[38px] pb-[72px]">
+        {/* Header */}
+        <div className="flex items-center gap-[15px] mb-[30px] flex-wrap">
+          <div className="w-[54px] h-[54px] rounded-[14px] bg-ally flex items-center justify-center shadow-[0_10px_24px_-10px_rgba(28,40,60,0.6)] shrink-0">
+            <Sword size={30} className="text-white" />
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <div className="font-condensed font-extrabold text-[12px] tracking-[0.34em] uppercase text-tan">Generální štáb · Plánování operací</div>
+            <h1 className="m-0 font-condensed font-extrabold text-[42px] leading-none tracking-tight text-ink">ALTHISTORY</h1>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={handleNewScenario}
+              className="flex items-center gap-2 px-5 py-[13px] rounded-[12px] bg-ally text-white font-condensed font-extrabold text-[15px] tracking-[0.05em] uppercase hover:opacity-90 transition-opacity shadow-[0_8px_20px_-10px_rgba(28,40,60,0.65)]"
+            >
+              <Plus size={17} strokeWidth={2.4} /> Nový scénář
+            </button>
+            <button
+              onClick={() => setMode('custom')}
+              className="flex items-center gap-2 px-5 py-[13px] rounded-[12px] border-2 border-ally bg-white/50 text-ally font-condensed font-extrabold text-[15px] tracking-[0.05em] uppercase hover:bg-ally hover:text-white transition-colors"
+            >
+              <Settings size={17} /> Nastavení
+            </button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mb-8">
-          <button
-            onClick={handleNewScenario}
-            className="bg-map-ink-blue text-white py-4 rounded-lg font-bold uppercase hover:bg-opacity-90 transition-all shadow-lg flex items-center justify-center gap-2 group"
-          >
-            <Plus className="group-hover:rotate-90 transition-transform" /> Nový scénář
-          </button>
-          <button
-            onClick={() => setMode('custom')}
-            className="border-2 border-map-ink-blue text-map-ink-blue py-4 rounded-lg font-bold uppercase hover:bg-map-ink-blue hover:text-white transition-all shadow-md flex items-center justify-center gap-2"
-          >
-            <Settings /> Nastavení
-          </button>
+        {/* Search + filters */}
+        <div className="bg-[rgba(255,253,247,0.85)] border border-tan-border-soft rounded-[15px] p-[16px_18px] mb-[22px] shadow-[0_14px_34px_-22px_rgba(60,45,20,0.5)]">
+          <div className="flex gap-3 flex-wrap items-center">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="absolute left-[13px] top-1/2 -translate-y-1/2 text-tan" size={17} />
+              <input
+                className="w-full pl-[38px] pr-[14px] py-[11px] border-2 border-tan-line rounded-[10px] bg-white font-semibold text-[14px] text-ink outline-none focus:border-ally"
+                placeholder="Hledat operaci…"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <MultiCountryFilter countries={countries} selected={filterCountries} onChange={setFilterCountries} />
+            <select className={SELECT_CLASS} value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)}>
+              <option value="all">Všechny kampaně</option>
+              {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <select className={SELECT_CLASS} value={filterReal} onChange={e => setFilterReal(e.target.value)}>
+              <option value="all">Typ bitvy</option>
+              <option value="real">Reálná</option>
+              <option value="fictional">Fiktivní</option>
+            </select>
+            <select className={SELECT_CLASS} value={sortBy} onChange={e => setSortBy(e.target.value)}>
+              <option value="name">Podle názvu</option>
+              <option value="year">Podle roku</option>
+              <option value="campaign">Podle kampaně</option>
+            </select>
+            <div className="flex items-center gap-2.5 font-condensed font-bold text-[13px] tracking-[0.06em] uppercase text-tan-deep">
+              <Target size={15} />
+              <span className="bg-ally/[0.08] text-ally rounded-lg px-3 py-1.5">{filteredScenarios.length} operací</span>
+            </div>
+          </div>
         </div>
 
         {lastGameId && (
           <button
             onClick={() => navigate(`/game/${lastGameId}`)}
-            className="w-full mb-8 bg-blue-50 text-blue-700 py-3 rounded-lg font-black uppercase border-2 border-blue-200 hover:bg-blue-100 transition-all flex items-center justify-center gap-2"
+            className="w-full mb-[22px] flex items-center justify-center gap-2 py-3 rounded-[12px] bg-ally-soft/[0.08] border-2 border-ally-soft/30 text-ally-soft font-condensed font-extrabold uppercase tracking-[0.05em] hover:bg-ally-soft hover:text-white transition-colors"
           >
             <Wifi size={18} /> Pokračovat v online hře
           </button>
         )}
 
-        <div className="pt-6 border-t-2 border-map-ink-blue/20">
-          <div className="mb-6">{filterControls}</div>
-
-          <div className="flex items-center justify-between mb-4 gap-2">
-            <h2 className="text-sm font-bold uppercase text-map-ink-blue tracking-widest flex items-center gap-2">
-              <Filter size={14} /> Dostupné operace ({filteredScenarios.length}):
-            </h2>
-            <button
-              onClick={() => setShowBrowser(true)}
-              className="text-[10px] font-bold uppercase text-map-ink-blue border-2 border-map-ink-blue/30 px-3 py-1.5 rounded-lg hover:bg-map-ink-blue hover:text-white transition-all flex items-center gap-1.5 shrink-0"
-            >
-              <Maximize2 size={12} /> Velký přehled
-            </button>
+        {/* Scenario grid */}
+        {filteredScenarios.length === 0 ? (
+          <div className="text-center py-16 text-tan italic font-medium">
+            <Info className="mx-auto mb-2 opacity-30" size={32} />
+            Žádné operace neodpovídají filtrům.
           </div>
-
-          <div className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+        ) : (
+          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
             {filteredScenarios.map(s => (
               <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns} onLocal={startLocalGame} onOnline={startOnlineGame} />
             ))}
-            {filteredScenarios.length === 0 && emptyState}
           </div>
-        </div>
+        )}
       </div>
-
-      {showBrowser && (
-        <div className="fixed inset-0 z-50 bg-map-paper/95 backdrop-blur-sm flex flex-col font-military animate-in fade-in">
-          <div className="border-b-2 border-map-ink-blue bg-white/90 shadow-md">
-            <div className="max-w-7xl mx-auto w-full px-4 md:px-8 py-4 flex items-center justify-between gap-4">
-              <h2 className="text-xl md:text-2xl font-bold text-map-ink-blue font-handwriting uppercase tracking-widest flex items-center gap-2 md:gap-3">
-                <Sword size={24} /> Přehled operací
-                <span className="text-xs font-military text-gray-500 normal-case tracking-normal">({filteredScenarios.length})</span>
-              </h2>
-              <button
-                onClick={() => setShowBrowser(false)}
-                className="p-2 rounded-full text-map-ink-blue hover:bg-map-ink-blue hover:text-white transition-colors border-2 border-map-ink-blue/30"
-                aria-label="Zavřít přehled"
-              >
-                <X size={22} />
-              </button>
-            </div>
-            <div className="max-w-7xl mx-auto w-full px-4 md:px-8 pb-4">{filterControls}</div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
-            <div className="max-w-7xl mx-auto w-full px-4 md:px-8 py-6">
-              {filteredScenarios.length === 0 ? emptyState : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {filteredScenarios.map(s => (
-                    <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns} onLocal={startLocalGame} onOnline={startOnlineGame} />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -149,22 +149,22 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden p-4 bg-map-paper font-military">
-      <div className="flex justify-between mb-4 border-b-2 border-map-ink-blue pb-2 items-center">
-        <h2 className="text-2xl font-bold font-handwriting uppercase text-map-ink-blue flex items-center gap-2">
-          <Layers /> Editor Scénáře
+      <div className="flex justify-between mb-5 border-b-2 border-ally pb-4 items-center">
+        <h2 className="text-[30px] m-0 font-condensed font-extrabold uppercase tracking-[0.02em] text-ally flex items-center gap-2">
+          <Layers size={28} /> Editor scénáře
         </h2>
-        <div className="flex gap-2">
-          <button onClick={save} className="bg-map-ink-blue text-white px-6 py-2 rounded font-bold uppercase flex items-center gap-2 hover:bg-opacity-90 shadow-md">
-            <Save size={18} /> Uložit
+        <div className="flex gap-2.5">
+          <button onClick={onBack} className="px-[22px] py-2.5 rounded-[10px] border-2 border-ally bg-white/50 text-ally font-condensed font-extrabold text-sm tracking-[0.06em] uppercase flex items-center gap-2 hover:bg-ally hover:text-white transition-colors">
+            <X size={16} /> Zrušit
           </button>
-          <button onClick={onBack} className="bg-gray-500 text-white px-6 py-2 rounded font-bold uppercase flex items-center gap-2 hover:bg-opacity-90 shadow-md">
-            <X size={18} /> Zrušit
+          <button onClick={save} className="px-[22px] py-2.5 rounded-[10px] bg-army text-white font-condensed font-extrabold text-sm tracking-[0.06em] uppercase flex items-center gap-2 hover:opacity-90 shadow-md transition-opacity">
+            <Save size={16} /> Uložit scénář
           </button>
         </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden gap-4">
-        <div className="w-96 overflow-y-auto bg-white/80 p-4 border-2 border-map-ink-blue rounded shadow-inner space-y-6">
+        <div className="w-96 overflow-y-auto custom-scrollbar bg-parchment-card p-4 border-2 border-tan-border rounded-[14px] shadow-inner space-y-6">
           <section className="space-y-3">
             <h3 className="font-bold uppercase text-xs text-map-ink-blue border-b border-map-ink-blue/20 pb-1 flex items-center gap-1"><BookOpen size={12} /> Základní informace</h3>
             <input className="w-full p-2 border-2 border-gray-100 focus:border-map-ink-blue outline-none rounded font-bold" placeholder="Název scénáře" value={scenario.name} onChange={e => setScenario({ ...scenario, name: e.target.value })} />
@@ -423,14 +423,14 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
           </button>
         </div>
 
-        <div className="flex-1 bg-white/40 rounded-xl border-2 border-map-ink-blue p-4 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-4 right-4 bg-white/80 p-2 rounded text-[10px] font-bold border border-map-ink-blue z-10 shadow-sm">
-            Nástroj: <span className="text-map-ink-blue uppercase">{tool.type === 'delete' ? 'Smazat' : tool.id}</span>
+        <div className="flex-1 rounded-[14px] border-2 border-tan-border p-4 shadow-inner relative overflow-hidden" style={{ background: 'rgba(28,63,107,0.04)' }}>
+          <div className="absolute top-4 right-4 bg-parchment-card p-2 rounded-lg text-[10px] font-bold border border-tan-border-soft z-10 shadow-sm">
+            Nástroj: <span className="text-ally uppercase">{tool.type === 'delete' ? 'Smazat' : tool.id}</span>
             {tool.type === 'unit' && <span className={player === 'player1' ? ' text-blue-600' : ' text-red-600'}> ({player === 'player1' ? 'SPOJ' : 'OSA'})</span>}
           </div>
           <button
             onClick={() => setLabelMode(m => m === 'hidden' ? 'below' : m === 'below' ? 'above' : 'hidden')}
-            className="absolute top-4 left-4 bg-white/80 p-2 rounded text-[10px] font-bold border border-map-ink-blue z-10 shadow-sm flex items-center gap-1 hover:bg-white transition-colors"
+            className="absolute top-4 left-4 bg-parchment-card p-2 rounded-lg text-[10px] font-bold border border-tan-border-soft z-10 shadow-sm flex items-center gap-1 hover:bg-[#f7f0df] transition-colors"
             title="Popisky políček: skryté → pod jednotkami → nad jednotkami"
           >
             {labelMode === 'hidden' ? <EyeOff size={12} /> : <Eye size={12} className={labelMode === 'above' ? 'text-amber-600' : ''} />}
