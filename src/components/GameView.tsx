@@ -388,24 +388,17 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
           </div>
           <div className="flex-1 flex gap-3.5">
             {SECTIONS.map(({ id, label }) => (
-              <div key={id} className="flex-1 flex flex-col items-center justify-between gap-1.5 py-1.5 px-2 rounded-[13px]" style={{ background: 'rgba(255,253,247,.6)' }}>
+              <div key={id} onClick={() => { if (canDistribute && wh > 0) distributeResource(activeP, id, 1); }} title={`Přidat zdroj do sekce ${label}`}
+                className={`flex-1 flex flex-col items-center justify-center gap-2 py-1.5 px-2 rounded-[13px] ${canDistribute && wh > 0 ? 'cursor-pointer' : 'cursor-default'}`} style={{ background: 'rgba(255,253,247,.6)' }}>
                 <div className="flex items-center gap-1">
                   {[1, 2, 3, 'Max'].map((v) => (
-                    <button key={v} disabled={wh <= 0 || !canDistribute} onClick={() => distributeResource(activeP, id, v === 'Max' ? 'max' : (v as number))}
+                    <button key={v} disabled={wh <= 0 || !canDistribute} onClick={(e) => { e.stopPropagation(); distributeResource(activeP, id, v === 'Max' ? 'max' : (v as number)); }}
                       className="px-1.5 py-0.5 rounded-md text-[10px] font-condensed font-extrabold uppercase bg-ally text-white hover:opacity-90 disabled:opacity-30 transition-opacity">
                       {v}
                     </button>
                   ))}
                 </div>
-                <span className="font-condensed font-extrabold text-[12px] tracking-[0.1em] uppercase text-tan-deep">{label}</span>
                 <CubeBox count={res[id]} />
-                <div className="flex items-center gap-2.5">
-                  <button onClick={() => distributeResource(activeP, id, -1)} disabled={!canDistribute || res[id] <= 0 || wh <= 0}
-                    className="w-[30px] h-[30px] rounded-lg border-[1.5px] border-[#c4b289] bg-white text-ally text-[19px] leading-none font-bold flex items-center justify-center disabled:opacity-30 hover:bg-[#f7f0df] transition-colors">−</button>
-                  <span className="font-condensed font-extrabold text-[20px] min-w-[22px] text-center text-ally">{res[id]}</span>
-                  <button onClick={() => distributeResource(activeP, id, 1)} disabled={!canDistribute || wh <= 0}
-                    className="w-[30px] h-[30px] rounded-lg border-none bg-ally text-white text-[19px] leading-none font-bold flex items-center justify-center disabled:opacity-30 hover:opacity-90 transition-opacity">+</button>
-                </div>
               </div>
             ))}
           </div>
@@ -422,8 +415,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
           </div>
           <div className="flex-1 flex gap-3.5">
             {SECTIONS.map(({ id, label }) => (
-              <div key={id} className="flex-1 flex flex-col items-center justify-between gap-1.5 py-1.5 px-2 rounded-[13px]" style={{ background: 'rgba(255,253,247,.6)' }}>
-                <span className="font-condensed font-extrabold text-[12px] tracking-[0.1em] uppercase text-tan-deep">{label}</span>
+              <div key={id} className="flex-1 flex flex-col items-center justify-center gap-2 py-1.5 px-2 rounded-[13px]" style={{ background: 'rgba(255,253,247,.6)' }}>
                 <CubeBox count={res[id]} />
                 <span className="font-condensed font-extrabold text-[15px]" style={{ color: res[id] > 0 ? '#2c7d42' : '#a99c78' }}>{res[id]} zbývá</span>
               </div>
