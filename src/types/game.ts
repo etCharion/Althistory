@@ -113,6 +113,10 @@ export type Scenario = {
   player1: { name: string; income: number; maxSectionResources: number; };
   player2: { name: string; income: number; maxSectionResources: number; };
   victoryPointsToWin: number;
+  // Logistické omezení: každý zdroj přidělený do sekce, která už má 4 přidělené
+  // zdroje, stojí ze skladu 2 zdroje (místo 1). Nadlimitní zdroje jsou barevně
+  // odlišené. Volí se při spuštění hry v jejím nastavení.
+  logisticsLimit?: boolean;
   firstPlayerId: PlayerId;
   initialHexes: Hex[];
   initialUnits: Unit[];

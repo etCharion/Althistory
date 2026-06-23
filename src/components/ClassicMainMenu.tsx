@@ -4,6 +4,7 @@ import { Search, Filter, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, M
 import ScenarioEditor from './ClassicScenarioEditor';
 import GameView from './ClassicGameView';
 import Customization from './ClassicCustomization';
+import LaunchSettingsModal, { LaunchSettings } from './LaunchSettingsModal';
 import { getAllScenarios, getAllCountries, getAllCampaigns, getScenarioCountryIds, getScenarioCountryNames } from '../data/typeUtils';
 import { ThemeToggle } from '../theme';
 
@@ -190,6 +191,10 @@ function MainMenu() {
 
   const [showBrowser, setShowBrowser] = useState(false);
 
+  // Před spuštěním hry zobrazíme nastavení (volby pravidel). Po potvrzení
+  // doplníme volby do scénáře a hru skutečně spustíme.
+  const [pendingStart, setPendingStart] = useState<{ scenario: any; mode: 'local' | 'online' } | null>(null);
+
   const startLocalGame = (scenario) => {
     setCurrentScenario(scenario);
     setShowBrowser(false);
@@ -200,6 +205,15 @@ function MainMenu() {
     const gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     localStorage.setItem('lastGameId', gameId);
     navigate(`/game/${gameId}`, { state: { scenario } });
+  };
+
+  const confirmStart = (settings: LaunchSettings) => {
+    if (!pendingStart) return;
+    const { scenario, mode: startMode } = pendingStart;
+    const configured = { ...scenario, logisticsLimit: settings.logisticsLimit };
+    setPendingStart(null);
+    if (startMode === 'local') startLocalGame(configured);
+    else startOnlineGame(configured);
   };
 
   const [lastGameId, setLastGameId] = useState<string | null>(null);
@@ -302,7 +316,9 @@ function MainMenu() {
 
           <div className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
             {filteredScenarios.map(s => (
-              <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns} onLocal={startLocalGame} onOnline={startOnlineGame} />
+              <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns}
+                onLocal={(sc) => setPendingStart({ scenario: sc, mode: 'local' })}
+                onOnline={(sc) => setPendingStart({ scenario: sc, mode: 'online' })} />
             ))}
             {filteredScenarios.length === 0 && emptyState}
           </div>
@@ -333,13 +349,24 @@ function MainMenu() {
               {filteredScenarios.length === 0 ? emptyState : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredScenarios.map(s => (
-                    <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns} onLocal={startLocalGame} onOnline={startOnlineGame} />
+                    <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns}
+                      onLocal={(sc) => setPendingStart({ scenario: sc, mode: 'local' })}
+                      onOnline={(sc) => setPendingStart({ scenario: sc, mode: 'online' })} />
                   ))}
                 </div>
               )}
             </div>
           </div>
         </div>
+      )}
+
+      {pendingStart && (
+        <LaunchSettingsModal
+          scenarioName={pendingStart.scenario.name}
+          modeLabel={pendingStart.mode === 'local' ? 'Místní hra' : 'Online hra'}
+          onConfirm={confirmStart}
+          onCancel={() => setPendingStart(null)}
+        />
       )}
     </div>
   );
