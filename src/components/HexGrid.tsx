@@ -1,4 +1,4 @@
-import React from 'react'; import { axialToPixel, HEX_SIZE, getSection, terrainColor } from '../logic/hexGrid';
+import React from 'react'; import { axialToPixel, HEX_SIZE, terrainColor } from '../logic/hexGrid';
 import NatoSymbol from './NatoSymbol';
 
 const getHexPoints = (radius) => {
@@ -27,13 +27,10 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], on
       const isSelected = hex?.unitId && hex.unitId === selectedUnitId;
       const highlight = highlightedHexes?.[key];
       const isHovered = hoveredHex === key;
-      const band = getSection(col, leftWidth, centerWidth);
-      const sectionTint = band === 'left' ? 'rgba(47,109,176,0.10)' : band === 'center' ? 'rgba(245,197,24,0.13)' : 'rgba(192,57,43,0.10)';
       const pts = []; for (let i = 0; i < 6; i++) { const a = (Math.PI / 180) * (60 * i - 30); pts.push(`${x + HEX_SIZE * Math.cos(a)},${y + HEX_SIZE * Math.sin(a)}`); }
       terrainLayer.push(
         <g key={key} data-testid={`hex-${q}-${r}`} onClick={() => onHexClick?.(q, r)} onMouseEnter={() => onHexMouseEnter?.(q, r)} onMouseLeave={() => onHexMouseLeave?.(q, r)} className="cursor-pointer">
           <polygon points={pts.join(' ')} fill={terrainColor(terrain?.color)} stroke="#5b4f37" strokeWidth="0.8" className="transition-[filter] hover:brightness-110" />
-          <polygon points={pts.join(' ')} fill={sectionTint} stroke="none" className="pointer-events-none" />
           {highlight && <polygon points={pts.join(' ')} fill={highlight === 'move' ? "rgba(58,166,87,0.32)" : "rgba(192,57,43,0.28)"} stroke={highlight === 'move' ? "#2c7d42" : "#c0392b"} strokeWidth={highlight === 'move' ? "2.5" : "3"} className="pointer-events-none" />}
           {isHovered && !highlight && (activePhase === 'movement' || activePhase === 'attack') && selectedUnitId && <polygon points={pts.join(' ')} fill="rgba(192,57,43,0.4)" className="pointer-events-none" />}
           {isHovered && highlight && <polygon points={pts.join(' ')} fill={highlight === 'move' ? "rgba(58,166,87,0.5)" : "rgba(192,57,43,0.5)"} className="pointer-events-none" />}
