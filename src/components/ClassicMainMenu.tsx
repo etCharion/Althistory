@@ -4,7 +4,6 @@ import { Search, Filter, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, M
 import ScenarioEditor from './ClassicScenarioEditor';
 import GameView from './ClassicGameView';
 import Customization from './ClassicCustomization';
-import LaunchSettingsModal, { LaunchSettings } from './LaunchSettingsModal';
 import { getAllScenarios, getAllCountries, getAllCampaigns, getScenarioCountryIds, getScenarioCountryNames } from '../data/typeUtils';
 import { ThemeToggle } from '../theme';
 
@@ -60,6 +59,9 @@ function MultiCountryFilter({ countries, selected, onChange }) {
 // full-screen browser overlay.
 function ScenarioCard({ s, countries, campaigns, onLocal, onOnline }) {
   const [showOnlineHelp, setShowOnlineHelp] = useState(false);
+  // Volba pravidla pro tuto partii. Doplní se do scénáře až při spuštění hry.
+  const [logisticsLimit, setLogisticsLimit] = useState(false);
+  const configured = { ...s, logisticsLimit };
   return (
     <div className="p-4 border-2 border-gray-100 rounded-xl bg-white hover:border-map-ink-blue transition-all group shadow-sm flex flex-col">
       <div className="flex justify-between items-start mb-2 gap-3">
@@ -76,14 +78,14 @@ function ScenarioCard({ s, countries, campaigns, onLocal, onOnline }) {
         </div>
         <div className="flex flex-col gap-2 shrink-0">
           <button
-            onClick={() => onLocal(s)}
+            onClick={() => onLocal(configured)}
             className="bg-map-ink-green text-white px-6 py-2 rounded-lg font-bold uppercase hover:bg-opacity-90 transition-transform active:scale-95 shadow-md flex items-center gap-2"
           >
             Místní hra
           </button>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => onOnline(s)}
+              onClick={() => onOnline(configured)}
               className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg font-bold uppercase text-[10px] hover:bg-blue-700 transition-all shadow-md flex items-center justify-center gap-2"
             >
               <Wifi size={12} /> Online hra
@@ -101,6 +103,15 @@ function ScenarioCard({ s, countries, campaigns, onLocal, onOnline }) {
               )}
             </button>
           </div>
+          <label className="flex items-center gap-1.5 cursor-pointer select-none mt-0.5" title="Každý zdroj do sekce, která už má 4 zdroje, stojí ze skladu 2 zdroje. Nadlimitní zdroje jsou barevně odlišené.">
+            <input
+              type="checkbox"
+              className="w-3.5 h-3.5 accent-map-ink-blue flex-shrink-0"
+              checked={logisticsLimit}
+              onChange={e => setLogisticsLimit(e.target.checked)}
+            />
+            <span className="text-[9px] font-bold uppercase text-gray-600 tracking-wide">Logistické omezení</span>
+          </label>
         </div>
       </div>
       {s.campaignId && (
@@ -191,10 +202,6 @@ function MainMenu() {
 
   const [showBrowser, setShowBrowser] = useState(false);
 
-  // Před spuštěním hry zobrazíme nastavení (volby pravidel). Po potvrzení
-  // doplníme volby do scénáře a hru skutečně spustíme.
-  const [pendingStart, setPendingStart] = useState<{ scenario: any; mode: 'local' | 'online' } | null>(null);
-
   const startLocalGame = (scenario) => {
     setCurrentScenario(scenario);
     setShowBrowser(false);
@@ -205,15 +212,6 @@ function MainMenu() {
     const gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     localStorage.setItem('lastGameId', gameId);
     navigate(`/game/${gameId}`, { state: { scenario } });
-  };
-
-  const confirmStart = (settings: LaunchSettings) => {
-    if (!pendingStart) return;
-    const { scenario, mode: startMode } = pendingStart;
-    const configured = { ...scenario, logisticsLimit: settings.logisticsLimit };
-    setPendingStart(null);
-    if (startMode === 'local') startLocalGame(configured);
-    else startOnlineGame(configured);
   };
 
   const [lastGameId, setLastGameId] = useState<string | null>(null);
@@ -316,9 +314,7 @@ function MainMenu() {
 
           <div className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
             {filteredScenarios.map(s => (
-              <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns}
-                onLocal={(sc) => setPendingStart({ scenario: sc, mode: 'local' })}
-                onOnline={(sc) => setPendingStart({ scenario: sc, mode: 'online' })} />
+              <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns} onLocal={startLocalGame} onOnline={startOnlineGame} />
             ))}
             {filteredScenarios.length === 0 && emptyState}
           </div>
@@ -349,24 +345,13 @@ function MainMenu() {
               {filteredScenarios.length === 0 ? emptyState : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredScenarios.map(s => (
-                    <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns}
-                      onLocal={(sc) => setPendingStart({ scenario: sc, mode: 'local' })}
-                      onOnline={(sc) => setPendingStart({ scenario: sc, mode: 'online' })} />
+                    <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns} onLocal={startLocalGame} onOnline={startOnlineGame} />
                   ))}
                 </div>
               )}
             </div>
           </div>
         </div>
-      )}
-
-      {pendingStart && (
-        <LaunchSettingsModal
-          scenarioName={pendingStart.scenario.name}
-          modeLabel={pendingStart.mode === 'local' ? 'Místní hra' : 'Online hra'}
-          onConfirm={confirmStart}
-          onCancel={() => setPendingStart(null)}
-        />
       )}
     </div>
   );
