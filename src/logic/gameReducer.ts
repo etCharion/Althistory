@@ -275,12 +275,27 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       if (!isGeneral(state, action.clientId, active)) return state;
       if (state.centralWarehouse[active] <= 0) return state;
       const pid = active;
-      const actualAmount = action.amount === 'max' ? state.centralWarehouse[pid] : Math.min(action.amount, state.centralWarehouse[pid]);
+      // Logistické omezení: jakmile sekce dosáhne 4 zdrojů, každý další zdroj
+      // stojí ze skladu 2 zdroje místo 1. Zdroje proto přidáváme po jednom a
+      // průběžně počítáme skutečnou cenu ze skladu.
+      const logistics = !!state.scenario.logisticsLimit;
+      let sectionCount = state.sectionResources[pid][action.section];
+      let warehouseLeft = state.centralWarehouse[pid];
+      const want = action.amount === 'max' ? Infinity : action.amount;
+      let added = 0;
+      while (added < want) {
+        const unitCost = logistics && sectionCount >= 4 ? 2 : 1;
+        if (warehouseLeft < unitCost) break;
+        warehouseLeft -= unitCost;
+        sectionCount += 1;
+        added += 1;
+      }
+      if (added === 0) return state;
       return {
         ...state,
         undoStack: pushUndo(state, action.clientId),
-        centralWarehouse: { ...state.centralWarehouse, [pid]: state.centralWarehouse[pid] - actualAmount },
-        sectionResources: { ...state.sectionResources, [pid]: { ...state.sectionResources[pid], [action.section]: state.sectionResources[pid][action.section] + actualAmount } }
+        centralWarehouse: { ...state.centralWarehouse, [pid]: warehouseLeft },
+        sectionResources: { ...state.sectionResources, [pid]: { ...state.sectionResources[pid], [action.section]: sectionCount } }
       };
     }
 
@@ -340,7 +355,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       const hex = unitHex(state, unitId);
       if (!hex) return state;
 
-      const isAtMax = unit.resources >= 3;
+      const isAtMax = unit.resources >= 2;
       const clickedUnitBody = !sectionId;
       const sections = getUnitSections((hex as any).q, (hex as any).r, state.scenario);
       const isBoundaryUnit = sections.length > 1;
@@ -348,7 +363,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       let sec = sectionId;
       if (!sec && !isBoundaryUnit) sec = sections[0];
 
-      const canAdd = !!sec && state.sectionResources[active][sec] > 0 && unit.resources < 3;
+      const canAdd = !!sec && state.sectionResources[active][sec] > 0 && unit.resources < 2;
 
       if (isAtMax || (clickedUnitBody && isBoundaryUnit && unit.resources > 0) || (clickedUnitBody && !isBoundaryUnit && unit.resources > 0 && !canAdd)) {
         const origins = unit.resourceOrigins || [];

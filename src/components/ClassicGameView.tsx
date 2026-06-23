@@ -7,15 +7,17 @@ import { controlsSection, isGeneral } from '../logic/gameReducer';
 
 const ROLE_LABELS: Record<string, string> = { general: 'Generál', left: 'Levá sekce', center: 'Střed', right: 'Pravá sekce' };
 
-const ResourceCube = () => (
-  <div className="w-4 h-5 bg-green-600 border-2 border-green-800 rounded shadow-[0_2px_0_0_rgba(0,0,0,0.2)] animate-in zoom-in duration-300 flex-shrink-0" />
+// `over` označuje nadlimitní zdroj (5. a další v sekci při logistickém
+// omezení) – vykreslí se kontrastní oranžovou, aby byla dvojnásobná cena vidět.
+const ResourceCube = ({ over = false }: { over?: boolean }) => (
+  <div className={`w-4 h-5 border-2 rounded shadow-[0_2px_0_0_rgba(0,0,0,0.2)] animate-in zoom-in duration-300 flex-shrink-0 ${over ? 'bg-amber-500 border-amber-700' : 'bg-green-600 border-green-800'}`} />
 );
 
-const Misticka = ({ count, active, warehouse = false, capacity = 12 }) => (
+const Misticka = ({ count, active, warehouse = false, capacity = 12, overFrom }: { count: number; active: boolean; warehouse?: boolean; capacity?: number; overFrom?: number }) => (
   <div className={`transition-all duration-500 ${active ? 'scale-105' : 'opacity-40'}`}>
     <div className={`${warehouse ? 'w-[240px]' : 'w-[140px]'} h-8 border-2 border-slate-800 rounded-lg flex items-center justify-center gap-1 px-2 bg-slate-100/50 backdrop-blur-sm shadow-inner overflow-hidden relative`}>
        <div className="flex gap-1 flex-wrap justify-center max-h-full py-0.5">
-         {Array.from({ length: Math.min(count, capacity) }).map((_, i) => <ResourceCube key={i} />)}
+         {Array.from({ length: Math.min(count, capacity) }).map((_, i) => <ResourceCube key={i} over={overFrom !== undefined && i >= overFrom} />)}
        </div>
        {count > capacity && <span className="absolute right-1 bg-slate-800 text-white px-1.5 py-0.5 text-[8px] font-black rounded shadow-md border border-white">+{count-capacity}</span>}
        {count === 0 && <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black opacity-10 uppercase tracking-widest text-slate-900">PRÁZDNÉ</span>}
@@ -153,7 +155,7 @@ const PHASE_DESCRIPTIONS = {
   },
   'distribution-units': {
     title: 'B) Zdroje jednotkám',
-    text: 'Hráč přiděluje zdroje ze sekcí konkrétním jednotkám v těchto sekcích. Každá jednotka může mít max. 3 zdroje. Zdroje slouží pro pohyb, útok a jako "životy".'
+    text: 'Hráč přiděluje zdroje ze sekcí konkrétním jednotkám v těchto sekcích. Každá jednotka může mít max. 2 zdroje. Zdroje slouží pro pohyb, útok a jako "životy".'
   },
   'movement': {
     title: 'C) Pohyb jednotek',
@@ -416,7 +418,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
 
                   <div className="border-t border-gray-200 pt-2 mb-2">
                     <div className="text-[9px] uppercase flex justify-between">
-                      <span>Zdroje:</span> <span className="font-bold">{gameState.units[selected].resources} / 3</span>
+                      <span>Zdroje:</span> <span className="font-bold">{gameState.units[selected].resources} / 2</span>
                     </div>
                     <div className="text-[9px] uppercase flex justify-between">
                       <span>Figurky:</span> <span className="font-bold">{gameState.units[selected].figures}</span>
@@ -493,7 +495,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
                         ))}
                       </div>
                     )}
-                    <Misticka count={res[section]} active={gameState.phase === 'distribution-sections' || (gameState.phase === 'distribution-units' && res[section] > 0)} />
+                    <Misticka count={res[section]} active={gameState.phase === 'distribution-sections' || (gameState.phase === 'distribution-units' && res[section] > 0)} overFrom={gameState.scenario.logisticsLimit ? 4 : undefined} />
                   </div>
                 ))}
               </div>

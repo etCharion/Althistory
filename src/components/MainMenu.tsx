@@ -4,6 +4,7 @@ import { Search, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, ChevronDo
 import ScenarioEditor from './ScenarioEditor';
 import GameView from './GameView';
 import Customization from './Customization';
+import LaunchSettingsModal, { LaunchSettings } from './LaunchSettingsModal';
 import { getAllScenarios, getAllCountries, getAllCampaigns, getScenarioCountryIds, getScenarioCountryNames } from '../data/typeUtils';
 import { ThemeToggle } from '../theme';
 
@@ -183,6 +184,10 @@ function MainMenu() {
     setMode('editor');
   };
 
+  // Před spuštěním hry zobrazíme nastavení (volby pravidel). Po potvrzení
+  // doplníme volby do scénáře a hru skutečně spustíme.
+  const [pendingStart, setPendingStart] = useState<{ scenario: any; mode: 'local' | 'online' } | null>(null);
+
   const startLocalGame = (scenario) => {
     setCurrentScenario(scenario);
     setMode('game');
@@ -192,6 +197,15 @@ function MainMenu() {
     const gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     localStorage.setItem('lastGameId', gameId);
     navigate(`/game/${gameId}`, { state: { scenario } });
+  };
+
+  const confirmStart = (settings: LaunchSettings) => {
+    if (!pendingStart) return;
+    const { scenario, mode: startMode } = pendingStart;
+    const configured = { ...scenario, logisticsLimit: settings.logisticsLimit };
+    setPendingStart(null);
+    if (startMode === 'local') startLocalGame(configured);
+    else startOnlineGame(configured);
   };
 
   const [lastGameId, setLastGameId] = useState<string | null>(null);
@@ -284,11 +298,22 @@ function MainMenu() {
         ) : (
           <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
             {filteredScenarios.map(s => (
-              <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns} onLocal={startLocalGame} onOnline={startOnlineGame} />
+              <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns}
+                onLocal={(sc) => setPendingStart({ scenario: sc, mode: 'local' })}
+                onOnline={(sc) => setPendingStart({ scenario: sc, mode: 'online' })} />
             ))}
           </div>
         )}
       </div>
+
+      {pendingStart && (
+        <LaunchSettingsModal
+          scenarioName={pendingStart.scenario.name}
+          modeLabel={pendingStart.mode === 'local' ? 'Místní hra' : 'Online hra'}
+          onConfirm={confirmStart}
+          onCancel={() => setPendingStart(null)}
+        />
+      )}
     </div>
   );
 }

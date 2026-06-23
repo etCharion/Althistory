@@ -28,7 +28,7 @@ const PHASE_DESCRIPTIONS = {
   },
   'distribution-units': {
     title: 'B) Zdroje jednotkám',
-    text: 'Hráč přiděluje zdroje ze sekcí konkrétním jednotkám v těchto sekcích. Každá jednotka může mít max. 3 zdroje. Zdroje slouží pro pohyb, útok a jako "životy".'
+    text: 'Hráč přiděluje zdroje ze sekcí konkrétním jednotkám v těchto sekcích. Každá jednotka může mít max. 2 zdroje. Zdroje slouží pro pohyb, útok a jako "životy".'
   },
   'movement': {
     title: 'C) Pohyb jednotek',
@@ -41,14 +41,17 @@ const PHASE_DESCRIPTIONS = {
   'gameOver': { title: 'Konec hry', text: 'Bitva byla rozhodnuta.' }
 };
 
-// A single resource cube as drawn inside the trays / warehouse box.
-const DockCube = ({ filled }: { filled: boolean }) => (
-  <div className="w-[13px] h-[16px] rounded-[2px]" style={filled ? { background: '#3aa657', border: '1.5px solid #2c7d42' } : { background: 'transparent', border: '1.5px dashed #cbb98c' }} />
+// A single resource cube as drawn inside the trays / warehouse box. The "over"
+// variant marks a logistika-overlimit resource (the 5th+ in a section), drawn
+// in a contrasting amber so the doubled cost is visible.
+const DockCube = ({ filled, over = false }: { filled: boolean; over?: boolean }) => (
+  <div className="w-[13px] h-[16px] rounded-[2px]" style={filled ? (over ? { background: '#e0913a', border: '1.5px solid #b96f1e' } : { background: '#3aa657', border: '1.5px solid #2c7d42' }) : { background: 'transparent', border: '1.5px dashed #cbb98c' }} />
 );
 
-const CubeBox = ({ count, capacity = 12, className = '' }: { count: number; capacity?: number; className?: string }) => (
+// `overFrom` (when set) is the index from which cubes are drawn as overlimit.
+const CubeBox = ({ count, capacity = 12, className = '', overFrom }: { count: number; capacity?: number; className?: string; overFrom?: number }) => (
   <div className={`relative flex flex-wrap gap-[5px] items-center justify-center rounded-[10px] px-3 py-2.5 ${className}`} style={{ background: 'rgba(28,63,107,.05)', border: '1.5px solid #c4b289', boxShadow: 'inset 0 2px 5px rgba(60,45,20,.12)' }}>
-    {Array.from({ length: Math.min(count, capacity) }).map((_, i) => <DockCube key={i} filled />)}
+    {Array.from({ length: Math.min(count, capacity) }).map((_, i) => <DockCube key={i} filled over={overFrom !== undefined && i >= overFrom} />)}
     {count === 0 && <span className="text-[10px] font-condensed font-extrabold uppercase tracking-[0.15em] text-[#a99c78]">Prázdné</span>}
     {count > capacity && <span className="absolute right-1 bg-ally text-white px-1.5 py-0.5 text-[8px] font-extrabold rounded">+{count - capacity}</span>}
   </div>
@@ -398,7 +401,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
                     </button>
                   ))}
                 </div>
-                <CubeBox count={res[id]} />
+                <CubeBox count={res[id]} overFrom={sc.logisticsLimit ? 4 : undefined} />
               </div>
             ))}
           </div>
@@ -416,7 +419,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
           <div className="flex-1 flex gap-3.5">
             {SECTIONS.map(({ id, label }) => (
               <div key={id} className="flex-1 flex flex-col items-center justify-center gap-2 py-1.5 px-2 rounded-[13px]" style={{ background: 'rgba(255,253,247,.6)' }}>
-                <CubeBox count={res[id]} />
+                <CubeBox count={res[id]} overFrom={sc.logisticsLimit ? 4 : undefined} />
                 <span className="font-condensed font-extrabold text-[15px]" style={{ color: res[id] > 0 ? '#2c7d42' : '#a99c78' }}>{res[id]} zbývá</span>
               </div>
             ))}
@@ -590,7 +593,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
                     <div className="grid grid-cols-[auto_auto] gap-x-2.5 gap-y-1 text-[12px] flex-1">
                       <span className="font-semibold uppercase tracking-[0.04em] text-[#8593a6] text-[10px]">Pohyb</span><span className="font-bold text-right text-ink">{selType?.movement}</span>
                       <span className="font-semibold uppercase tracking-[0.04em] text-[#8593a6] text-[10px]">Dostřel</span><span className="font-bold text-right text-ink">{selType?.shootingRange.join('·')}</span>
-                      <span className="font-semibold uppercase tracking-[0.04em] text-[#8593a6] text-[10px]">Zdroje</span><span className="font-bold text-right text-ink">{selUnit.resources} / 3</span>
+                      <span className="font-semibold uppercase tracking-[0.04em] text-[#8593a6] text-[10px]">Zdroje</span><span className="font-bold text-right text-ink">{selUnit.resources} / 2</span>
                     </div>
                   </div>
                   <div className="flex items-center justify-between px-2.5 py-2 rounded-[9px] mb-2" style={{ background: '#f1ead6' }}>
