@@ -1,4 +1,4 @@
-import { getDistance, getUnitSections, getNeighbors, getTargetableUnits, getDiceCount, isImpassableForUnit } from './hexGrid';
+import { getDistance, getUnitSections, getNeighbors, getTargetableUnits, getDiceCount, getReachableDistances, isImpassableForUnit } from './hexGrid';
 import { rollDice } from './dice';
 import type { GameState, PlayerId, SectionId, Seats, UndoSnapshot } from '../types/game';
 
@@ -12,7 +12,9 @@ export type Action =
   | { type: 'END_TURN'; clientId: string }
   | { type: 'ASSIGN_RESOURCE'; clientId: string; unitId: string; sectionId?: SectionId }
   | { type: 'MOVE'; clientId: string; unitId: string; q: number; r: number }
-  | { type: 'ATTACK'; clientId: string; attackerId: string; targetId: string }
+  // `seed` určuje výsledek hodu kostkami – generuje ho action creator, aby byl
+  // reducer deterministický (viz rollDice).
+  | { type: 'ATTACK'; clientId: string; attackerId: string; targetId: string; seed?: number }
   | { type: 'DESTROY_OVERLAY'; clientId: string; unitId: string }
   | { type: 'DISMISS_COMBAT'; clientId: string }
   | { type: 'RESOLVE_RETREAT'; clientId: string; unitId: string; q: number; r: number }
@@ -104,9 +106,9 @@ export function onTeam(state: GameState, clientId: string, team: PlayerId): bool
 const unitHex = (state: GameState, uid: string) => Object.values(state.grid).find((h: any) => h.unitId === uid) || null;
 
 // Capture the current per-phase state so a reversible action (DISTRIBUTE / MOVE)
-// can be undone while the phase is still open. The grid hexes are cloned because
-// the reducer mutates hex objects in place when moving units; without the clone
-// the snapshot would change underneath us.
+// can be undone while the phase is still open. The grid hexes are cloned
+// defensively – the reducer treats hexes as immutable, but a stray in-place
+// mutation anywhere would otherwise silently corrupt the snapshot.
 function pushUndo(state: GameState, clientId: string): UndoSnapshot[] {
   const snap: UndoSnapshot = {
     clientId,
@@ -400,47 +402,53 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       if (!unit.hasMoved && unit.resources <= 0) return state;
       const fHex = unitHex(state, uid);
       if (!fHex) return state;
-      const dist = getDistance(fHex, { q: tq, r: tr });
       const utype = unitTypes.find(ut => ut.id === unit.typeId);
-      if (!utype || (unit.movementUsed + dist) > utype.movement || state.grid[`${tq},${tr}`]?.unitId) return state;
+      if (!utype) return state;
+      const remaining = utype.movement - unit.movementUsed;
+      if (remaining <= 0) return state;
 
-      // ---- Omezení terénu (neprůchodnost a omezený vstup/výstup) ----
-      const moveCategory = utype.category || (utype.id === 'tank' ? 'tank' : (utype.id === 'artillery' ? 'artillery' : 'infantry'));
-      const tHex = state.grid[`${tq},${tr}`];
-      // Cíl je pro tuto jednotku zcela neprůchozí (typ jednotky / strana).
-      if (isImpassableForUnit(tHex, terrainTypes, overlayTypes, moveCategory, unit.ownerId)) return state;
-      const tTerrain = terrainTypes.find(t => t.id === tHex?.terrainTypeId);
-      const tOverlay = overlayTypes.find(o => o.id === tHex?.overlayTypeId);
+      // Cíl musí být dosažitelný legální cestou. BFS respektuje neprůchodný
+      // terén, obsazená pole, „stop" terén i vstup/výstup pouze na vedlejší
+      // pole – jde o tutéž množinu, kterou UI zvýrazňuje jako dosažitelnou.
+      // Vzdálenost se účtuje podle skutečné cesty (např. obejití řeky), ne
+      // vzdušnou čarou.
+      const moveCategory = categoryOf(utype);
+      const distances = getReachableDistances((fHex as any).q, (fHex as any).r, remaining, state.grid, terrainTypes, overlayTypes, { unitCategory: moveCategory, ownerId: unit.ownerId });
+      const dist = distances[`${tq},${tr}`];
+      if (dist === undefined) return state;
+
       const fTerrain = terrainTypes.find(t => t.id === (fHex as any)?.terrainTypeId);
       const fOverlay = overlayTypes.find(o => o.id === (fHex as any)?.overlayTypeId);
-      // Vstup na cílové pole je povolen jen z vedlejšího pole.
-      if ((tTerrain?.entryFromAdjacentOnly || tOverlay?.entryFromAdjacentOnly) && dist !== 1) return state;
-      // Z výchozího pole lze vystoupit jen na vedlejší pole.
+      // Výstup z výchozího pole jen na vedlejší pole spotřebuje veškerý pohyb.
       const exitAdjacentOnly = !!(fTerrain?.exitToAdjacentOnly || fOverlay?.exitToAdjacentOnly);
-      if (exitAdjacentOnly && dist !== 1) return state;
 
-      // All checks passed – snapshot before mutating so the move can be undone
+      // All checks passed – snapshot before applying so the move can be undone
       // while the movement phase is still open.
       const undoStack = pushUndo(state, action.clientId);
 
+      // Hexy se klonují (nikdy nemutují) – stejné objekty sdílí předchozí stav
+      // i undo snapshoty a reducer musí zůstat čistý.
       const nGrid = { ...state.grid } as any;
-      const fromHex = nGrid[`${(fHex as any).q},${(fHex as any).r}`];
-      const targetHex = nGrid[`${tq},${tr}`];
+      const fromKey = `${(fHex as any).q},${(fHex as any).r}`;
+      const targetKey = `${tq},${tr}`;
+      const fromHex = { ...nGrid[fromKey], unitId: undefined };
       if (fromHex.overlayTypeId === 'sandbags') fromHex.overlayTypeId = undefined;
-      fromHex.unitId = undefined;
-      targetHex.unitId = uid;
+      nGrid[fromKey] = fromHex;
+      const targetHex = { ...nGrid[targetKey], unitId: uid };
 
       const totalDist = unit.movementUsed + dist;
       const newResources = unit.hasMoved ? unit.resources : unit.resources - 1;
       const targetTerrain = terrainTypes.find(t => t.id === targetHex?.terrainTypeId);
+      const targetOverlay = overlayTypes.find(o => o.id === targetHex?.overlayTypeId);
       const targetOverlayId = targetHex?.overlayTypeId;
 
-      let isStopTerrain = targetTerrain?.movementRestriction === 'stop' || targetOverlayId === 'wire';
+      let isStopTerrain = targetTerrain?.movementRestriction === 'stop' || targetOverlay?.movementRestriction === 'stop' || targetOverlayId === 'wire';
       let allowAttackAfterStop = false;
       if (targetOverlayId === 'wire') {
         allowAttackAfterStop = true;
         if (utype.category === 'tank') targetHex.overlayTypeId = undefined;
       }
+      nGrid[targetKey] = targetHex;
       // Výstup z výchozího pole jen na vedlejší pole spotřebuje veškerý pohyb
       // (po vystoupení už nelze pokračovat), neovlivňuje však možnost útoku.
       const finalMovementUsed = (isStopTerrain || exitAdjacentOnly) ? utype.movement : totalDist;
@@ -451,7 +459,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       const { nVP, newGrid: updatedGrid } = checkObjectives(nGrid, state.units, active, 'immediate', state.currentTurn, state.victoryPoints);
 
       const newUnits = { ...state.units, [uid]: { ...unit, resources: newResources, hasMoved: true, movementUsed: finalMovementUsed, hasAttacked } };
-      return { ...state, grid: updatedGrid, units: newUnits, victoryPoints: nVP, unitStats: newStats, undoStack, winner: computeWinner(state.scenario, state.units, nVP) };
+      return { ...state, grid: updatedGrid, units: newUnits, victoryPoints: nVP, unitStats: newStats, undoStack, winner: computeWinner(state.scenario, newUnits, nVP) };
     }
 
     // -------------------------------------------------- Commander: attack
@@ -483,7 +491,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       let ignoreFlags = 0;
       if (!isArtillery) ignoreFlags = Math.max(tarTerrain.ignoreFlags ?? 0, tarOverlay?.ignoreFlags ?? 0);
 
-      const dice = rollDice(dC);
+      const dice = rollDice(dC, action.seed);
       let h = 0, f = 0;
       const targetUnitType = unitTypes.find(ut => ut.id === tar.typeId);
       const targetCategory = categoryOf(targetUnitType);
@@ -500,7 +508,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       let attackerStats = { ...nStats[aid] };
       attackerStats.damageDealt += h;
       targetStats.damageTaken += h;
-      if (!targetStats.attackers.includes(att.typeId)) targetStats.attackers.push(att.typeId);
+      if (!targetStats.attackers.includes(att.typeId)) targetStats.attackers = [...targetStats.attackers, att.typeId];
 
       for (let i = 0; i < h; i++) { if (upT.resources > 0) upT.resources--; else upT.figures--; }
 
@@ -511,8 +519,10 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
         attackerStats.kills += 1;
         targetStats.destroyedInRound = state.currentTurn;
         delete nU[tid];
-        nG[`${(tH as any).q},${(tH as any).r}`].unitId = undefined;
-        if (nG[`${(tH as any).q},${(tH as any).r}`].overlayTypeId === 'sandbags') nG[`${(tH as any).q},${(tH as any).r}`].overlayTypeId = undefined;
+        const tKey = `${(tH as any).q},${(tH as any).r}`;
+        const clearedHex = { ...nG[tKey], unitId: undefined };
+        if (clearedHex.overlayTypeId === 'sandbags') clearedHex.overlayTypeId = undefined;
+        nG[tKey] = clearedHex;
         nVP[att.ownerId].push({ id: `kill-${tid}-${state.currentTurn}`, type: 'unit', round: state.currentTurn, unitStats: targetStats });
         isEliminated = true;
       } else {
@@ -550,7 +560,8 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       const hex = unitHex(state, uid);
       if (!hex || (hex as any).overlayTypeId !== 'wire') return state;
       const nG = { ...state.grid } as any;
-      nG[`${(hex as any).q},${(hex as any).r}`].overlayTypeId = undefined;
+      const key = `${(hex as any).q},${(hex as any).r}`;
+      nG[key] = { ...nG[key], overlayTypeId: undefined };
       return { ...state, grid: nG, units: { ...state.units, [uid]: { ...unit, resources: unit.resources - 1, hasAttacked: true } } };
     }
 
@@ -587,8 +598,10 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
         if (u.figures <= 0) {
           uStats.destroyedInRound = state.currentTurn;
           delete nU[uid];
-          nG[`${(fH as any).q},${(fH as any).r}`].unitId = undefined;
-          if (nG[`${(fH as any).q},${(fH as any).r}`].overlayTypeId === 'sandbags') nG[`${(fH as any).q},${(fH as any).r}`].overlayTypeId = undefined;
+          const fKey = `${(fH as any).q},${(fH as any).r}`;
+          const clearedHex = { ...nG[fKey], unitId: undefined };
+          if (clearedHex.overlayTypeId === 'sandbags') clearedHex.overlayTypeId = undefined;
+          nG[fKey] = clearedHex;
           const attacker = state.units[pr.attackerId];
           if (attacker) {
             nVP[attacker.ownerId].push({ id: `kill-${uid}-${state.currentTurn}`, type: 'unit', round: state.currentTurn, unitStats: uStats });
@@ -622,12 +635,17 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       // Retreat into a neighbouring hex (must move backwards relative to owner).
       if (getDistance(fH, { q: tq, r: tr }) !== 1 || state.grid[`${tq},${tr}`]?.unitId) return state;
       if (unit.ownerId === 'player1' ? tr <= (fH as any).r : tr >= (fH as any).r) return state;
+      // Ústup do neprůchodného terénu (řeka, terén zakázaný pro danou kategorii
+      // jednotky či stranu) není povolen.
+      const retreatType = unitTypes.find(ut => ut.id === unit.typeId);
+      if (isImpassableForUnit(state.grid[`${tq},${tr}`], terrainTypes, overlayTypes, categoryOf(retreatType), unit.ownerId)) return state;
 
       const nG = { ...state.grid } as any;
-      const fromHex = nG[`${(fH as any).q},${(fH as any).r}`];
+      const fromKey = `${(fH as any).q},${(fH as any).r}`;
+      const fromHex = { ...nG[fromKey], unitId: undefined };
       if (fromHex.overlayTypeId === 'sandbags') fromHex.overlayTypeId = undefined;
-      fromHex.unitId = undefined;
-      nG[`${tq},${tr}`].unitId = uid;
+      nG[fromKey] = fromHex;
+      nG[`${tq},${tr}`] = { ...nG[`${tq},${tr}`], unitId: uid };
       const nStats = { ...state.unitStats } as any;
       if (nStats[uid]) nStats[uid] = { ...nStats[uid], distanceTraveled: nStats[uid].distanceTraveled + 1 };
       const { nVP, newGrid: updatedGrid } = checkObjectives(nG, state.units, active, 'immediate', state.currentTurn, state.victoryPoints);
@@ -659,10 +677,11 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       const fH = unitHex(state, uid);
       if (!fH || state.grid[`${q},${r}`]?.unitId) return { ...state, pendingTakeGround: null };
       const nG = { ...state.grid } as any;
-      const fromHex = nG[`${(fH as any).q},${(fH as any).r}`];
+      const fromKey = `${(fH as any).q},${(fH as any).r}`;
+      const fromHex = { ...nG[fromKey], unitId: undefined };
       if (fromHex.overlayTypeId === 'sandbags') fromHex.overlayTypeId = undefined;
-      fromHex.unitId = undefined;
-      nG[`${q},${r}`].unitId = uid;
+      nG[fromKey] = fromHex;
+      nG[`${q},${r}`] = { ...nG[`${q},${r}`], unitId: uid };
       const nStats = { ...state.unitStats } as any;
       if (nStats[uid]) nStats[uid] = { ...nStats[uid], distanceTraveled: nStats[uid].distanceTraveled + 1 };
       const { nVP, newGrid: updatedGrid } = checkObjectives(nG, state.units, active, 'immediate', state.currentTurn, state.victoryPoints);

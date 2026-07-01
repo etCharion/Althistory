@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { getNeighbors, getReachableHexes, getTargetableUnits } from '../logic/hexGrid';
+import { getNeighbors, getReachableHexes, getTargetableUnits, isImpassableForUnit } from '../logic/hexGrid';
+import { newDiceSeed } from '../logic/dice';
 import { subscribeToGame, applyAction, createGameIfMissing } from '../logic/firebaseService';
 import { reducer, createInitialGameState } from '../logic/gameReducer';
 import type { Action, Rules } from '../logic/gameReducer';
@@ -40,7 +41,8 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
   const endTurn = () => dispatch({ type: 'END_TURN', clientId });
   const assignResourceToUnit = (uid, sectionId?) => dispatch({ type: 'ASSIGN_RESOURCE', clientId, unitId: uid, sectionId });
   const moveUnit = (uid, q, r) => dispatch({ type: 'MOVE', clientId, unitId: uid, q, r });
-  const attackUnit = (aid, tid) => dispatch({ type: 'ATTACK', clientId, attackerId: aid, targetId: tid });
+  // Seed hodu kostkami vzniká tady (mimo reducer), aby byl reducer deterministický.
+  const attackUnit = (aid, tid) => dispatch({ type: 'ATTACK', clientId, attackerId: aid, targetId: tid, seed: newDiceSeed() });
   const destroyOverlay = (uid) => dispatch({ type: 'DESTROY_OVERLAY', clientId, unitId: uid });
   const retreatUnit = (uid, q, r) => dispatch({ type: 'RESOLVE_RETREAT', clientId, unitId: uid, q, r });
   const takeGround = (uid, q, r) => dispatch({ type: 'RESOLVE_TAKE_GROUND', clientId, unitId: uid, q, r });
@@ -92,10 +94,15 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     const unit = gameState.units[uid];
     const fH = getUnitHex(uid);
     if (!unit || !fH) return [];
+    const utype = unitTypes.find(ut => ut.id === unit.typeId);
+    const category = utype?.category || (utype?.id === 'tank' ? 'tank' : (utype?.id === 'artillery' ? 'artillery' : 'infantry'));
     const neighbors = getNeighbors((fH as any).q, (fH as any).r);
     const valid = neighbors.filter(n => {
       const hex = gameState.grid[`${n.q},${n.r}`];
       if (!hex || hex.unitId) return false;
+      // Do neprůchodného terénu (řeka apod.) nelze ustoupit – stejná kontrola
+      // jako v reduceru (RESOLVE_RETREAT).
+      if (isImpassableForUnit(hex, terrainTypes, overlayTypes, category, unit.ownerId)) return false;
       if (unit.ownerId === 'player1') return n.r > (fH as any).r;
       if (unit.ownerId === 'player2') return n.r < (fH as any).r;
       return false;
