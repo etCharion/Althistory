@@ -33,7 +33,7 @@ Audit ale odhalil **jednu kritickou díru v mechanice** (pohyb jednotek nevalidu
 
 ### Nalezené problémy
 
-#### 🔴 KRITICKÉ — `MOVE` nevaliduje cestu, jednotky mohou „teleportovat"
+#### 🔴 KRITICKÉ — `MOVE` nevaliduje cestu, jednotky mohou „teleportovat" ✅ *opraveno*
 
 `gameReducer.ts:394-455`. Reducer při pohybu kontroluje pouze:
 vzdálenost vzdušnou čarou (`getDistance`) ≤ zbývající pohyb, neprůchodnost **cílového** pole a pravidla entry/exit-adjacent. **Nevolá `getReachableHexes`** — nekontroluje, že mezi startem a cílem existuje průchozí cesta.
@@ -46,11 +46,11 @@ UI sice zvýrazňuje dosažitelná pole, ale `handleHexClick` v `GameView.tsx:30
 
 Zneužitelné v lokální i online hře (reducer je jediná autorita a tuto kontrolu nemá). **Oprava**: v `MOVE` ověřit `getReachableHexes(fHex.q, fHex.r, limit, …).includes(\`${tq},${tr}\`)` — funkce už existuje v `src/logic/hexGrid.ts:97` a používá správnou kategorii jednotky i vlastníka; volitelně navíc v UI ignorovat kliky mimo zvýrazněná pole.
 
-#### 🟠 VYSOKÉ — ústup ignoruje neprůchodný terén
+#### 🟠 VYSOKÉ — ústup ignoruje neprůchodný terén ✅ *opraveno*
 
 `RESOLVE_RETREAT` (`gameReducer.ts:623-624`) kontroluje jen vzdálenost 1, obsazenost a směr ústupu; `getRetreatHexes` (`useGameLogic.ts:96-102`) totéž. Ani jedno nevolá `isImpassableForUnit` → jednotka může ustoupit **do řeky** nebo do terénu neprůchodného pro svou kategorii/stranu. Oprava je na dvou místech jeden řádek (filtr přes `isImpassableForUnit`).
 
-#### 🟠 STŘEDNÍ — nečistý reducer × `React.StrictMode` (koroze stavu v dev módu)
+#### 🟠 STŘEDNÍ — nečistý reducer × `React.StrictMode` (koroze stavu v dev módu) ✅ *opraveno*
 
 Reducer po mělké kopii gridu (`{ ...state.grid }`) **mutuje sdílené hex objekty in-place** (`fromHex.unitId = undefined` v MOVE, ATTACK, RESOLVE_RETREAT, RESOLVE_TAKE_GROUND, DESTROY_OVERLAY) a navíc volá `Math.random` (`rollDice`). `main.tsx` zapíná `React.StrictMode`, který v dev režimu volá updater `setLocalState(prev => reducer(prev, action, rules))` (`useGameLogic.ts:33`) **dvakrát**:
 
@@ -61,7 +61,7 @@ Produkční build (StrictMode se v produkci nedvojí) ani online hra (transakce 
 
 #### 🟡 NÍZKÉ
 
-- **`MOVE` počítá vítěze ze zastaralých jednotek** — `computeWinner(state.scenario, state.units, nVP)` na `gameReducer.ts:454` používá `state.units` místo `newUnits`. Dnes bez následku (pohyb jednotky neničí), ale nekonzistentní se zbytkem reduceru.
+- **`MOVE` počítá vítěze ze zastaralých jednotek** ✅ *opraveno* — `computeWinner(state.scenario, state.units, nVP)` používal `state.units` místo `newUnits`. Dnes bez následku (pohyb jednotky neničí), ale nekonzistentní se zbytkem reduceru.
 - **Zaseknutelný `pendingCombat`** — `DISMISS_COMBAT` smí jen hráč aktivního týmu (`gameReducer.ts:560`). Když se útočníkova strana odpojí hned po útoku, obránce overlay nezavře a `hasPendingCombat` blokuje veškeré další akce. Řešení: povolit dismiss oběma týmům, nebo timeout na serverovém čase.
 - **Mrtvé pole `maxSectionResources`** — je v typech (`types/game.ts:113`), v editoru i ve scénářích, ale reducer ho nikde nevynucuje. Buď vynutit v `DISTRIBUTE`, nebo odstranit.
 - **Katalogy pravidel se načítají jen při mountu** (`GameView.tsx:195-215`). Když někdo změní typy jednotek/terénů v Nastavení uprostřed online hry, klienti počítají s různými pravidly. Řešení: zmrazit kopii katalogů do dokumentu hry při jejím založení.
@@ -103,9 +103,9 @@ Pro hru v okruhu přátel je to přijatelný kompromis. Pokud má být hra veře
 
 | Priorita | Úkol | Pracnost |
 |---|---|---|
-| **P1** | Opravit validaci pohybu v `MOVE` (použít `getReachableHexes`) | malá |
-| **P1** | Opravit ústup do neprůchodného terénu (`RESOLVE_RETREAT` + `getRetreatHexes`) | malá |
-| **P1** | Zčistit reducer: klonovat mutované hexy, hod kostkou předávat v akci | malá–střední |
+| **P1** ✅ | Opravit validaci pohybu v `MOVE` (použít `getReachableHexes`) — **hotovo** | malá |
+| **P1** ✅ | Opravit ústup do neprůchodného terénu (`RESOLVE_RETREAT` + `getRetreatHexes`) — **hotovo** | malá |
+| **P1** ✅ | Zčistit reducer: klonovat mutované hexy, hod kostkou předávat v akci (seed) — **hotovo** | malá–střední |
 | **P2** | Unit testy reduceru (Vitest) — čistý reducer je ideální kandidát; testy pohybu, útoku, ústupu, objektivů, undo | střední |
 | **P2** | CI: `npm run build` (+ testy) na pull requesty | malá |
 | **P3** | Kombat log + toast při odmítnuté akci + indikace „hotových" jednotek | střední |

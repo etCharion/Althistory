@@ -94,9 +94,13 @@ export function isImpassableForUnit(hex, terrainTypes, overlayTypes = [], unitCa
   return false;
 }
 
-export function getReachableHexes(q, r, movementLimit, grid, terrainTypes, overlayTypes = [], options = {}) {
+// BFS přes průchozí pole. Vrací mapu `"q,r" -> délka nejkratší legální cesty`
+// (bez výchozího pole). Respektuje neprůchodnost, obsazená pole, „stop" terén
+// i vstup/výstup pouze na vedlejší pole – reducer podle ní validuje pohyb a
+// účtuje skutečně ušlou vzdálenost, UI z ní zvýrazňuje dosažitelná pole.
+export function getReachableDistances(q, r, movementLimit, grid, terrainTypes, overlayTypes = [], options = {}): Record<string, number> {
   const { unitCategory = undefined, ownerId = undefined } = options as any;
-  const reachable = new Set();
+  const distances: Record<string, number> = {};
   const queue = [{ q, r, dist: 0 }];
   const visited = new Set();
   visited.add(`${q},${r}`);
@@ -110,7 +114,6 @@ export function getReachableHexes(q, r, movementLimit, grid, terrainTypes, overl
 
   while (queue.length > 0) {
     const { q: cq, r: cr, dist: cd } = queue.shift();
-    if (cd > 0) reachable.add(`${cq},${cr}`);
     if (cd >= movementLimit) continue;
     // Po vystoupení z pole s omezeným výstupem už nelze pokračovat v pohybu.
     if (cd > 0 && exitAdjacentOnly) continue;
@@ -138,10 +141,15 @@ export function getReachableHexes(q, r, movementLimit, grid, terrainTypes, overl
       if (entryAdjacentOnly && cd !== 0) continue;
 
       visited.add(key);
+      distances[key] = cd + 1;
       queue.push({ q: n.q, r: n.r, dist: cd + 1 });
     }
   }
-  return Array.from(reachable);
+  return distances;
+}
+
+export function getReachableHexes(q, r, movementLimit, grid, terrainTypes, overlayTypes = [], options = {}) {
+  return Object.keys(getReachableDistances(q, r, movementLimit, grid, terrainTypes, overlayTypes, options));
 }
 
 export function isBlocking(q, r, grid, terrainTypes, overlayTypes = []) {
