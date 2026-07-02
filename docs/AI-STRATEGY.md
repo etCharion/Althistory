@@ -130,3 +130,150 @@ legální a hra musí skončit vítězem.
   současná implementace odpovídá „normální".
 - AI zatím hraje jen v lokální hře; protože mluví stejnými akcemi jako lidský
   klient, lze ji později posadit i na seat v online hře.
+
+---
+
+# Část II — Situační postoje ✅ *implementováno*
+
+*Systém **postojů (postur)** — variant strategie, mezi kterými AI přepíná
+podle typu bitvy, vývoje skóre a poměru sil. Útočník se chová jinak než
+obránce, prohrávající jinak než vedoucí. Implementace: `src/logic/aiPosture.ts`
+(hodnocení situace, matice, katalog vah), napojení v `src/logic/ai.ts`, odznak
+aktuálního postoje v liště tahu počítače, testy v `aiPosture.test.ts`.*
+
+## 10. Princip: jedna doktrína, více postojů
+
+Základní chování (Část I) zůstává — mění se jen **váhy `W` a několik
+behaviorálních přepínačů**. Postoj je tedy „nálada" téhož velitele, ne jiný
+algoritmus. To má tři výhody:
+
+1. žádné nové riziko nelegálních tahů (rozhodovací kostra je stejná),
+2. každý postoj je čitelný — hráč pozná, že se AI zakopala nebo že zaútočila
+   vabank, což je přesně ta věrohodnost, o kterou jde,
+3. ladí se tabulkou, ne kódem.
+
+Postoj se vyhodnocuje **deterministicky z aktuálního stavu hry** (žádná paměť
+mezi tahy — AI zůstává čistou funkcí). Vstupy se mění po tazích, ne po akcích,
+takže postoj přirozeně drží celý tah a nepřeskakuje.
+
+## 11. Vstupy situačního hodnocení
+
+| Vstup | Výpočet | Hodnoty |
+|---|---|---|
+| **Role v bitvě** `role` | Z rozestavení scénáře (stabilní celou hru): kolik objektivů získatelných pro AI drží na začátku soupeř/nikdo vs. kolik jich AI musí bránit; + kdo má převahu sil na startu. Scénář „dobij most" → AI s mostem je *obránce*, druhá strana *útočník*; bez objektivů → *střetná bitva*. | útočník / obránce / střetná |
+| **Bodová situace** `score` | `myNeed = VP_k_výhře − mojeVP`, `enemyNeed` totéž pro soupeře. Porovnání potřeb, ne absolutních bodů. | vedu / vyrovnáno / prohrávám / **kritické** (`enemyNeed ≤ 2` a menší než `myNeed`) |
+| **Poměr sil** `force` | Součet (figurky + zdroje) × hodnota typu (tank 1.3, dělo 1.2, pěchota 1.0), můj / soupeřův. Pásma s hysterezí, aby postoj nekmital na hranici. | převaha (≥ 1.3) / vyrovnané / slabší (≤ 0.75) |
+| **Fáze hry** `turn` | Číslo tahu. | otevření (1.–2. tah) / střed / — |
+
+## 12. Katalog postojů
+
+Multiplikátory se vztahují k základním vahám `W` z Části I.
+
+### ⚔️ ÚTOK (ofenzíva)
+*Kdy: role útočník a neprohrávám kriticky; nebo vyrovnaná střetná bitva s převahou.*
+Tempo a zábor prostoru: APPROACH ×1.4, OBJ_CAPTURE ×1.3, PUSH_OFF_OBJ ×1.5,
+DANGER ×0.8, MOVE_MARGIN 0.3. Zásobování: těžiště dostává víc (koncentrace).
+Take-ground: standardní pravidla. Ústup: standardní.
+
+### 🛡️ OBRANA (pevná obrana)
+*Kdy: role obránce a nemám důvod vylézt (neprohrávám, síly vyrovnané či slabší).*
+Drž linii a nech soupeře krvácet: APPROACH ×0.5 (jednotky se nehrnou vpřed,
+ale objektivy vlastní poloviny stále přitahují), COVER ×1.6, HOLD_OBJ ×1.4,
+DANGER ×1.3, MOVE_MARGIN 0.6. Zásobování: dělostřelectvo a posádky objektivů
+přednostně. Take-ground: **jen objektivy** (nevylézat ze zákopů za ustupujícím
+nepřítelem). Ústup: ochotnější (ztráta jednotky = VP soupeři; pozice ano,
+životy ne — kromě objektivů).
+
+### 🗡️ VÝPAD (protiútok)
+*Kdy: role obránce, ale získal jsem lokální převahu (force = převaha), nebo
+soupeř oslabil útok (vedu na body v obranné roli).*
+Dočasně útočné chování s důrazem na zničení oslabených sil: jako ÚTOK, navíc
+KILL ×1.3 a FOCUS ×1.5 — cíl výpadu je dorazit, ne dobýt. Take-ground:
+standardní. Jakmile převaha pomine, hodnocení samo sklouzne zpět do OBRANY.
+
+### 🏰 KONSOLIDACE (udržet vedení)
+*Kdy: vedu na body a nemám drtivou převahu sil.*
+Neriskovat — soupeř potřebuje moje jednotky a objektivy, tak mu je nedám:
+APPROACH ×0.3, DANGER ×1.5, HOLD_OBJ ×1.5, MOVE_MARGIN 0.7. Střílí se na vše
+v dostřelu (útok nic neriskuje), ale nepostupuje se. Take-ground: **nikdy**
+kromě objektivu. Ústup: maximálně konzervativní k životům.
+
+### 🔥 VABANK (zoufalý útok)
+*Kdy: kritické skóre — soupeři chybí ≤ 2 VP a mně víc; nebo prohrávám a jsem
+výrazně slabší (vyhrát může už jen risk).*
+Opatrnost už nemá cenu: DANGER ×0.3, APPROACH ×1.8, OBJ_CAPTURE ×2, KILL ×1.5,
+MOVE_MARGIN 0.1. Take-ground: vždy (i na drát ne — past zůstává pastí).
+Ústup: spíše držet pozice a brát ztráty (ustupující jednotka nestřílí a čas
+došel). Zásobování: vše do těžiště, žádné rezervy.
+
+### Modifikátor OTEVŘENÍ (1.–2. tah)
+Nezávisle na postoji: DANGER minimálně ×1.0 (žádné riskování v prvním tahu),
+preferuj obsazení výhodného terénu a středových objektivů. Zabraňuje tomu,
+aby VABANK v prvním tahu poslal jednotky osamoceně přes celou mapu.
+
+## 13. Rozhodovací matice
+
+Vyhodnocuje se shora dolů, první shoda platí:
+
+| # | Podmínka | Postoj |
+|---|---|---|
+| 1 | `score = kritické` (soupeř ≤ 2 VP od výhry, já dál) | **VABANK** |
+| 2 | `score = prohrávám` a `force = slabší` | **VABANK** |
+| 3 | `score = vedu` a `force ≠ převaha` | **KONSOLIDACE** |
+| 4 | `score = vedu` a `force = převaha` | role útočník → **ÚTOK**, jinak **VÝPAD** |
+| 5 | role obránce a `force = převaha` | **VÝPAD** |
+| 6 | role obránce | **OBRANA** |
+| 7 | role útočník | **ÚTOK** |
+| 8 | střetná bitva | `force ≥ vyrovnané` → **ÚTOK**, jinak **OBRANA** |
+
+Hystereze: pásma `force` mají mrtvou zónu (převaha ≥ 1.3, konec převahy až
+pod 1.15), aby jedna zničená figurka nepřepínala postoj tam a zpět.
+
+## 14. Architektura implementace
+
+```
+src/logic/aiPosture.ts
+  assessSituation(state, rules, ai): Situation   // role, score, force, turn
+  selectPosture(sit): Posture                    // tabulka z §13
+  type Posture = {
+    id: 'utok' | 'obrana' | 'vypad' | 'konsolidace' | 'vabank';
+    weights: typeof W;                // přenásobené váhy
+    takeGround: 'standard' | 'objectivesOnly' | 'always';
+    retreatHoldFactor: number;        // ochota brát ztráty místo ústupu
+    supplyFocusShare: number;         // míra koncentrace zásob do těžiště
+  };
+```
+
+- `chooseAiAction` na začátku spočte postoj a předá ho pod-rozhodovačům;
+  konstantu `W` nahradí `posture.weights` (mechanická náhrada, beze změny
+  logiky). Vše zůstává čisté a deterministické.
+- **UI**: volitelný odznak u indikace tahu („Počítač táhne… · Obrana"), ať
+  hráč vidí záměr — výrazně přidává na věrohodnosti a usnadňuje ladění.
+- **Roli v bitvě** lze později přepsat polem scénáře (`aiDoctrine` v editoru:
+  „braň most za každou cenu"), automatické odvození je jen výchozí.
+
+## 15. Testovací plán
+
+1. **Jednotkové testy matice** — každá řádka §13 (syntetické stavy → očekávaný
+   postoj), hystereze na hranici pásem.
+2. **Behaviorální dvojice** — tatáž pozice, jiná situace ⇒ jiné rozhodnutí:
+   vedoucí AI odmítne riskantní take-ground, prohrávající ho vezme; obránce
+   s převahou vyrazí (VÝPAD), bez převahy drží linii.
+3. **Simulační matice** — všechny dvojice postojů proti sobě (vynucené
+   postoje): každá partie doběhne, žádná nelegální akce; VABANK musí proti
+   KONSOLIDACI vykazovat vyšší rozptyl výsledků (riziko funguje).
+4. **Regrese Části I** — stávajících 63 testů beze změny (výchozí postoj se
+   chová jako dnešní doktrína).
+
+## 16. Možná další rozšíření (mimo tento plán)
+
+- **Osobnosti generálů**: statický multiplikátor nad postoji (agresivní /
+  metodický / opatrný) volitelný u scénáře — dvě partie proti „jinému
+  generálovi" pak mají jiný charakter i při stejné mapě.
+- **Sekční postoje**: držet levé křídlo, tlačit středem — dnešní těžiště
+  zásobování rozšířené i na manévr.
+- **Vazba na obtížnost**: lehká = bez postojů (dnešní stav), normální =
+  postoje, těžká = postoje + 1-ply lookahead.
+
+*Odhad pracnosti: ~200–300 řádků (`aiPosture.ts` + úpravy `ai.ts`) + testy;
+riziko nízké — mění se jen váhy, ne rozhodovací kostra.*
