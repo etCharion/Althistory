@@ -112,13 +112,18 @@ Pro hru v okruhu přátel je to přijatelný kompromis. Pokud má být hra veře
 | **P3** | Ošetření výpadků sítě (chybová hláška, retry) | malá |
 | **P4** | Anonymní Firebase Auth + Firestore security rules; katalogy pravidel zmrazit do dokumentu hry | střední |
 | **P5** | Sjednotit dvě UI témata nad společnou logikou (theme tokeny) | velká |
-| **P6** | AI protihráč (viz kapitola 4) | střední–velká |
+| **P6** ✅ | AI protihráč (viz kapitola 4; doktrína v `docs/AI-STRATEGY.md`, implementace `src/logic/ai.ts`) — **hotovo** | střední–velká |
 
 Pořadí P1 → P2 není náhodné: testy reduceru napsané po opravách zafixují správné chování a stanou se regresní sítí pro všechno další — včetně AI.
 
 ---
 
-## 4) Návrh: AI protihráč pro sólo hru
+## 4) Návrh: AI protihráč pro sólo hru ✅ *realizováno*
+
+> Návrh níže byl realizován: herní doktrína je popsaná v `docs/AI-STRATEGY.md`,
+> implementace v `src/logic/ai.ts`, integrace v `useGameLogic` (řízení tempa)
+> a v menu obou témat („Proti PC"). Testy v `src/logic/ai.test.ts` ověřují
+> doktrinální rozhodnutí i celé partie AI vs. AI.
 
 ### Je to rozumně proveditelné?
 

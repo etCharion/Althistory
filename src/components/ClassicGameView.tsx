@@ -167,7 +167,7 @@ const PHASE_DESCRIPTIONS = {
   }
 };
 
-const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clientId = 'local', seat = null, onChangeSeat = null }) => {
+const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clientId = 'local', seat = null, onChangeSeat = null, aiPlayerId = null }) => {
   const online = !!gameId;
   const spectator = !!seat?.spectator;
   const [uTypes, setUTypes] = useState([]);
@@ -200,7 +200,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
     load();
   }, [gameId, initialScenario]);
 
-  const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, undoLastAction, canUndo, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId);
+  const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, undoLastAction, canUndo, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId, aiPlayerId);
   const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none'); const [hovered, setHovered] = useState(null);
   const [dismissedOverlay, setDismissedOverlay] = useState(false);
   const [showPhaseInfo, setShowPhaseInfo] = useState(false);
@@ -260,11 +260,14 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const wh = gameState.centralWarehouse[activeP];
 
   // --- Role-based permissions (local hot-seat games grant full control) ---
+  const isAiTurn = !!aiPlayerId && activeP === aiPlayerId;
   const myTeam: 'player1' | 'player2' | null = online && !spectator ? seat?.team : null;
-  const isMyTurn = !online || (!spectator && myTeam === activeP);
+  const isMyTurn = (!online || (!spectator && myTeam === activeP)) && !isAiTurn;
   const iAmGeneral = !online || (!spectator && isGeneral(gameState, clientId, activeP));
   const canDistribute = isMyTurn && iAmGeneral;
   const canControlUnit = (uid: string) => {
+    // Jednotky počítače člověk neovládá (vč. jeho ústupů a obsazování pozic).
+    if (aiPlayerId && gameState.units[uid]?.ownerId === aiPlayerId) return false;
     if (!online) return true;
     if (spectator) return false;
     const unit = gameState.units[uid]; if (!unit) return false;
@@ -277,7 +280,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const handleHexClick = (q, r) => {
     if (retreatingUnitId) { if (canControlUnit(retreatingUnitId.unitId)) retreatUnit(retreatingUnitId.unitId, q, r); return; }
     if (takeGroundOption) { if (canControlUnit(takeGroundOption.unitId)) takeGround(takeGroundOption.unitId, q, r); return; }
-    if (spectator) return;
+    if (spectator || isAiTurn) return;
     const hex = gameState.grid[`${q},${r}`];
     const unitAtHex = hex?.unitId ? gameState.units[hex.unitId] : null;
 
@@ -332,7 +335,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
            </div>
 
            <div className="flex flex-col items-center gap-1">
-             <div className="text-[11px] uppercase opacity-40 font-black tracking-[0.2em]">Turn {gameState.currentTurn}</div>
+             <div className="text-[11px] uppercase opacity-40 font-black tracking-[0.2em]">Turn {gameState.currentTurn}{isAiTurn ? ' · Počítač táhne…' : ''}</div>
              {gameId && (
                <div className="flex items-center gap-1">
                  <button

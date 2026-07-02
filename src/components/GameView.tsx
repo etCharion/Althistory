@@ -181,7 +181,7 @@ const VPItem = ({ vp, player, color, onMouseEnter }) => (
   </div>
 );
 
-const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clientId = 'local', seat = null, onChangeSeat = null }) => {
+const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clientId = 'local', seat = null, onChangeSeat = null, aiPlayerId = null }) => {
   const online = !!gameId;
   const spectator = !!seat?.spectator;
   const [uTypes, setUTypes] = useState([]);
@@ -214,7 +214,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
     load();
   }, [gameId, initialScenario]);
 
-  const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, undoLastAction, canUndo, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId);
+  const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, undoLastAction, canUndo, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId, aiPlayerId);
   const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none'); const [hovered, setHovered] = useState(null);
   const [dismissedOverlay, setDismissedOverlay] = useState(false);
   const [showPhaseInfo, setShowPhaseInfo] = useState(false);
@@ -275,11 +275,14 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const toWin = sc.victoryPointsToWin || 6;
 
   // --- Role-based permissions (local hot-seat games grant full control) ---
+  const isAiTurn = !!aiPlayerId && activeP === aiPlayerId;
   const myTeam: 'player1' | 'player2' | null = online && !spectator ? seat?.team : null;
-  const isMyTurn = !online || (!spectator && myTeam === activeP);
+  const isMyTurn = (!online || (!spectator && myTeam === activeP)) && !isAiTurn;
   const iAmGeneral = !online || (!spectator && isGeneral(gameState, clientId, activeP));
   const canDistribute = isMyTurn && iAmGeneral;
   const canControlUnit = (uid: string) => {
+    // Jednotky počítače člověk neovládá (vč. jeho ústupů a obsazování pozic).
+    if (aiPlayerId && gameState.units[uid]?.ownerId === aiPlayerId) return false;
     if (!online) return true;
     if (spectator) return false;
     const unit = gameState.units[uid]; if (!unit) return false;
@@ -292,7 +295,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const handleHexClick = (q, r) => {
     if (retreatingUnitId) { if (canControlUnit(retreatingUnitId.unitId)) retreatUnit(retreatingUnitId.unitId, q, r); return; }
     if (takeGroundOption) { if (canControlUnit(takeGroundOption.unitId)) takeGround(takeGroundOption.unitId, q, r); return; }
-    if (spectator) return;
+    if (spectator || isAiTurn) return;
     const hex = gameState.grid[`${q},${r}`];
     const unitAtHex = hex?.unitId ? gameState.units[hex.unitId] : null;
 
@@ -333,7 +336,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
 
   const phaseIndex = PHASE_ORDER.indexOf(gameState.phase);
   const sideName = (p) => (p === 'player1' ? sc.player1.name : sc.player2.name);
-  const turnLabel = `TAH ${gameState.currentTurn} · ${sideName(activeP).toUpperCase()}`;
+  const turnLabel = `TAH ${gameState.currentTurn} · ${sideName(activeP).toUpperCase()}${isAiTurn ? ' · POČÍTAČ' : ''}`;
 
   const renderVPTokens = (player) => {
     const earned = gameState.victoryPoints[player] || [];
@@ -432,9 +435,11 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
     const u = selected ? gameState.units[selected] : null;
     const ut = u ? uTypes.find(t => t.id === u.typeId) : null;
     const isAttack = gameState.phase === 'attack';
-    const msg = isAttack
-      ? (ut ? `Zvolena ${ut.name} — klikni na zvýrazněného nepřítele.` : 'Klikni na svou jednotku — zobrazí se cíle v dostřelu.')
-      : (ut ? `Zvolena ${ut.name} — klikni na zvýrazněné pole (pohyb ${ut.movement}).` : 'Klikni na svou jednotku — zobrazí se pole pro přesun.');
+    const msg = isAiTurn
+      ? 'Počítač táhne…'
+      : isAttack
+        ? (ut ? `Zvolena ${ut.name} — klikni na zvýrazněného nepřítele.` : 'Klikni na svou jednotku — zobrazí se cíle v dostřelu.')
+        : (ut ? `Zvolena ${ut.name} — klikni na zvýrazněné pole (pohyb ${ut.movement}).` : 'Klikni na svou jednotku — zobrazí se pole pro přesun.');
     const barLabel = gameState.winner ? 'Konec' : (isAttack ? 'Útok' : 'Pohyb');
     return (
       <div className="p-[11px_20px] flex items-center gap-3.5">

@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { getNeighbors, getReachableHexes, getTargetableUnits, isImpassableForUnit } from '../logic/hexGrid';
 import { newDiceSeed } from '../logic/dice';
+import { chooseAiAction } from '../logic/ai';
 import { subscribeToGame, applyAction, createGameIfMissing } from '../logic/firebaseService';
 import { reducer, createInitialGameState } from '../logic/gameReducer';
 import type { Action, Rules } from '../logic/gameReducer';
 
-export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, gameId?: string, clientId: string = 'local') {
+export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, gameId?: string, clientId: string = 'local', aiPlayerId: 'player1' | 'player2' | null = null) {
   const rules: Rules = useMemo(() => ({ unitTypes, terrainTypes, overlayTypes }), [unitTypes, terrainTypes, overlayTypes]);
 
   // Local (hot-seat) games keep their state in React; online games mirror Firestore.
@@ -34,6 +35,24 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
       setLocalState((prev) => (prev ? reducer(prev, action, rules) : prev));
     }
   }, [gameId, rules]);
+
+  // ---- AI protihráč (jen lokální hra) ----
+  // Po každé změně stavu se AI zeptáme na jednu další akci; provede se se
+  // zpožděním, aby tah počítače působil čitelným tempem. Kostky nechává na
+  // stole déle (zavře je až po doběhnutí animace – v UI to obvykle stihne
+  // dřív jeho vlastní časovač, DISMISS je idempotentní).
+  useEffect(() => {
+    if (!aiPlayerId || gameId || !gameState || gameState.winner) return;
+    if (!unitTypes?.length || !terrainTypes?.length) return;
+    const action = chooseAiAction(gameState, rules, aiPlayerId, { clientId: 'ai' });
+    if (!action) return;
+    const delay = action.type === 'DISMISS_COMBAT' ? 2600
+      : action.type === 'ATTACK' ? 900
+      : (action.type === 'DISTRIBUTE' || action.type === 'ASSIGN_RESOURCE') ? 400
+      : 700;
+    const t = setTimeout(() => dispatch(action), delay);
+    return () => clearTimeout(t);
+  }, [gameState, aiPlayerId, gameId, rules, dispatch]);
 
   // ---- Action creators (thin wrappers around dispatch) ----
   const distributeResource = (_pid, sec, amount: number | 'max' = 1) => dispatch({ type: 'DISTRIBUTE', clientId, section: sec, amount });

@@ -137,7 +137,7 @@ function controlsUnit(state: GameState, clientId: string, unitId: string): boole
   return secs.some((sec: SectionId) => controlsSection(state, clientId, unit.ownerId, sec));
 }
 
-const categoryOf = (utype: any) =>
+export const categoryOf = (utype: any) =>
   utype?.category || (utype?.id === 'tank' ? 'tank' : (utype?.id === 'artillery' ? 'artillery' : 'infantry'));
 
 function computeWinner(scenario: any, units: Record<string, any>, vp: any): PlayerId | undefined {
