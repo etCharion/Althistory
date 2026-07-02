@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, ChevronDown, Target, Play } from 'lucide-react';
+import { Search, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, ChevronDown, Target, Play, Bot } from 'lucide-react';
 import ScenarioEditor from './ScenarioEditor';
 import GameView from './GameView';
 import Customization from './Customization';
@@ -59,7 +59,7 @@ const SELECT_CLASS =
   "px-3 py-2.5 border-2 border-tan-line rounded-[10px] text-[12px] font-condensed font-bold uppercase tracking-wide outline-none focus:border-ally bg-white text-ink cursor-pointer";
 
 // A single operation/scenario card in the field-map menu grid.
-function ScenarioCard({ s, countries, campaigns, onLocal, onOnline }) {
+function ScenarioCard({ s, countries, campaigns, onLocal, onVsAi, onOnline }) {
   const [showOnlineHelp, setShowOnlineHelp] = useState(false);
   // Volba pravidla pro tuto partii. Doplní se do scénáře až při spuštění hry.
   const [logisticsLimit, setLogisticsLimit] = useState(false);
@@ -110,6 +110,13 @@ function ScenarioCard({ s, countries, campaigns, onLocal, onOnline }) {
           className="flex-1 flex items-center justify-center gap-1.5 py-[11px] rounded-[10px] bg-army text-white font-condensed font-extrabold text-[14px] tracking-[0.05em] uppercase hover:bg-opacity-90 transition-all active:scale-95"
         >
           <Play size={15} fill="currentColor" strokeWidth={0} /> Místní hra
+        </button>
+        <button
+          onClick={() => onVsAi(configured)}
+          title={`Hra proti počítači — počítač velí straně ${s.player2?.name || 'Osa'}.`}
+          className="flex items-center justify-center gap-1.5 py-[11px] px-[13px] rounded-[10px] border-2 border-army bg-army/[0.08] text-army font-condensed font-extrabold text-[13px] tracking-[0.04em] uppercase hover:bg-army hover:text-white transition-colors"
+        >
+          <Bot size={15} /> Proti PC
         </button>
         <button
           onClick={() => onOnline(configured)}
@@ -197,8 +204,13 @@ function MainMenu() {
     setMode('editor');
   };
 
-  const startLocalGame = (scenario) => {
+  // Hra proti počítači je lokální hra, kde druhou stranu řídí AI (viz
+  // docs/AI-STRATEGY.md); volba se drží mimo scénář, aby se neukládala.
+  const [vsAi, setVsAi] = useState(false);
+
+  const startLocalGame = (scenario, againstAi = false) => {
     setCurrentScenario(scenario);
+    setVsAi(againstAi);
     setMode('game');
   };
 
@@ -215,7 +227,7 @@ function MainMenu() {
 
   if (mode === 'editor') return <ScenarioEditor onBack={() => setMode('menu')} initialScenario={editingScenario} />;
   if (mode === 'custom') return <Customization onBack={() => setMode('menu')} onEditScenario={handleEditScenario} />;
-  if (mode === 'game' && currentScenario) return <GameView scenario={currentScenario} onExit={() => setMode('menu')} />;
+  if (mode === 'game' && currentScenario) return <GameView scenario={currentScenario} aiPlayerId={vsAi ? 'player2' : null} onExit={() => setMode('menu')} />;
 
   return (
     <div className="min-h-screen text-ink">
@@ -298,7 +310,7 @@ function MainMenu() {
         ) : (
           <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
             {filteredScenarios.map(s => (
-              <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns} onLocal={startLocalGame} onOnline={startOnlineGame} />
+              <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns} onLocal={startLocalGame} onVsAi={(sc) => startLocalGame(sc, true)} onOnline={startOnlineGame} />
             ))}
           </div>
         )}

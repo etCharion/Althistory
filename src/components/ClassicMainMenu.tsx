@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, Maximize2, X, ChevronDown, Target } from 'lucide-react';
+import { Search, Filter, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, Maximize2, X, ChevronDown, Target, Bot } from 'lucide-react';
 import ScenarioEditor from './ClassicScenarioEditor';
 import GameView from './ClassicGameView';
 import Customization from './ClassicCustomization';
@@ -57,7 +57,7 @@ function MultiCountryFilter({ countries, selected, onChange }) {
 
 // A single operation/scenario card, reused in both the compact list and the
 // full-screen browser overlay.
-function ScenarioCard({ s, countries, campaigns, onLocal, onOnline }) {
+function ScenarioCard({ s, countries, campaigns, onLocal, onVsAi, onOnline }) {
   const [showOnlineHelp, setShowOnlineHelp] = useState(false);
   // Volba pravidla pro tuto partii. Doplní se do scénáře až při spuštění hry.
   const [logisticsLimit, setLogisticsLimit] = useState(false);
@@ -82,6 +82,13 @@ function ScenarioCard({ s, countries, campaigns, onLocal, onOnline }) {
             className="bg-map-ink-green text-white px-6 py-2 rounded-lg font-bold uppercase hover:bg-opacity-90 transition-transform active:scale-95 shadow-md flex items-center gap-2"
           >
             Místní hra
+          </button>
+          <button
+            onClick={() => onVsAi(configured)}
+            title={`Hra proti počítači — počítač velí straně ${s.player2?.name || 'Osa'}.`}
+            className="border-2 border-map-ink-green text-map-ink-green px-6 py-2 rounded-lg font-bold uppercase text-[10px] hover:bg-map-ink-green hover:text-white transition-all shadow-md flex items-center justify-center gap-2"
+          >
+            <Bot size={12} /> Proti PC
           </button>
           <div className="flex items-center gap-1">
             <button
@@ -202,8 +209,12 @@ function MainMenu() {
 
   const [showBrowser, setShowBrowser] = useState(false);
 
-  const startLocalGame = (scenario) => {
+  // Hra proti počítači je lokální hra, kde druhou stranu řídí AI.
+  const [vsAi, setVsAi] = useState(false);
+
+  const startLocalGame = (scenario, againstAi = false) => {
     setCurrentScenario(scenario);
+    setVsAi(againstAi);
     setShowBrowser(false);
     setMode('game');
   };
@@ -221,7 +232,7 @@ function MainMenu() {
 
   if (mode === 'editor') return <ScenarioEditor onBack={() => setMode('menu')} initialScenario={editingScenario} />;
   if (mode === 'custom') return <Customization onBack={() => setMode('menu')} onEditScenario={handleEditScenario} />;
-  if (mode === 'game' && currentScenario) return <GameView scenario={currentScenario} onExit={() => setMode('menu')} />;
+  if (mode === 'game' && currentScenario) return <GameView scenario={currentScenario} aiPlayerId={vsAi ? 'player2' : null} onExit={() => setMode('menu')} />;
 
   // Search + filter controls, reused in the compact list and the full-screen browser.
   const filterControls = (
@@ -314,7 +325,7 @@ function MainMenu() {
 
           <div className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
             {filteredScenarios.map(s => (
-              <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns} onLocal={startLocalGame} onOnline={startOnlineGame} />
+              <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns} onLocal={startLocalGame} onVsAi={(sc) => startLocalGame(sc, true)} onOnline={startOnlineGame} />
             ))}
             {filteredScenarios.length === 0 && emptyState}
           </div>
@@ -345,7 +356,7 @@ function MainMenu() {
               {filteredScenarios.length === 0 ? emptyState : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredScenarios.map(s => (
-                    <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns} onLocal={startLocalGame} onOnline={startOnlineGame} />
+                    <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns} onLocal={startLocalGame} onVsAi={(sc) => startLocalGame(sc, true)} onOnline={startOnlineGame} />
                   ))}
                 </div>
               )}
