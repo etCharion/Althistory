@@ -53,6 +53,9 @@ export type OverlayType = {
   id: string;
   name: string;
   diceModifierDefense?: number;
+  diceModifierDefenseInfantry?: number;
+  diceModifierDefenseTank?: number;
+  diceModifierDefenseArtillery?: number;
   diceModifierAttackInfantry?: number;
   diceModifierAttackTank?: number;
   diceModifierAttackArtillery?: number;
@@ -60,6 +63,10 @@ export type OverlayType = {
   movementRestriction?: 'stop' | 'no-move' | 'none';
   impassableForCategories?: UnitCategory[];
   impassableForPlayer?: PlayerId;
+  noRetreatCategories?: UnitCategory[];
+  cannotLeaveCategories?: UnitCategory[];
+  onlyBonusForOwner?: boolean;
+  allowAttackAfterStop?: boolean;
   entryFromAdjacentOnly?: boolean;
   exitToAdjacentOnly?: boolean;
   blocksLOS?: boolean;
@@ -94,6 +101,7 @@ export type Hex = {
   s: number;
   terrainTypeId: string;
   overlayTypeId?: string;
+  overlayOwnerId?: PlayerId;
   unitId?: string;
   objective?: Objective;
   // Volitelný textový popisek vykreslený na políčku (např. jméno města/řeky).

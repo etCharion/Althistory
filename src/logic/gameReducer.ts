@@ -439,7 +439,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       const targetOverlayId = targetHex?.overlayTypeId;
 
       let isStopTerrain = targetTerrain?.movementRestriction === 'stop' || targetOverlay?.movementRestriction === 'stop' || targetOverlayId === 'wire';
-      let allowAttackAfterStop = false;
+      let allowAttackAfterStop = !!targetOverlay?.allowAttackAfterStop;
       if (targetOverlayId === 'wire') {
         allowAttackAfterStop = true;
         if (utype.category === 'tank') targetHex.overlayTypeId = undefined;
@@ -472,20 +472,20 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       const attCategory = categoryOf(utype);
       if (attCategory === 'artillery' && (att.movementUsed > 0 || att.hasMoved)) return state;
 
-      const fH = unitHex(state, aid);
-      const tH = unitHex(state, tid);
-      if (!fH || !tH) return state;
-      const targetable = getTargetableUnits((fH as any).q, (fH as any).r, utype, state, terrainTypes, overlayTypes);
+      const fromHex = unitHex(state, aid);
+      const targetHex = unitHex(state, tid);
+      if (!fromHex || !targetHex) return state;
+      const targetable = getTargetableUnits((fromHex as any).q, (fromHex as any).r, utype, state, terrainTypes, overlayTypes);
       if (!targetable.includes(tid)) return state;
 
-      const dist = getDistance(fH, tH);
-      const tarTerrain = getTerrainAt((tH as any).q, (tH as any).r);
-      const tarOverlay = getOverlayAt((tH as any).q, (tH as any).r);
+      const dist = getDistance(fromHex, targetHex);
+      const targetTerrain = getTerrainAt((targetHex as any).q, (targetHex as any).r);
+      const targetOverlay = getOverlayAt((targetHex as any).q, (targetHex as any).r);
       const isArtillery = attCategory === 'artillery';
-      const dC = getDiceCount(att, tar, fH, tH, state.grid, terrainTypes, overlayTypes, utype);
+      const dC = getDiceCount(att, tar, fromHex, targetHex, state.grid, terrainTypes, overlayTypes, utype);
 
       let ignoreFlags = 0;
-      if (!isArtillery) ignoreFlags = Math.max(tarTerrain.ignoreFlags ?? 0, tarOverlay?.ignoreFlags ?? 0);
+      if (!isArtillery) ignoreFlags = Math.max(targetTerrain.ignoreFlags ?? 0, targetOverlay?.ignoreFlags ?? 0);
 
       const dice = rollDice(dC, action.seed);
       let h = 0, f = 0;
@@ -517,7 +517,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
         attackerStats.kills += 1;
         targetStats.destroyedInRound = state.currentTurn;
         delete nU[tid];
-        const tKey = `${(tH as any).q},${(tH as any).r}`;
+        const tKey = `${(targetHex as any).q},${(targetHex as any).r}`;
         const clearedHex = { ...nG[tKey], unitId: undefined };
         if (clearedHex.overlayTypeId === 'sandbags') clearedHex.overlayTypeId = undefined;
         nG[tKey] = clearedHex;
@@ -526,18 +526,44 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       } else {
         nU[tid] = upT;
       }
-      nStats[aid] = attackerStats;
-      nStats[tid] = targetStats;
       nU[aid] = { ...nU[aid], resources: nU[aid].resources - 1, hasAttacked: true };
 
       if (isEliminated) {
         const { nVP: updatedVP, newGrid: updatedGrid } = checkObjectives(nG, nU, active, 'immediate', state.currentTurn, { player1: nVP.player1, player2: nVP.player2 });
         nG = updatedGrid;
         nVP = updatedVP;
-        if (dist === 1 && attCategory !== 'artillery') pendingTakeGround = { unitId: aid, hex: { q: (tH as any).q, r: (tH as any).r } };
+        if (dist === 1 && attCategory !== 'artillery') pendingTakeGround = { unitId: aid, hex: { q: (targetHex as any).q, r: (targetHex as any).r } };
       } else if (finalFlags > 0) {
-        pendingRetreat = { unitId: tid, count: finalFlags, attackerId: aid, targetHex: { q: (tH as any).q, r: (tH as any).r } };
+        const noRetreat = targetOverlay?.noRetreatCategories?.includes(targetCategory);
+        if (noRetreat) {
+          // Instead of a pending retreat, resolve flags as hits (stay and fight/take damage).
+          for (let i = 0; i < finalFlags; i++) {
+             upT.figures -= 1;
+             targetStats.damageTaken += 1;
+             if (upT.figures <= 0) {
+                attackerStats.kills += 1;
+                targetStats.destroyedInRound = state.currentTurn;
+                delete nU[tid];
+                const tKey = `${(targetHex as any).q},${(targetHex as any).r}`;
+                const clearedHex = { ...nG[tKey], unitId: undefined };
+                if (clearedHex.overlayTypeId === 'sandbags') clearedHex.overlayTypeId = undefined;
+                nG[tKey] = clearedHex;
+                nVP[att.ownerId].push({ id: `kill-${tid}-${state.currentTurn}`, type: 'unit', round: state.currentTurn, unitStats: targetStats });
+                const { nVP: updatedVP, newGrid: updatedGrid } = checkObjectives(nG, nU, active, 'immediate', state.currentTurn, { player1: nVP.player1, player2: nVP.player2 });
+                nG = updatedGrid;
+                nVP = updatedVP;
+                isEliminated = true;
+                if (dist === 1 && attCategory !== 'artillery') pendingTakeGround = { unitId: aid, hex: { q: (targetHex as any).q, r: (targetHex as any).r } };
+                break;
+             }
+          }
+          if (!isEliminated) nU[tid] = upT;
+        } else {
+          pendingRetreat = { unitId: tid, count: finalFlags, attackerId: aid, targetHex: { q: (targetHex as any).q, r: (targetHex as any).r } };
+        }
       }
+      nStats[aid] = attackerStats;
+      nStats[tid] = targetStats;
 
       return {
         ...state,

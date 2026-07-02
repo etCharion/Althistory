@@ -79,7 +79,15 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
     if (tool.type === 'terrain') {
       setHexes({ ...hexes, [key]: { ...ex, terrainTypeId: tool.id } });
     } else if (tool.type === 'overlay') {
-      setHexes({ ...hexes, [key]: { ...ex, overlayTypeId: ex.overlayTypeId === tool.id ? undefined : tool.id } });
+      const isRemoving = ex.overlayTypeId === tool.id && (!ex.overlayOwnerId || ex.overlayOwnerId === player);
+      setHexes({
+        ...hexes,
+        [key]: {
+          ...ex,
+          overlayTypeId: isRemoving ? undefined : tool.id,
+          overlayOwnerId: isRemoving ? undefined : player as any
+        }
+      });
     } else if (tool.type === 'objective') {
       const { name, type, timing, points, validFor, groupId, condition } = objSettings;
       // Group objectives carry a shared groupId + condition; single-tile ones omit them.
