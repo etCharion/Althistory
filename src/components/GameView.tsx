@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils'; import { getUnitSections, axialToOffset, getSection, terrainColor } from '../logic/hexGrid';
 import NatoSymbol from './NatoSymbol';
-import { Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check, Crown, Shield, Eye, EyeOff, QrCode, Undo2, ArrowLeft, ArrowRight, Bot, Play } from 'lucide-react';
+import { Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check, Crown, Shield, Eye, EyeOff, QrCode, Undo2, ArrowLeft, ArrowRight, Bot, Play, ChevronLeft, ChevronRight } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { getGameState } from '../logic/firebaseService';
 import { controlsSection, isGeneral } from '../logic/gameReducer';
@@ -226,7 +226,15 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const aiSpeed = AI_SPEEDS.find(s => s.id === aiSpeedId)?.factor ?? 1;
   const pickAiSpeed = (id) => { setAiSpeedId(id); localStorage.setItem('ai-speed', id); };
 
-  const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, undoLastAction, canUndo, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions, aiLastAction, clearAiHighlight } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId, aiPlayerId, aiRun, aiSpeed);
+  const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, undoLastAction, canUndo, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions, aiLastAction, clearAiHighlight, aiLog } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId, aiPlayerId, aiRun, aiSpeed);
+
+  // Zpětné (čistě vizuální) prohlížení tahu počítače: index do aiLog,
+  // null = živý pohled. Nemění stav hry, jen zvýraznění na mapě.
+  const [aiReviewIdx, setAiReviewIdx] = useState<number | null>(null);
+  useEffect(() => {
+    if (aiReviewIdx !== null && aiReviewIdx >= aiLog.length) setAiReviewIdx(null);
+  }, [aiLog.length, aiReviewIdx]);
+  const aiReviewEntry = aiReviewIdx !== null ? aiLog[aiReviewIdx] : null;
   const [selected, setSelected] = useState(null); const [actType, setActType] = useState('none'); const [hovered, setHovered] = useState(null);
   const [dismissedOverlay, setDismissedOverlay] = useState(false);
   const [showPhaseInfo, setShowPhaseInfo] = useState(false);
@@ -272,10 +280,12 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
       h[`${takeGroundOption.hex.q},${takeGroundOption.hex.r}`] = 'move';
       return h;
     }
-    // Poslední pohyb/útok počítače: odkud (i kam) zeleně, cíl útoku červeně.
-    if (aiLastAction) {
-      if (aiLastAction.from) h[aiLastAction.from] = aiLastAction.kind === 'attack' ? 'move' : 'move';
-      if (aiLastAction.to) h[aiLastAction.to] = aiLastAction.kind === 'attack' ? 'attack' : 'move';
+    // Prohlížený krok logu (má přednost), jinak poslední pohyb/útok počítače:
+    // odkud/kam zeleně, cíl útoku červeně.
+    const focus = aiReviewEntry || aiLastAction;
+    if (focus) {
+      if (focus.from) h[focus.from] = 'move';
+      if (focus.to) h[focus.to] = focus.kind === 'attack' ? 'attack' : 'move';
       return h;
     }
     if (!selected) return {};
@@ -285,7 +295,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
       getSelectedTargetable(selected).forEach(uid => { const hex = getUnitHex(uid); if (hex) h[`${hex.q},${hex.r}`] = 'attack'; });
     }
     return h;
-  }, [selected, actType, gameState?.phase, gameState?.units, gameState?.grid, retreatingUnitId, takeGroundOption, gameState?.scenario, aiLastAction, aiPlayerId]);
+  }, [selected, actType, gameState?.phase, gameState?.units, gameState?.grid, retreatingUnitId, takeGroundOption, gameState?.scenario, aiLastAction, aiReviewEntry, aiPlayerId]);
 
   const currentUnitSections = useMemo(() => {
     if (!gameState || !selected || gameState.phase !== 'distribution-units' || !gameState.scenario) return [];
@@ -326,6 +336,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
     if (takeGroundOption) { if (canControlUnit(takeGroundOption.unitId)) takeGround(takeGroundOption.unitId, q, r); return; }
     if (spectator || isAiTurn) return;
     clearAiHighlight(); // klik hráče ruší zvýraznění posledního tahu AI
+    setAiReviewIdx(null); // …i prohlížení logu
     const hex = gameState.grid[`${q},${r}`];
     const unitAtHex = hex?.unitId ? gameState.units[hex.unitId] : null;
 
@@ -415,41 +426,6 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   ];
 
   const renderDock = () => {
-    // Tah počítače: hráč vybere rychlost a tah ručně spustí; během tahu vidí
-    // aktuální postoj AI (viz docs/AI-STRATEGY.md, část II).
-    if (isAiTurn && !gameState.winner) {
-      return (
-        <div className="p-[12px_20px] flex items-center gap-4">
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Bot size={18} className="text-axis" />
-            <span className="font-condensed font-extrabold text-[13px] tracking-[0.1em] uppercase text-axis">Tah počítače</span>
-            {aiPosture && (
-              <span title={aiPosture.description} className="px-2 py-0.5 rounded-md bg-axis/[0.08] border border-axis/25 text-axis text-[11px] font-condensed font-extrabold uppercase tracking-wide cursor-help">
-                {aiPosture.label}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-1 flex-shrink-0" title="Rychlost tahu počítače">
-            {AI_SPEEDS.map(s => (
-              <button key={s.id} onClick={() => pickAiSpeed(s.id)}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-condensed font-extrabold uppercase transition-colors ${aiSpeedId === s.id ? 'bg-ally text-white' : 'bg-white border border-tan-line text-tan-deep hover:bg-[#f7f0df]'}`}>
-                {s.label}
-              </button>
-            ))}
-          </div>
-          <span className="flex-1 text-[13px] text-tan-text">
-            {aiRun ? 'Počítač táhne… Sleduj zvýrazněné jednotky a políčka.' : 'Vyber rychlost a spusť tah počítače.'}
-          </span>
-          {!aiRun && (
-            <button onClick={() => setAiRun(true)}
-              className="flex-shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-[10px] border-none text-white font-condensed font-extrabold text-[14px] tracking-[0.05em] uppercase cursor-pointer hover:opacity-90 transition-opacity"
-              style={{ background: '#7c2018', boxShadow: '0 5px 13px -6px rgba(28,40,60,.65)' }}>
-              <Play size={16} fill="currentColor" strokeWidth={0} /> Spustit tah počítače
-            </button>
-          )}
-        </div>
-      );
-    }
     if (gameState.phase === 'distribution-sections') {
       return (
         <div className="p-[12px_20px] flex items-stretch gap-4">
@@ -613,12 +589,46 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
             <HexGrid
               width={sc.boardWidth} height={sc.boardHeight} hexes={gameState.grid} units={gameState.units}
               terrainTypes={tTypes} unitTypes={uTypes} onHexClick={handleHexClick} onHexMouseEnter={(q,r) => setHovered(`${q},${r}`)} onHexMouseLeave={() => setHovered(null)}
-              leftWidth={sc.sections.leftWidth} centerWidth={sc.sections.centerWidth} selectedUnitId={aiLastAction ? aiLastAction.unitId : selected}
+              leftWidth={sc.sections.leftWidth} centerWidth={sc.sections.centerWidth} selectedUnitId={(aiReviewEntry || aiLastAction) ? (aiReviewEntry || aiLastAction).unitId : selected}
               highlightedHexes={highlightedHexes} hoveredHex={hovered} activePhase={gameState.phase}
               unitSections={currentUnitSections} onSectionSelect={(s) => assignResourceToUnit(selected, s)}
               labelMode={labelMode}
             />
           </div>
+
+          {/* Ovládání tahu počítače – plovoucí panel ve volném prostoru nahoře,
+              dock s tácky zdrojů zůstává viditelný (hráč vidí, kam AI rozděluje). */}
+          {isAiTurn && !gameState.winner && (
+            <div className="absolute top-3.5 left-1/2 -translate-x-1/2 z-[8] flex items-center gap-3 rounded-[13px] px-4 py-2.5"
+              style={{ background: 'rgba(255,253,247,.97)', border: '2px solid #7c2018', boxShadow: '0 14px 30px -14px rgba(28,40,60,.55)' }}>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Bot size={17} className="text-axis" />
+                <span className="font-condensed font-extrabold text-[12px] tracking-[0.08em] uppercase text-axis whitespace-nowrap">Tah počítače</span>
+                {aiPosture && (
+                  <span title={aiPosture.description} className="px-2 py-0.5 rounded-md bg-axis/[0.08] border border-axis/25 text-axis text-[10px] font-condensed font-extrabold uppercase tracking-wide cursor-help whitespace-nowrap">
+                    {aiPosture.label}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0" title="Rychlost tahu počítače">
+                {AI_SPEEDS.map(s => (
+                  <button key={s.id} onClick={() => pickAiSpeed(s.id)}
+                    className={`px-2 py-1 rounded-md text-[10px] font-condensed font-extrabold uppercase transition-colors ${aiSpeedId === s.id ? 'bg-ally text-white' : 'bg-white border border-tan-line text-tan-deep hover:bg-[#f7f0df]'}`}>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              {aiRun ? (
+                <span className="text-[11.5px] text-tan-text italic whitespace-nowrap">Počítač táhne…</span>
+              ) : (
+                <button onClick={() => setAiRun(true)}
+                  className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-[9px] border-none text-white font-condensed font-extrabold text-[12px] tracking-[0.05em] uppercase cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap"
+                  style={{ background: '#7c2018' }}>
+                  <Play size={13} fill="currentColor" strokeWidth={0} /> Spustit tah
+                </button>
+              )}
+            </div>
+          )}
 
           {retreatingUnitId && (
             <div className={`absolute left-1/2 -translate-x-1/2 z-40 text-center uppercase transition-all duration-300 ${dismissedOverlay ? 'top-2' : 'top-1/2 -translate-y-1/2'}`}>
@@ -762,6 +772,35 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
                 <button onClick={() => setShowStats(true)} title="Statistiky" className="w-[36px] h-[36px] rounded-[10px] bg-parchment-card border border-tan-border-soft shadow-md flex items-center justify-center hover:bg-[#f7f0df] transition-colors">
                   <Trophy size={18} className="text-gold" />
                 </button>
+              )}
+              {/* Log tahu počítače: čistě vizuální krokování zpět (nemění stav hry). */}
+              {!!aiPlayerId && aiLog.length > 0 && (
+                <div className="flex items-center gap-1 px-2 h-[36px] rounded-[10px] bg-parchment-card border border-axis/30 shadow-md" title="Prohlídka tahu počítače – jen zvýraznění na mapě, stav hry se nemění.">
+                  <Bot size={14} className="text-axis flex-shrink-0" />
+                  <button onClick={() => setAiReviewIdx(i => i === null ? aiLog.length - 1 : Math.max(0, i - 1))}
+                    disabled={aiReviewIdx === 0}
+                    className="w-[22px] h-[26px] flex items-center justify-center rounded-md text-tan-deep hover:bg-[#f7f0df] disabled:opacity-30 transition-colors">
+                    <ChevronLeft size={15} />
+                  </button>
+                  <span className="text-[11px] font-condensed font-extrabold text-ink whitespace-nowrap min-w-[34px] text-center">
+                    {aiReviewIdx === null ? `${aiLog.length}` : `${aiReviewIdx + 1}/${aiLog.length}`}
+                  </span>
+                  <button onClick={() => setAiReviewIdx(i => (i === null || i >= aiLog.length - 1) ? null : i + 1)}
+                    disabled={aiReviewIdx === null}
+                    className="w-[22px] h-[26px] flex items-center justify-center rounded-md text-tan-deep hover:bg-[#f7f0df] disabled:opacity-30 transition-colors">
+                    <ChevronRight size={15} />
+                  </button>
+                  {aiReviewEntry ? (
+                    <>
+                      <span className="text-[11px] text-tan-text max-w-[180px] truncate">{aiReviewEntry.label}</span>
+                      <button onClick={() => setAiReviewIdx(null)} title="Zpět na živý pohled" className="w-[22px] h-[26px] flex items-center justify-center rounded-md text-tan-deep hover:bg-[#f7f0df] transition-colors">
+                        <CloseIcon size={13} />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-[10px] uppercase font-condensed font-bold text-tan whitespace-nowrap">akcí PC</span>
+                  )}
+                </div>
               )}
               {sc.victoryGoals && (
                 <div className="relative" onMouseEnter={() => setShowGoals(true)} onMouseLeave={() => setShowGoals(false)}>

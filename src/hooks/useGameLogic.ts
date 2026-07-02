@@ -8,6 +8,8 @@ import type { Action, Rules } from '../logic/gameReducer';
 
 // Zvýraznění poslední akce AI na mapě: jednotka + odkud + kam (viz GameView).
 export type AiActionHighlight = { kind: 'move' | 'attack'; unitId: string; from: string; to: string } | null;
+// Záznam akce AI pro zpětné (čistě vizuální) prohlížení tahu počítače.
+export type AiLogEntry = { id: number; kind: 'move' | 'attack'; unitId: string; from: string; to: string; label: string };
 
 export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, gameId?: string, clientId: string = 'local', aiPlayerId: 'player1' | 'player2' | null = null, aiRun: boolean = true, aiSpeed: number = 1) {
   const rules: Rules = useMemo(() => ({ unitTypes, terrainTypes, overlayTypes }), [unitTypes, terrainTypes, overlayTypes]);
@@ -34,6 +36,15 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
   // Poslední pohyb/útok AI – GameView z něj zvýrazňuje jednotku a políčka.
   const [aiLastAction, setAiLastAction] = useState<AiActionHighlight>(null);
   const clearAiHighlight = useCallback(() => setAiLastAction(null), []);
+
+  // Log akcí AI (pohyby, útoky, ústupy, obsazení pozic) pro zpětné vizuální
+  // prohlížení. Maže se na začátku dalšího tahu počítače – hráč si tak může
+  // celý minulý tah AI projít krok za krokem.
+  const [aiLog, setAiLog] = useState<AiLogEntry[]>([]);
+  const aiActive = !!aiPlayerId && gameState?.activePlayerId === aiPlayerId;
+  useEffect(() => {
+    if (aiActive) setAiLog([]);
+  }, [aiActive]);
 
   const dispatch = useCallback((action: Action) => {
     // Akce člověka ruší zvýraznění posledního tahu AI.
@@ -65,15 +76,30 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     const delay = action.type === 'DISMISS_COMBAT' ? base : Math.round(base * aiSpeed);
     const t = setTimeout(() => {
       // Zvýraznění: pohyby (vč. ústupu a obsazení pozice) a útoky; ostatní
-      // akce zvýraznění ruší, ať na mapě nestraší z minulé fáze.
+      // akce zvýraznění ruší, ať na mapě nestraší z minulé fáze. Tytéž akce
+      // se zapisují do logu pro zpětné prohlížení tahu.
       const hexOf = (uid: string) => {
         const h: any = Object.values(gameState.grid).find((x: any) => x.unitId === uid);
         return h ? `${h.q},${h.r}` : '';
       };
-      if (action.type === 'MOVE' || action.type === 'RESOLVE_RETREAT' || action.type === 'RESOLVE_TAKE_GROUND') {
-        setAiLastAction({ kind: 'move', unitId: (action as any).unitId, from: hexOf((action as any).unitId), to: `${(action as any).q},${(action as any).r}` });
+      const typeName = (uid: string) => {
+        const u: any = (gameState.units as any)[uid];
+        return unitTypes.find((t: any) => t.id === u?.typeId)?.name || 'Jednotka';
+      };
+      const record = (kind: 'move' | 'attack', unitId: string, from: string, to: string, label: string) => {
+        setAiLastAction({ kind, unitId, from, to });
+        setAiLog(prev => [...prev, { id: prev.length, kind, unitId, from, to, label }]);
+      };
+      if (action.type === 'MOVE') {
+        record('move', (action as any).unitId, hexOf((action as any).unitId), `${(action as any).q},${(action as any).r}`, `Pohyb: ${typeName((action as any).unitId)}`);
+      } else if (action.type === 'RESOLVE_RETREAT') {
+        const from = hexOf((action as any).unitId);
+        const to = `${(action as any).q},${(action as any).r}`;
+        record('move', (action as any).unitId, from, to, from === to ? `Ztráta při ústupu: ${typeName((action as any).unitId)}` : `Ústup: ${typeName((action as any).unitId)}`);
+      } else if (action.type === 'RESOLVE_TAKE_GROUND') {
+        record('move', (action as any).unitId, hexOf((action as any).unitId), `${(action as any).q},${(action as any).r}`, `Obsazení pozice: ${typeName((action as any).unitId)}`);
       } else if (action.type === 'ATTACK') {
-        setAiLastAction({ kind: 'attack', unitId: (action as any).attackerId, from: hexOf((action as any).attackerId), to: hexOf((action as any).targetId) });
+        record('attack', (action as any).attackerId, hexOf((action as any).attackerId), hexOf((action as any).targetId), `Útok: ${typeName((action as any).attackerId)} → ${typeName((action as any).targetId)}`);
       } else if (action.type !== 'DISMISS_COMBAT') {
         setAiLastAction(null);
       }
@@ -204,6 +230,6 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit,
     undoLastAction, canUndo,
     getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions,
-    aiLastAction, clearAiHighlight
+    aiLastAction, clearAiHighlight, aiLog
   };
 }
