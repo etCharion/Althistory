@@ -250,11 +250,13 @@ describe('AI vs AI – simulace celých partií', () => {
       expect(next).not.toBe(state);
       state = next;
       steps++;
-      // Invariant férovosti: AI hraje přes stejná pravidla jako člověk –
-      // žádná jednotka nikdy nesmí mít víc než 2 zdroje.
+      // Invarianty férovosti: AI hraje přes stejná pravidla jako člověk –
+      // žádná jednotka nikdy nesmí mít víc než 2 zdroje a jednotky hráče,
+      // který není na tahu, nesmí mít zdroje žádné (na konci tahu propadají).
       for (const u of Object.values(state.units) as any[]) {
         expect(u.resources).toBeGreaterThanOrEqual(0);
         expect(u.resources).toBeLessThanOrEqual(2);
+        if (u.ownerId !== state.activePlayerId) expect(u.resources).toBe(0);
       }
     }
     return { state, steps };

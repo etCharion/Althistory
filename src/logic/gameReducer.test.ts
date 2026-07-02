@@ -253,12 +253,11 @@ describe('ATTACK (fáze D – útok)', () => {
     expect(s.grid['0,5'].unitId).toBe('d1'); // žádná mutace vstupu
   });
 
-  it('zásahy nejprve odeberou zdroje, pak figurky; útok stojí 1 zdroj', () => {
+  it('zásahy odebírají figurky (zdroje je nepohlcují); útok stojí 1 zdroj', () => {
     const seed = findSeed(3, d => countHits(d, 'infantry') === 1 && countFlags(d) === 0);
     const s = attackState({ resources: 1 });
     const after = reducer(s, local({ type: 'ATTACK', attackerId: 'a1', targetId: 'd1', seed }), rules);
-    expect(after.units.d1.resources).toBe(0);
-    expect(after.units.d1.figures).toBe(4); // zdroj pohltil zásah
+    expect(after.units.d1.figures).toBe(3); // zásah jde rovnou do figurek
     expect(after.units.a1).toMatchObject({ resources: 1, hasAttacked: true });
   });
 
@@ -377,7 +376,7 @@ describe('RESOLVE_TAKE_GROUND / CANCEL_TAKE_GROUND', () => {
 });
 
 describe('END_TURN a NEXT_PHASE', () => {
-  it('konec tahu: předá tah, dá soupeři příjem, sníží přenesené zdroje na max 1', () => {
+  it('konec tahu: předá tah, dá soupeři příjem, všechny nevyužité zdroje propadají', () => {
     const s = buildState({
       phase: 'attack',
       hexes: [hexEntry(0, 0, 'grass', { unitId: 'u1' }), hexEntry(0, 8, 'grass', { unitId: 'e1' })],
@@ -390,7 +389,8 @@ describe('END_TURN a NEXT_PHASE', () => {
     expect(after.activePlayerId).toBe('player2');
     expect(after.phase).toBe('distribution-sections');
     expect(after.centralWarehouse.player2).toBe(6);
-    expect(after.units.u1).toMatchObject({ resources: 1, hasMoved: false, hasAttacked: false, movementUsed: 0 });
+    // Žádný přenos zdrojů přes konec tahu („život navíc" byl ze hry odstraněn).
+    expect(after.units.u1).toMatchObject({ resources: 0, hasMoved: false, hasAttacked: false, movementUsed: 0 });
     expect(after.units.e1.resources).toBe(0); // nový hráč začíná bez přidělených zdrojů
     expect(after.currentTurn).toBe(1); // číslo tahu roste až po tahu druhého hráče
     const round2 = reducer(after, local({ type: 'END_TURN' }), rules);
