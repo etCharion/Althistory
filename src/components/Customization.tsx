@@ -376,13 +376,19 @@ const Customization = ({ onBack, onEditScenario }) => {
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs mb-4">
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase text-gray-400">Omezení pohybu</label>
-                      <select className="w-full border p-1 rounded mt-1" value={o.movementRestriction || 'none'} onChange={e => updateOverlay({ ...o, movementRestriction: e.target.value as any })}>
-                        <option value="none">Žádné</option>
-                        <option value="stop">Zastavit při vstupu</option>
-                        <option value="no-move">Neprůchodné</option>
-                      </select>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-gray-400">Omezení pohybu</label>
+                        <select className="w-full border p-1 rounded mt-1" value={o.movementRestriction || 'none'} onChange={e => updateOverlay({ ...o, movementRestriction: e.target.value as any })}>
+                          <option value="none">Žádné</option>
+                          <option value="stop">Zastavit při vstupu</option>
+                          <option value="no-move">Neprůchodné</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input type="checkbox" id={`attack-stop-${o.id}`} checked={!!o.allowAttackAfterStop} onChange={e => updateOverlay({ ...o, allowAttackAfterStop: e.target.checked })} />
+                        <label htmlFor={`attack-stop-${o.id}`} className="text-[10px] font-bold uppercase text-gray-600">Lze útočit po 'stop'</label>
+                      </div>
                     </div>
                     <div className="space-y-2 border-l pl-4">
                       <label className="block text-[10px] font-bold uppercase text-gray-400">Obranný bonus (kostky)</label>
@@ -391,8 +397,24 @@ const Customization = ({ onBack, onEditScenario }) => {
                         <input type="number" className="w-full border p-1 rounded" value={o.diceModifierDefense || 0} onChange={e => updateOverlay({ ...o, diceModifierDefense: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="flex items-center gap-2">
+                        <span className="text-[10px] w-12">Pěchota:</span>
+                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierDefenseInfantry || 0} onChange={e => updateOverlay({ ...o, diceModifierDefenseInfantry: parseInt(e.target.value) || 0 })} />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] w-12">Tank:</span>
+                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierDefenseTank || 0} onChange={e => updateOverlay({ ...o, diceModifierDefenseTank: parseInt(e.target.value) || 0 })} />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] w-12">Děl:</span>
+                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierDefenseArtillery || 0} onChange={e => updateOverlay({ ...o, diceModifierDefenseArtillery: parseInt(e.target.value) || 0 })} />
+                      </div>
+                      <div className="flex items-center gap-2 pt-1 border-t">
                         <span className="text-[10px] w-12">Ign. vlajek:</span>
                         <input type="number" className="w-full border p-1 rounded" value={o.ignoreFlags || 0} onChange={e => updateOverlay({ ...o, ignoreFlags: parseInt(e.target.value) || 0 })} />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input type="checkbox" id={`owner-only-${o.id}`} checked={!!o.onlyBonusForOwner} onChange={e => updateOverlay({ ...o, onlyBonusForOwner: e.target.checked })} />
+                        <label htmlFor={`owner-only-${o.id}`} className="text-[10px] font-bold uppercase text-gray-600">Jen pro majitele</label>
                       </div>
                     </div>
                     <div className="space-y-2 border-l pl-4">
@@ -413,19 +435,51 @@ const Customization = ({ onBack, onEditScenario }) => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs mb-4">
-                    <div className="border-l pl-4">
-                      <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Neprůchodné pro jednotky</label>
-                      <div className="flex flex-wrap gap-3">
-                        {([['infantry', 'Pěchota'], ['tank', 'Tank'], ['artillery', 'Dělostřelectvo']] as const).map(([cat, label]) => (
-                          <label key={cat} className="flex items-center gap-1">
-                            <input type="checkbox" checked={(o.impassableForCategories || []).includes(cat)} onChange={e => {
-                              const cats = o.impassableForCategories || [];
-                              const next = e.target.checked ? [...cats, cat] : cats.filter(c => c !== cat);
-                              updateOverlay({ ...o, impassableForCategories: next });
-                            }} />
-                            <span>{label}</span>
-                          </label>
-                        ))}
+                    <div className="border-l pl-4 space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Neprůchodné pro jednotky</label>
+                        <div className="flex flex-wrap gap-3">
+                          {([['infantry', 'Pěchota'], ['tank', 'Tank'], ['artillery', 'Dělostřelectvo']] as const).map(([cat, label]) => (
+                            <label key={cat} className="flex items-center gap-1">
+                              <input type="checkbox" checked={(o.impassableForCategories || []).includes(cat)} onChange={e => {
+                                const cats = o.impassableForCategories || [];
+                                const next = e.target.checked ? [...cats, cat] : cats.filter(c => c !== cat);
+                                updateOverlay({ ...o, impassableForCategories: next });
+                              }} />
+                              <span>{label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Zákaz ústupu pro</label>
+                        <div className="flex flex-wrap gap-3">
+                          {([['infantry', 'Pěchota'], ['tank', 'Tank'], ['artillery', 'Dělostřelectvo']] as const).map(([cat, label]) => (
+                            <label key={cat} className="flex items-center gap-1">
+                              <input type="checkbox" checked={(o.noRetreatCategories || []).includes(cat)} onChange={e => {
+                                const cats = o.noRetreatCategories || [];
+                                const next = e.target.checked ? [...cats, cat] : cats.filter(c => c !== cat);
+                                updateOverlay({ ...o, noRetreatCategories: next });
+                              }} />
+                              <span>{label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Zákaz vyjití (uvěznění) pro</label>
+                        <div className="flex flex-wrap gap-3">
+                          {([['infantry', 'Pěchota'], ['tank', 'Tank'], ['artillery', 'Dělostřelectvo']] as const).map(([cat, label]) => (
+                            <label key={cat} className="flex items-center gap-1">
+                              <input type="checkbox" checked={(o.cannotLeaveCategories || []).includes(cat)} onChange={e => {
+                                const cats = o.cannotLeaveCategories || [];
+                                const next = e.target.checked ? [...cats, cat] : cats.filter(c => c !== cat);
+                                updateOverlay({ ...o, cannotLeaveCategories: next });
+                              }} />
+                              <span>{label}</span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
                       <label className="block text-[10px] font-bold uppercase text-gray-400 mt-3">Neprůchodné pro stranu</label>
                       <select className="w-full border p-1 rounded mt-1" value={o.impassableForPlayer || ''} onChange={e => updateOverlay({ ...o, impassableForPlayer: (e.target.value || undefined) as any })}>

@@ -14,7 +14,21 @@ export const DEFAULT_TERRAIN_TYPES = [
 
 export const DEFAULT_OVERLAY_TYPES = [
   { id: 'sandbags', name: 'Pytle s pískem', diceModifierDefense: 1, ignoreFlags: 1, color: '#8b4513', description: 'Obranný bonus +1 kostka. Ignoruje 1 vlajku. Zničeny při opuštění pole.' },
-  { id: 'wire', name: 'Ostnatý drát', movementRestriction: 'stop', diceModifierAttackInfantry: -1, diceModifierAttackArtillery: -1, color: '#808080', description: 'Zastavuje pohyb. Pěchota a dělostřelectvo: -1 kostka při útoku z tohoto pole. Tanky drát při vstupu zničí.' }
+  { id: 'wire', name: 'Ostnatý drát', movementRestriction: 'stop', diceModifierAttackInfantry: -1, diceModifierAttackArtillery: -1, color: '#808080', description: 'Zastavuje pohyb. Pěchota a dělostřelectvo: -1 kostka při útoku z tohoto pole. Tanky drát při vstupu zničí.' },
+  {
+    id: 'bunker',
+    name: 'Bunkr',
+    diceModifierDefenseInfantry: 1,
+    diceModifierDefenseTank: 2,
+    ignoreFlags: 1,
+    impassableForCategories: ['tank', 'artillery'] as any,
+    noRetreatCategories: ['artillery'] as any,
+    cannotLeaveCategories: ['artillery'] as any,
+    onlyBonusForOwner: true,
+    allowAttackAfterStop: true,
+    color: '#808080',
+    description: 'Obranný bonus: Pěchota +1, Tank +2. Ignoruje 1 vlajku. Neprůchodné pro tanky a dělostřelectvo. Dělostřelectvo v bunkru nemůže ustoupit ani z něj vyjít. Bonus platí pouze pro majitele.'
+  }
 ];
 
 export const DEFAULT_COUNTRIES = [

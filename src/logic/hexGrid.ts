@@ -111,12 +111,15 @@ export function getReachableDistances(q, r, movementLimit, grid, terrainTypes, o
   const startTerrain = terrainTypes.find(t => t.id === startHex?.terrainTypeId);
   const startOverlay = overlayTypes.find(o => o.id === startHex?.overlayTypeId);
   const exitAdjacentOnly = !!(startTerrain?.exitToAdjacentOnly || startOverlay?.exitToAdjacentOnly);
+  const startCannotLeave = unitCategory && startOverlay?.cannotLeaveCategories?.includes(unitCategory);
 
   while (queue.length > 0) {
     const { q: cq, r: cr, dist: cd } = queue.shift();
     if (cd >= movementLimit) continue;
     // Po vystoupení z pole s omezeným výstupem už nelze pokračovat v pohybu.
     if (cd > 0 && exitAdjacentOnly) continue;
+    // Nelze vyjít z určitých překážek (např. dělostřelectvo z bunkru).
+    if (cd === 0 && startCannotLeave) continue;
     const currentHex = grid[`${cq},${cr}`];
     const currentTerrain = terrainTypes.find(t => t.id === currentHex?.terrainTypeId);
     const currentOverlay = overlayTypes.find(o => o.id === currentHex?.overlayTypeId);
@@ -246,8 +249,20 @@ export function getDiceCount(attackerUnit, targetUnit, attackerHex, targetHex, g
     if (!(tarTerrain.id === 'hill' && onSameRidge)) {
       if (isTank) terrainDef = tarTerrain.diceModifierDefenseTank ?? 0;
       else if (isInfantry) terrainDef = tarTerrain.diceModifierDefenseInfantry ?? 0;
+      else if (isArtillery) terrainDef = tarTerrain.diceModifierDefenseArtillery ?? 0;
     }
-    const overlayDef = tarOverlay?.diceModifierDefense ?? 0;
+
+    let overlayDef = tarOverlay?.diceModifierDefense ?? 0;
+    // Check for category-specific overlay defense
+    if (isInfantry && tarOverlay?.diceModifierDefenseInfantry !== undefined) overlayDef = Math.max(overlayDef, tarOverlay.diceModifierDefenseInfantry);
+    if (isTank && tarOverlay?.diceModifierDefenseTank !== undefined) overlayDef = Math.max(overlayDef, tarOverlay.diceModifierDefenseTank);
+    if (isArtillery && tarOverlay?.diceModifierDefenseArtillery !== undefined) overlayDef = Math.max(overlayDef, tarOverlay.diceModifierDefenseArtillery);
+
+    // Some overlays (like Bunker) only provide bonus if the owner controls them.
+    if (tarOverlay?.onlyBonusForOwner && tarHex.overlayOwnerId && tarHex.overlayOwnerId !== targetUnit.ownerId) {
+      overlayDef = 0;
+    }
+
     diceModifierDefense = Math.max(terrainDef, overlayDef);
   }
 
