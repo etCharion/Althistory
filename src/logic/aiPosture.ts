@@ -52,7 +52,9 @@ export type Situation = {
   turn: number;
 };
 
-// Hodnota jednotky pro poměr sil: (figurky + zdroje) × váha typu.
+// Hodnota jednotky pro poměr sil: figurky × váha typu. Zdroje se nepočítají –
+// jsou přechodné (na konci tahu propadají), poměr by kolísal podle toho, kdo
+// je zrovna na tahu.
 const CATEGORY_VALUE: Record<string, number> = { tank: 1.3, artillery: 1.2, infantry: 1 };
 
 function forceValue(state: GameState, rules: Rules, pid: PlayerId): number {
@@ -61,7 +63,7 @@ function forceValue(state: GameState, rules: Rules, pid: PlayerId): number {
     if (u.ownerId !== pid) continue;
     const utype: any = rules.unitTypes.find((t: any) => t.id === u.typeId);
     const cat = utype?.category || 'infantry';
-    total += ((u.figures || 0) + (u.resources || 0)) * (CATEGORY_VALUE[cat] ?? 1);
+    total += (u.figures || 0) * (CATEGORY_VALUE[cat] ?? 1);
   }
   return total;
 }

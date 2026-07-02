@@ -29,7 +29,7 @@ const PHASE_DESCRIPTIONS = {
   },
   'distribution-units': {
     title: 'B) Zdroje jednotkám',
-    text: 'Hráč přiděluje zdroje ze sekcí konkrétním jednotkám v těchto sekcích. Každá jednotka může mít max. 2 zdroje. Zdroje slouží pro pohyb, útok a jako "životy".'
+    text: 'Hráč přiděluje zdroje ze sekcí konkrétním jednotkám v těchto sekcích. Každá jednotka může mít max. 2 zdroje. Zdroje slouží pro pohyb a útok; nevyužité na konci tahu propadají.'
   },
   'movement': {
     title: 'C) Pohyb jednotek',

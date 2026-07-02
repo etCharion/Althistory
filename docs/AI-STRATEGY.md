@@ -44,12 +44,12 @@ zásoby. AI proto každé kolo hodnotí tři sekce (levá / střed / pravá) pod
 
 ## 3. Zásobování jednotek
 
-Zdroj je zároveň palivo (pohyb), munice (útok) i vesta (pohlcuje zásahy).
-Pořadí přídělu:
+Zdroj je palivo (pohyb) a munice (útok); nevyužité zdroje na konci tahu
+propadají, takže se nevyplácí je hromadit. Pořadí přídělu:
 
 1. jednotky, které **mohou hned střílet** (mají cíl v dostřelu) a nemají zdroj,
 2. jednotky **v kontaktu s nepřítelem** (blízko fronty) — druhý zdroj jako
-   rezerva na manévr + štít,
+   rezerva na manévr,
 3. **posádky objektivů** — zdroj navíc znamená, že první zásah je neshodí,
 4. dělostřelectvo s výhledem na cíle (vytrvalá palba každé kolo).
 
@@ -85,7 +85,7 @@ přiblíží-li se protivník na dotyk.
 Výběr cíle (globálně přes všechny své jednotky, ne po jedné):
 
 1. **Dorážení**: cíl, který lze pravděpodobně zničit (očekávané zásahy ≥ jeho
-   figurky + zdroje), má absolutní prioritu — zničená jednotka je vítězný bod.
+   figurky), má absolutní prioritu — zničená jednotka je vítězný bod.
 2. **Koncentrace palby**: už poškozené cíle mají přednost před čerstvými.
 3. **Vytlačování**: cíle stojící na objektivech mají bonus (i neúspěšný útok
    může vlajkou vynutit ústup a uvolnit objektiv).
@@ -99,7 +99,7 @@ Když po vlajkách rozhoduje o ústupu vlastní jednotky (i během tahu člověk
 
 - **Nikdy dobrovolně nezemře**: hrozí-li setrváním zničení a existuje volné
   pole, ustoupí.
-- **Drží klíčové pozice**: zdravá jednotka (zbývá ≥ 2 „životy") na drženém
+- **Drží klíčové pozice**: zdravá jednotka (zbývají ≥ 2 figurky) na drženém
   objektivu raději vezme ztrátu, než by objektiv vyklidila.
 - Jinak ustoupí na pole s nejmenší hrozbou (a nejlepším krytím).
 
@@ -162,7 +162,7 @@ takže postoj přirozeně drží celý tah a nepřeskakuje.
 |---|---|---|
 | **Role v bitvě** `role` | Z rozestavení scénáře (stabilní celou hru): kolik objektivů získatelných pro AI drží na začátku soupeř/nikdo vs. kolik jich AI musí bránit; + kdo má převahu sil na startu. Scénář „dobij most" → AI s mostem je *obránce*, druhá strana *útočník*; bez objektivů → *střetná bitva*. | útočník / obránce / střetná |
 | **Bodová situace** `score` | `myNeed = VP_k_výhře − mojeVP`, `enemyNeed` totéž pro soupeře. Porovnání potřeb, ne absolutních bodů. | vedu / vyrovnáno / prohrávám / **kritické** (`enemyNeed ≤ 2` a menší než `myNeed`) |
-| **Poměr sil** `force` | Součet (figurky + zdroje) × hodnota typu (tank 1.3, dělo 1.2, pěchota 1.0), můj / soupeřův. Pásma s hysterezí, aby postoj nekmital na hranici. | převaha (≥ 1.3) / vyrovnané / slabší (≤ 0.75) |
+| **Poměr sil** `force` | Součet figurek × hodnota typu (tank 1.3, dělo 1.2, pěchota 1.0), můj / soupeřův. Pásma s hysterezí, aby postoj nekmital na hranici. | převaha (≥ 1.3) / vyrovnané / slabší (≤ 0.75) |
 | **Fáze hry** `turn` | Číslo tahu. | otevření (1.–2. tah) / střed / — |
 
 ## 12. Katalog postojů

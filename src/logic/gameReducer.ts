@@ -319,18 +319,11 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       if (!isGeneral(state, action.clientId, active)) return state;
       const next: PlayerId = active === 'player1' ? 'player2' : 'player1';
       const newUnits: Record<string, any> = { ...state.units };
+      // Nevyužité zdroje na konci tahu propadají – žádný přenos do dalšího
+      // tahu (mechanika „ponechaného zdroje jako života navíc" byla ze hry
+      // odstraněna).
       Object.keys(newUnits).forEach(id => {
-        const u = newUnits[id];
-        if (u.ownerId === next) {
-          newUnits[id] = { ...u, resources: 0, resourceOrigins: [], hasMoved: false, hasAttacked: false, movementUsed: 0 };
-        } else {
-          newUnits[id] = {
-            ...u,
-            resources: Math.min(u.resources, 1),
-            resourceOrigins: u.resourceOrigins ? u.resourceOrigins.slice(0, Math.min(u.resources, 1)) : [],
-            hasMoved: false, hasAttacked: false, movementUsed: 0
-          };
-        }
+        newUnits[id] = { ...newUnits[id], resources: 0, resourceOrigins: [], hasMoved: false, hasAttacked: false, movementUsed: 0 };
       });
       const { nVP, newGrid: updatedGrid } = checkObjectives(state.grid, newUnits, next, 'startOfTurn', state.currentTurn, state.victoryPoints);
       return {
@@ -513,7 +506,9 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       targetStats.damageTaken += h;
       if (!targetStats.attackers.includes(att.typeId)) targetStats.attackers = [...targetStats.attackers, att.typeId];
 
-      for (let i = 0; i < h; i++) { if (upT.resources > 0) upT.resources--; else upT.figures--; }
+      // Zásahy odebírají figurky (zdroje zásahy nepohlcují – bránící se
+      // jednotka je stejně nemá, na konci tahu propadají).
+      upT.figures -= h;
 
       let pendingRetreat: any = null;
       let pendingTakeGround: any = null;
@@ -595,7 +590,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
         let u = { ...nU[uid] };
         let uStats = { ...nStats[uid] };
         uStats.damageTaken += 1;
-        if (u.resources > 0) u.resources--; else u.figures--;
+        u.figures -= 1;
         let nG = { ...state.grid } as any;
         let died = false;
         if (u.figures <= 0) {

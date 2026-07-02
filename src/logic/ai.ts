@@ -47,7 +47,8 @@ function unitsOf(state: GameState, pid: PlayerId) {
   return Object.values(state.units).filter((u: any) => u.ownerId === pid) as any[];
 }
 
-const strengthOf = (u: any) => (u.figures || 0) + (u.resources || 0);
+// „Životy" jednotky = figurky (zdroje zásahy nepohlcují a na konci tahu propadají).
+const strengthOf = (u: any) => (u.figures || 0);
 
 function typeOf(rules: Rules, u: any) {
   return rules.unitTypes.find((t: any) => t.id === u.typeId);
