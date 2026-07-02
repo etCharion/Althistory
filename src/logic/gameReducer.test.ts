@@ -74,7 +74,7 @@ describe('ASSIGN_RESOURCE (fáze B – zdroje jednotkám)', () => {
     expect(s.units.u1.resources).toBe(1);
   });
 
-  it('po rozdání všech zdrojů automaticky přejde do fáze pohybu', () => {
+  it('po rozdání všech zdrojů zůstává ve fázi rozdělování; do pohybu se jde až tlačítkem', () => {
     let s: any = buildState({
       hexes: [hexEntry(0, 0, 'grass', { unitId: 'u1' })],
       units: [unitEntry('u1', 'infantry', 'player1')],
@@ -82,6 +82,9 @@ describe('ASSIGN_RESOURCE (fáze B – zdroje jednotkám)', () => {
     s = reducer(s, local({ type: 'DISTRIBUTE', section: 'left', amount: 1 }), rules);
     s = reducer(s, local({ type: 'NEXT_PHASE' }), rules);
     s = reducer(s, local({ type: 'ASSIGN_RESOURCE', unitId: 'u1' }), rules);
+    // Žádný automatický přechod – hráč může rozdělení ještě přeskládat.
+    expect(s.phase).toBe('distribution-units');
+    s = reducer(s, local({ type: 'NEXT_PHASE' }), rules);
     expect(s.phase).toBe('movement');
   });
 });

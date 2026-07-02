@@ -377,13 +377,13 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       if (canAdd) {
         const newSecRes = { ...state.sectionResources[active], [sec!]: state.sectionResources[active][sec!] - 1 } as any;
         const newOrigins = [...(unit.resourceOrigins || []), sec as SectionId];
-        const newState: GameState = {
+        // Fáze se po rozdání posledního zdroje neposouvá automaticky – hráč ji
+        // ukončí tlačítkem (NEXT_PHASE), aby mohl rozdělení ještě přeskládat.
+        return {
           ...state,
           sectionResources: { ...state.sectionResources, [active]: newSecRes },
           units: { ...state.units, [unitId]: { ...unit, resources: unit.resources + 1, resourceOrigins: newOrigins } }
         };
-        if (newSecRes.left === 0 && newSecRes.center === 0 && newSecRes.right === 0) { newState.phase = 'movement'; newState.undoStack = []; }
-        return newState;
       }
       return state;
     }

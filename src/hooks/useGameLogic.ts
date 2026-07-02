@@ -3,7 +3,7 @@ import { getNeighbors, getReachableHexes, getTargetableUnits, isImpassableForUni
 import { newDiceSeed } from '../logic/dice';
 import { chooseAiAction } from '../logic/ai';
 import { subscribeToGame, applyAction, createGameIfMissing } from '../logic/firebaseService';
-import { reducer, createInitialGameState } from '../logic/gameReducer';
+import { reducer, createInitialGameState, isGeneral } from '../logic/gameReducer';
 import type { Action, Rules } from '../logic/gameReducer';
 
 // Zvýraznění poslední akce AI na mapě: jednotka + odkud + kam (viz GameView).
@@ -223,6 +223,19 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
   };
 
   const hasAvailableActions = () => getUnusedActions().length > 0;
+
+  // Fáze útoku je jediná, ze které se už nedá nic vrátit – jakmile aktivnímu
+  // hráči nezbývá žádný útok a žádný souboj nečeká na vyřešení, tah skončí
+  // automaticky. Ostatní fáze ukončuje hráč vždy sám tlačítkem (kvůli undo).
+  useEffect(() => {
+    if (!gameState || gameState.winner || gameState.phase !== 'attack') return;
+    if (gameState.activePlayerId === aiPlayerId) return; // tah AI řídí smyčka výše
+    if (gameState.pendingCombat || gameState.pendingRetreat || gameState.pendingTakeGround) return;
+    if (!isGeneral(gameState, clientId, gameState.activePlayerId)) return;
+    if (hasAvailableActions()) return;
+    const t = setTimeout(() => dispatch({ type: 'END_TURN', clientId }), 900);
+    return () => clearTimeout(t);
+  }, [gameState, aiPlayerId, clientId, dispatch]);
 
   return {
     gameState, combatResult, retreatingUnitId, takeGroundOption,
