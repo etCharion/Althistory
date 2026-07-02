@@ -64,6 +64,7 @@ Produkční build (StrictMode se v produkci nedvojí) ani online hra (transakce 
 - **`MOVE` počítá vítěze ze zastaralých jednotek** ✅ *opraveno* — `computeWinner(state.scenario, state.units, nVP)` používal `state.units` místo `newUnits`. Dnes bez následku (pohyb jednotky neničí), ale nekonzistentní se zbytkem reduceru.
 - **Zaseknutelný `pendingCombat`** — `DISMISS_COMBAT` smí jen hráč aktivního týmu (`gameReducer.ts:560`). Když se útočníkova strana odpojí hned po útoku, obránce overlay nezavře a `hasPendingCombat` blokuje veškeré další akce. Řešení: povolit dismiss oběma týmům, nebo timeout na serverovém čase.
 - **Mrtvé pole `maxSectionResources`** — je v typech (`types/game.ts:113`), v editoru i ve scénářích, ale reducer ho nikde nevynucuje. Buď vynutit v `DISTRIBUTE`, nebo odstranit.
+- **`ASSIGN_RESOURCE` nevalidoval sekci** ✅ *opraveno* — reducer přijal libovolné `sectionId` bez kontroly, že patří k sekcím jednotky; UI nabízí jen platné sekce, ale programový klient mohl čerpat z cizí sekce. Reducer nyní cizí sekci odmítá.
 - **Katalogy pravidel se načítají jen při mountu** (`GameView.tsx:195-215`). Když někdo změní typy jednotek/terénů v Nastavení uprostřed online hry, klienti počítají s různými pravidly. Řešení: zmrazit kopii katalogů do dokumentu hry při jejím založení.
 - **Deploy workflow běží jen na větvi `memoir-44-clone-implementation-v2-…`** a PR se nebuildí — chyba typu „nezkompiluje se" projde review bez povšimnutí. Doporučuji přidat CI job `npm run build` na pull requesty.
 

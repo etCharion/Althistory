@@ -6,7 +6,10 @@ import { subscribeToGame, applyAction, createGameIfMissing } from '../logic/fire
 import { reducer, createInitialGameState } from '../logic/gameReducer';
 import type { Action, Rules } from '../logic/gameReducer';
 
-export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, gameId?: string, clientId: string = 'local', aiPlayerId: 'player1' | 'player2' | null = null) {
+// Zvýraznění poslední akce AI na mapě: jednotka + odkud + kam (viz GameView).
+export type AiActionHighlight = { kind: 'move' | 'attack'; unitId: string; from: string; to: string } | null;
+
+export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, gameId?: string, clientId: string = 'local', aiPlayerId: 'player1' | 'player2' | null = null, aiRun: boolean = true, aiSpeed: number = 1) {
   const rules: Rules = useMemo(() => ({ unitTypes, terrainTypes, overlayTypes }), [unitTypes, terrainTypes, overlayTypes]);
 
   // Local (hot-seat) games keep their state in React; online games mirror Firestore.
@@ -28,7 +31,13 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
 
   const gameState = gameId ? remoteState : localState;
 
+  // Poslední pohyb/útok AI – GameView z něj zvýrazňuje jednotku a políčka.
+  const [aiLastAction, setAiLastAction] = useState<AiActionHighlight>(null);
+  const clearAiHighlight = useCallback(() => setAiLastAction(null), []);
+
   const dispatch = useCallback((action: Action) => {
+    // Akce člověka ruší zvýraznění posledního tahu AI.
+    if ((action as any).clientId !== 'ai') setAiLastAction(null);
     if (gameId) {
       applyAction(gameId, action, rules);
     } else {
@@ -38,21 +47,40 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
 
   // ---- AI protihráč (jen lokální hra) ----
   // Po každé změně stavu se AI zeptáme na jednu další akci; provede se se
-  // zpožděním, aby tah počítače působil čitelným tempem. Kostky nechává na
-  // stole déle (zavře je až po doběhnutí animace – v UI to obvykle stihne
-  // dřív jeho vlastní časovač, DISMISS je idempotentní).
+  // zpožděním (škálovaným zvolenou rychlostí), aby tah počítače působil
+  // čitelným tempem. Vlastní tah AI startuje až na pokyn hráče (`aiRun`);
+  // ústupy a obsazování pozic během tahu člověka řeší AI vždy hned, protože
+  // jsou součástí hráčova souboje. Kostky nechává na stole déle (zavře je až
+  // po doběhnutí animace – v UI to obvykle stihne dřív jeho vlastní časovač).
   useEffect(() => {
     if (!aiPlayerId || gameId || !gameState || gameState.winner) return;
     if (!unitTypes?.length || !terrainTypes?.length) return;
+    if (gameState.activePlayerId === aiPlayerId && !aiRun) return; // čeká na „Spustit tah"
     const action = chooseAiAction(gameState, rules, aiPlayerId, { clientId: 'ai' });
     if (!action) return;
-    const delay = action.type === 'DISMISS_COMBAT' ? 2600
+    const base = action.type === 'DISMISS_COMBAT' ? 2600
       : action.type === 'ATTACK' ? 900
       : (action.type === 'DISTRIBUTE' || action.type === 'ASSIGN_RESOURCE') ? 400
       : 700;
-    const t = setTimeout(() => dispatch(action), delay);
+    const delay = action.type === 'DISMISS_COMBAT' ? base : Math.round(base * aiSpeed);
+    const t = setTimeout(() => {
+      // Zvýraznění: pohyby (vč. ústupu a obsazení pozice) a útoky; ostatní
+      // akce zvýraznění ruší, ať na mapě nestraší z minulé fáze.
+      const hexOf = (uid: string) => {
+        const h: any = Object.values(gameState.grid).find((x: any) => x.unitId === uid);
+        return h ? `${h.q},${h.r}` : '';
+      };
+      if (action.type === 'MOVE' || action.type === 'RESOLVE_RETREAT' || action.type === 'RESOLVE_TAKE_GROUND') {
+        setAiLastAction({ kind: 'move', unitId: (action as any).unitId, from: hexOf((action as any).unitId), to: `${(action as any).q},${(action as any).r}` });
+      } else if (action.type === 'ATTACK') {
+        setAiLastAction({ kind: 'attack', unitId: (action as any).attackerId, from: hexOf((action as any).attackerId), to: hexOf((action as any).targetId) });
+      } else if (action.type !== 'DISMISS_COMBAT') {
+        setAiLastAction(null);
+      }
+      dispatch(action);
+    }, delay);
     return () => clearTimeout(t);
-  }, [gameState, aiPlayerId, gameId, rules, dispatch]);
+  }, [gameState, aiPlayerId, gameId, rules, dispatch, aiRun, aiSpeed]);
 
   // ---- Action creators (thin wrappers around dispatch) ----
   const distributeResource = (_pid, sec, amount: number | 'max' = 1) => dispatch({ type: 'DISTRIBUTE', clientId, section: sec, amount });
@@ -175,6 +203,7 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     dismissCombat, cancelTakeGround, takeGround, destroyOverlay,
     distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit,
     undoLastAction, canUndo,
-    getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions
+    getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions,
+    aiLastAction, clearAiHighlight
   };
 }

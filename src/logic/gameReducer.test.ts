@@ -64,6 +64,16 @@ describe('ASSIGN_RESOURCE (fáze B – zdroje jednotkám)', () => {
     expect(s.sectionResources.player1.left).toBe(3);
   });
 
+  it('odmítne přidělení z cizí sekce (sectionId mimo sekce jednotky)', () => {
+    let s = assignState(); // jednotka u1 stojí v levé sekci
+    (s.sectionResources as any).player1.right = 2;
+    const before = s;
+    s = reducer(s, local({ type: 'ASSIGN_RESOURCE', unitId: 'u1', sectionId: 'right' }), rules);
+    expect(s).toBe(before); // pravá sekce k jednotce nepatří
+    s = reducer(s, local({ type: 'ASSIGN_RESOURCE', unitId: 'u1', sectionId: 'left' }), rules);
+    expect(s.units.u1.resources).toBe(1);
+  });
+
   it('po rozdání všech zdrojů automaticky přejde do fáze pohybu', () => {
     let s: any = buildState({
       hexes: [hexEntry(0, 0, 'grass', { unitId: 'u1' })],

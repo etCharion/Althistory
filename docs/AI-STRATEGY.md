@@ -133,12 +133,13 @@ legální a hra musí skončit vítězem.
 
 ---
 
-# Část II — Situační postoje (PLÁN)
+# Část II — Situační postoje ✅ *implementováno*
 
-*Návrh rozšíření: doktrína výše je zatím jedna a neměnná. Tato část plánuje
-systém **postojů (postur)** — variant strategie, mezi kterými AI přepíná podle
-typu bitvy, vývoje skóre a poměru sil. Cíl: útočník se má chovat jinak než
-obránce, prohrávající jinak než vedoucí. Zatím NEIMPLEMENTOVÁNO.*
+*Systém **postojů (postur)** — variant strategie, mezi kterými AI přepíná
+podle typu bitvy, vývoje skóre a poměru sil. Útočník se chová jinak než
+obránce, prohrávající jinak než vedoucí. Implementace: `src/logic/aiPosture.ts`
+(hodnocení situace, matice, katalog vah), napojení v `src/logic/ai.ts`, odznak
+aktuálního postoje v liště tahu počítače, testy v `aiPosture.test.ts`.*
 
 ## 10. Princip: jedna doktrína, více postojů
 

@@ -250,6 +250,12 @@ describe('AI vs AI – simulace celých partií', () => {
       expect(next).not.toBe(state);
       state = next;
       steps++;
+      // Invariant férovosti: AI hraje přes stejná pravidla jako člověk –
+      // žádná jednotka nikdy nesmí mít víc než 2 zdroje.
+      for (const u of Object.values(state.units) as any[]) {
+        expect(u.resources).toBeGreaterThanOrEqual(0);
+        expect(u.resources).toBeLessThanOrEqual(2);
+      }
     }
     return { state, steps };
   }

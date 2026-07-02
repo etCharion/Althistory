@@ -362,6 +362,9 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       const sections = getUnitSections((hex as any).q, (hex as any).r, state.scenario);
       const isBoundaryUnit = sections.length > 1;
 
+      // Explicitně zadaná sekce musí být jednou ze sekcí jednotky – UI nabízí
+      // jen platné, ale reducer je jediná autorita (AI, podvržený klient).
+      if (sectionId && !sections.includes(sectionId)) return state;
       let sec = sectionId;
       if (!sec && !isBoundaryUnit) sec = sections[0];
 

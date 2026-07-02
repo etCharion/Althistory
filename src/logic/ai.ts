@@ -4,9 +4,15 @@
 // Zásady: AI hraje výhradně přes akce reduceru (nemůže podvádět), vrací vždy
 // jednu akci za rozhodnutí (null = „teď nerozhoduji já") a rozhoduje
 // deterministicky – náhodné jsou jen kostky (seed generuje seedFn).
+//
+// Váhy nejsou pevné: před každým rozhodnutím se z bojové situace vybere
+// postoj (Útok / Obrana / Výpad / Konsolidace / Vabank – část II doktríny,
+// implementace v aiPosture.ts) a heuristiky pracují s jeho vahami.
 import { getDistance, getNeighbors, getReachableDistances, getTargetableUnits, getDiceCount, checkLOS, getUnitSections, isImpassableForUnit } from './hexGrid';
 import { categoryOf } from './gameReducer';
 import { newDiceSeed } from './dice';
+import { postureFor } from './aiPosture';
+import type { Posture, AiWeights } from './aiPosture';
 import type { Action, Rules } from './gameReducer';
 import type { GameState, PlayerId, SectionId } from '../types/game';
 
@@ -14,28 +20,15 @@ export type AiOptions = {
   clientId?: string;
   // Generátor seedů pro hody kostkami (testy dosazují deterministický).
   seedFn?: () => number;
+  // Vynucený postoj (testy) – jinak se vybírá situačně.
+  posture?: Posture;
 };
 
-// ---------------------------------------------------------------------------
-// Váhy doktríny (AI-STRATEGY.md §8). Jednotka měřítka ≈ 1 očekávaný zásah.
-// ---------------------------------------------------------------------------
-const W = {
-  KILL: 4,            // §5.1 dorážení – bonus za pravděpodobné zničení cíle (VP)
-  FOCUS: 0.8,         // §5.2 koncentrace palby na už poškozené cíle
-  PUSH_OFF_OBJ: 1.2,  // §5.3 bonus za palbu na jednotku držící objektiv
-  OBJ_CAPTURE: 6,     // §4 vstup na neobsazený objektiv (za 1 bod objektivu)
-  OBJ_LEAVE: 5,       // §4 penalizace za opuštění drženého dočasného objektivu
-  APPROACH: 0.5,      // §4 přiblížení k atraktoru (za 1 hex)
-  DANGER: 0.6,        // §4 váha hrozby nepřátelské palby na cílovém poli
-  COVER: 0.5,         // §4 terénní obranný bonus (za 1 kostku), platí u fronty
-  MOVE_MARGIN: 0.4,   // §4 pohyb jen když nové pole překoná stání o tento práh
-  // Cena prvního pohybu (utracený zdroj) je nízká záměrně: o ušlý útok se
-  // stará člen `atk` (po utracení posledního zdroje vyjde 0), tohle je jen
-  // setrvačnost proti bezcílnému přešlapování.
-  RESOURCE_COST: 0.3,
-  HOLD_OBJ: 2.5,      // §6 ochota vzít ztrátu při držení objektivu
-  ARTY_MIN_DIST: 2,   // §4 dělostřelectvo si drží odstup
-};
+// Aktuální postoj AI pro UI (odznak „Počítač táhne… · Obrana").
+export function getAiPosture(state: GameState, rules: Rules, aiPlayerId: PlayerId): Posture | null {
+  if (!state || !rules.unitTypes?.length) return null;
+  return postureFor(state, rules, aiPlayerId);
+}
 
 // Šance na zásah podle kategorie cíle (kostka: 2× pěchota, tank, granát, vlajka, hvězda).
 const P_HIT: Record<string, number> = { infantry: 3 / 6, tank: 2 / 6, artillery: 1 / 6 };
@@ -95,7 +88,7 @@ function holdsTemporaryObjective(hex: any, pid: PlayerId): boolean {
 // pokud tam skončí pohyb dlouhý `movedDist` a zbude jí `resourcesAfter` zdrojů.
 // Zohledňuje limit střelby po pohybu, „stop" terén (ruší útok, drát ne) a
 // pravidlo přednosti sousedních nepřátel.
-function bestAttackFrom(state: GameState, rules: Rules, u: any, utype: any, fromHex: any, movedDist: number, resourcesAfter: number): number {
+function bestAttackFrom(state: GameState, rules: Rules, u: any, utype: any, fromHex: any, movedDist: number, resourcesAfter: number, w: AiWeights): number {
   if (resourcesAfter <= 0) return 0;
   const cat = categoryOf(utype);
   if (cat === 'artillery' && movedDist > 0) return 0;
@@ -122,7 +115,7 @@ function bestAttackFrom(state: GameState, rules: Rules, u: any, utype: any, from
     if (dice <= 0) continue;
     const eType = typeOf(rules, e);
     let val = dice * pHit(categoryOf(eType));
-    if (val >= strengthOf(e)) val += W.KILL; // šance na dorážku
+    if (val >= strengthOf(e)) val += w.KILL; // šance na dorážku
     if (dist === 1) { hasAdjacent = true; bestAdj = Math.max(bestAdj, val); }
     else bestRanged = Math.max(bestRanged, val);
   }
@@ -132,7 +125,7 @@ function bestAttackFrom(state: GameState, rules: Rules, u: any, utype: any, from
 
 // Hrozba nepřátelské palby na poli `hex` v příštím kole, škálovaná křehkostí
 // jednotky a snížená krytím (AI-STRATEGY.md §4 „Krytí a riziko").
-function dangerAt(state: GameState, rules: Rules, u: any, utype: any, hex: any): number {
+function dangerAt(state: GameState, rules: Rules, u: any, utype: any, hex: any, w: AiWeights): number {
   const myCat = categoryOf(utype);
   const enemies = unitsOf(state, u.ownerId === 'player1' ? 'player2' : 'player1');
   let threat = 0;
@@ -153,7 +146,7 @@ function dangerAt(state: GameState, rules: Rules, u: any, utype: any, hex: any):
   }
   const fragility = 2 / Math.max(1, strengthOf(u));
   const cover = coverAt(rules, hex, myCat);
-  return Math.max(0, threat * fragility - cover * W.COVER);
+  return Math.max(0, threat * fragility - cover * w.COVER);
 }
 
 // Atraktor pohybu: nejbližší získatelný objektiv, jinak nejbližší nepřítel
@@ -204,17 +197,20 @@ function sectionStats(state: GameState, rules: Rules, ai: PlayerId) {
   return stats;
 }
 
-function chooseDistribution(state: GameState, rules: Rules, ai: PlayerId, clientId: string): Action | null {
+function chooseDistribution(state: GameState, rules: Rules, ai: PlayerId, clientId: string, p: Posture): Action | null {
   const warehouse = state.centralWarehouse[ai];
   if (warehouse <= 0) return null;
   const stats = sectionStats(state, rules, ai);
   const cur = state.sectionResources[ai];
   const logistics = !!state.scenario.logisticsLimit;
 
-  // 1) Rezerva: každá aktivní sekce dostane nejdřív 1 zdroj.
-  for (const s of SECTIONS) {
-    if (stats[s].myUnits > 0 && stats[s].capacity > cur[s] && cur[s] === 0) {
-      return { type: 'DISTRIBUTE', clientId, section: s, amount: 1 };
+  // 1) Rezerva: každá aktivní sekce dostane nejdřív 1 zdroj (vabank rezervy
+  // vynechává – vše jde do těžiště).
+  if (p.supplyReserve) {
+    for (const s of SECTIONS) {
+      if (stats[s].myUnits > 0 && stats[s].capacity > cur[s] && cur[s] === 0) {
+        return { type: 'DISTRIBUTE', clientId, section: s, amount: 1 };
+      }
     }
   }
 
@@ -243,7 +239,7 @@ function chooseDistribution(state: GameState, rules: Rules, ai: PlayerId, client
 // ---------------------------------------------------------------------------
 // Fáze B: zdroje jednotkám (AI-STRATEGY.md §3)
 // ---------------------------------------------------------------------------
-function chooseAssignment(state: GameState, rules: Rules, ai: PlayerId, clientId: string): Action | null {
+function chooseAssignment(state: GameState, rules: Rules, ai: PlayerId, clientId: string, p: Posture): Action | null {
   const res = state.sectionResources[ai];
   if (res.left <= 0 && res.center <= 0 && res.right <= 0) return null;
 
@@ -257,15 +253,22 @@ function chooseAssignment(state: GameState, rules: Rules, ai: PlayerId, clientId
     const utype = typeOf(rules, u);
     if (!utype) continue;
 
+    const isArtillery = categoryOf(utype) === 'artillery';
     const canShoot = getTargetableUnits(hex.q, hex.r, utype, state, rules.terrainTypes, rules.overlayTypes).length > 0;
     const distToEnemy = nearestEnemyDist(state, ai, hex);
+    const garrison = hex.objective && hex.objective.controllingPlayerId === ai;
     let score = 0;
     if (canShoot) score += u.resources === 0 ? 4 : 2;            // munice pro střelce
     score += Math.max(0, 3 - Math.min(3, distToEnemy));           // fronta
-    if (hex.objective && hex.objective.controllingPlayerId === ai) score += 2; // posádka objektivu
-    if (categoryOf(utype) === 'artillery' && canShoot) score += 1;
+    if (garrison) score += 2;                                     // posádka objektivu
+    if (isArtillery && canShoot) score += 1;
     if (strengthOf(u) <= 1 && distToEnemy > 3) score -= 1;        // opozdilci naposled
     score += (2 - (u.resources || 0)) * 0.1;                      // preferuj prázdné
+    // Obranné postoje zásobují dělostřelectvo a posádky přednostně (§3, §12).
+    if (p.defensiveSupply) {
+      if (isArtillery && canShoot) score += 1.5;
+      if (garrison) score += 1.5;
+    }
 
     // Ze sekcí jednotky vyber tu s největší zásobou (vyrovnávání).
     const sectionId = sections.sort((a, b) => res[b] - res[a])[0];
@@ -289,37 +292,38 @@ function nearestEnemyDist(state: GameState, ai: PlayerId, fromHex: any): number 
 // ---------------------------------------------------------------------------
 // Fáze C: pohyb (AI-STRATEGY.md §4)
 // ---------------------------------------------------------------------------
-function scoreStanding(state: GameState, rules: Rules, ai: PlayerId, u: any, utype: any, hex: any): number {
-  const atk = u.hasAttacked ? 0 : bestAttackFrom(state, rules, u, utype, hex, u.movementUsed || 0, u.resources || 0);
-  const obj = capturableObjective(hex, ai) ? W.OBJ_CAPTURE * (hex.objective.points || 1) : 0;
-  const hold = holdsTemporaryObjective(hex, ai) ? W.OBJ_LEAVE : 0;
-  const approach = -nearestAttractorDist(state, ai, hex) * W.APPROACH;
-  const danger = -dangerAt(state, rules, u, utype, hex) * W.DANGER;
+function scoreStanding(state: GameState, rules: Rules, ai: PlayerId, u: any, utype: any, hex: any, w: AiWeights): number {
+  const atk = u.hasAttacked ? 0 : bestAttackFrom(state, rules, u, utype, hex, u.movementUsed || 0, u.resources || 0, w);
+  const obj = capturableObjective(hex, ai) ? w.OBJ_CAPTURE * (hex.objective.points || 1) : 0;
+  const hold = holdsTemporaryObjective(hex, ai) ? w.OBJ_LEAVE : 0;
+  const approach = -nearestAttractorDist(state, ai, hex) * w.APPROACH;
+  const danger = -dangerAt(state, rules, u, utype, hex, w) * w.DANGER;
   return atk + obj + hold + approach + danger;
 }
 
-function scoreDestination(state: GameState, rules: Rules, ai: PlayerId, u: any, utype: any, fromHex: any, destKey: string, dist: number): number {
+function scoreDestination(state: GameState, rules: Rules, ai: PlayerId, u: any, utype: any, fromHex: any, destKey: string, dist: number, w: AiWeights): number {
   const dHex = (state.grid as any)[destKey];
   const cat = categoryOf(utype);
   const resourcesAfter = u.hasMoved ? (u.resources || 0) : (u.resources || 0) - 1;
   const movedTotal = (u.movementUsed || 0) + dist;
 
-  const atk = u.hasAttacked ? 0 : bestAttackFrom(state, rules, u, utype, dHex, movedTotal, resourcesAfter);
-  const obj = capturableObjective(dHex, ai) ? W.OBJ_CAPTURE * (dHex.objective.points || 1) : 0;
-  const leave = holdsTemporaryObjective(fromHex, ai) ? -W.OBJ_LEAVE : 0;
-  const approach = -nearestAttractorDist(state, ai, dHex) * W.APPROACH;
-  const danger = -dangerAt(state, rules, u, utype, dHex) * W.DANGER;
-  const moveCost = u.hasMoved ? 0 : -W.RESOURCE_COST;
+  const atk = u.hasAttacked ? 0 : bestAttackFrom(state, rules, u, utype, dHex, movedTotal, resourcesAfter, w);
+  const obj = capturableObjective(dHex, ai) ? w.OBJ_CAPTURE * (dHex.objective.points || 1) : 0;
+  const leave = holdsTemporaryObjective(fromHex, ai) ? -w.OBJ_LEAVE : 0;
+  const approach = -nearestAttractorDist(state, ai, dHex) * w.APPROACH;
+  const danger = -dangerAt(state, rules, u, utype, dHex, w) * w.DANGER;
+  const moveCost = u.hasMoved ? 0 : -w.RESOURCE_COST;
 
   let score = atk + obj + leave + approach + danger + moveCost;
   // Dělostřelecká doktrína: drž odstup od nepřítele.
-  if (cat === 'artillery' && nearestEnemyDist(state, ai, dHex) < W.ARTY_MIN_DIST) score -= 3;
+  if (cat === 'artillery' && nearestEnemyDist(state, ai, dHex) < w.ARTY_MIN_DIST) score -= 3;
   // Nevlez na drát bez důvodu (past: stojí pohyb i pozici).
   if (dHex?.overlayTypeId === 'wire' && !obj) score -= 1.5;
   return score;
 }
 
-function chooseMove(state: GameState, rules: Rules, ai: PlayerId, clientId: string): Action | null {
+function chooseMove(state: GameState, rules: Rules, ai: PlayerId, clientId: string, p: Posture): Action | null {
+  const w = p.weights;
   let best: { unitId: string; q: number; r: number; gain: number } | null = null;
 
   for (const u of unitsOf(state, ai)) {
@@ -334,14 +338,14 @@ function chooseMove(state: GameState, rules: Rules, ai: PlayerId, clientId: stri
 
     // Dělostřelectvo: pohyb = ztráta salvy; nehýbat, pokud má na co střílet.
     if (cat === 'artillery' && !u.hasAttacked && (u.resources || 0) > 0
-        && bestAttackFrom(state, rules, u, utype, hex, 0, u.resources) > 0) continue;
+        && bestAttackFrom(state, rules, u, utype, hex, 0, u.resources, w) > 0) continue;
 
-    const stay = scoreStanding(state, rules, ai, u, utype, hex);
+    const stay = scoreStanding(state, rules, ai, u, utype, hex, w);
     const remaining = utype.movement - (u.movementUsed || 0);
     const dists = getReachableDistances(hex.q, hex.r, remaining, state.grid, rules.terrainTypes, rules.overlayTypes, { unitCategory: cat, ownerId: u.ownerId });
     for (const [dKey, dist] of Object.entries(dists) as [string, number][]) {
-      const gain = scoreDestination(state, rules, ai, u, utype, hex, dKey, dist) - stay;
-      if (gain > W.MOVE_MARGIN && (!best || gain > best.gain)) {
+      const gain = scoreDestination(state, rules, ai, u, utype, hex, dKey, dist, w) - stay;
+      if (gain > w.MOVE_MARGIN && (!best || gain > best.gain)) {
         const dHex = (state.grid as any)[dKey];
         best = { unitId: u.id, q: dHex.q, r: dHex.r, gain };
       }
@@ -354,7 +358,8 @@ function chooseMove(state: GameState, rules: Rules, ai: PlayerId, clientId: stri
 // ---------------------------------------------------------------------------
 // Fáze D: útok (AI-STRATEGY.md §5)
 // ---------------------------------------------------------------------------
-function chooseAttack(state: GameState, rules: Rules, ai: PlayerId, clientId: string, seedFn: () => number): Action | null {
+function chooseAttack(state: GameState, rules: Rules, ai: PlayerId, clientId: string, seedFn: () => number, p: Posture): Action | null {
+  const w = p.weights;
   let best: { attackerId: string; targetId: string; score: number } | null = null;
   let wireBreaker: string | null = null;
 
@@ -382,11 +387,11 @@ function chooseAttack(state: GameState, rules: Rules, ai: PlayerId, clientId: st
       if (dice <= 0) continue;
       const expected = dice * pHit(categoryOf(tType));
       let score = expected;
-      if (expected >= strengthOf(t)) score += W.KILL;                    // dorážení
-      else if (strengthOf(t) - expected <= 1) score += W.KILL / 2;       // skoro dorážka
+      if (expected >= strengthOf(t)) score += w.KILL;                    // dorážení
+      else if (strengthOf(t) - expected <= 1) score += w.KILL / 2;       // skoro dorážka
       const tTypeMax = tType?.maxFigures ?? t.figures;
-      if (t.figures < tTypeMax || (t.resources || 0) === 0) score += W.FOCUS; // koncentrace palby
-      if (tHex.objective) score += W.PUSH_OFF_OBJ * (tHex.objective.points || 1); // vytlačování
+      if (t.figures < tTypeMax || (t.resources || 0) === 0) score += w.FOCUS; // koncentrace palby
+      if (tHex.objective) score += w.PUSH_OFF_OBJ * (tHex.objective.points || 1); // vytlačování
       if (!best || score > best.score || (score === best.score && u.id < best.attackerId)) {
         best = { attackerId: u.id, targetId: tid, score };
       }
@@ -400,7 +405,8 @@ function chooseAttack(state: GameState, rules: Rules, ai: PlayerId, clientId: st
 // ---------------------------------------------------------------------------
 // Ústup (AI-STRATEGY.md §6) – řeší se i během tahu člověka.
 // ---------------------------------------------------------------------------
-function chooseRetreat(state: GameState, rules: Rules, ai: PlayerId, clientId: string): Action {
+function chooseRetreat(state: GameState, rules: Rules, ai: PlayerId, clientId: string, p: Posture): Action {
+  const w = p.weights;
   const pr = state.pendingRetreat!;
   const u = (state.units as any)[pr.unitId];
   const hex = unitHexOf(state, pr.unitId);
@@ -419,12 +425,14 @@ function chooseRetreat(state: GameState, rules: Rules, ai: PlayerId, clientId: s
   const healthy = strengthOf(u) >= 2;
   const holding = hex.objective && (hex.objective.controllingPlayerId === u.ownerId || capturableObjective(hex, u.ownerId));
 
-  // Zdravá posádka objektivu vezme ztrátu a drží pozici; umírající vždy ustoupí.
-  const stayValue = (holding && healthy ? W.HOLD_OBJ : 0) - (wouldDie ? 100 : 1);
+  // Zdravá posádka objektivu vezme ztrátu a drží pozici; umírající vždy
+  // ustoupí. Ochotu držet moduluje postoj (obrana drží víc, konsolidace šetří
+  // životy, vabank nemá čas couvat).
+  const stayValue = (holding && healthy ? w.HOLD_OBJ * p.retreatHoldFactor : 0) - (wouldDie ? 100 : 1);
   let bestOpt: { q: number; r: number; value: number } | null = null;
   for (const n of options) {
     const h = (state.grid as any)[key(n.q, n.r)];
-    const value = -dangerAt(state, rules, u, utype, h) * W.DANGER + coverAt(rules, h, cat) * W.COVER;
+    const value = -dangerAt(state, rules, u, utype, h, w) * w.DANGER + coverAt(rules, h, cat) * w.COVER;
     if (!bestOpt || value > bestOpt.value) bestOpt = { q: n.q, r: n.r, value };
   }
 
@@ -438,7 +446,8 @@ function chooseRetreat(state: GameState, rules: Rules, ai: PlayerId, clientId: s
 // ---------------------------------------------------------------------------
 // Obsazení pozice (AI-STRATEGY.md §7)
 // ---------------------------------------------------------------------------
-function chooseTakeGround(state: GameState, rules: Rules, ai: PlayerId, clientId: string): Action {
+function chooseTakeGround(state: GameState, rules: Rules, ai: PlayerId, clientId: string, p: Posture): Action {
+  const w = p.weights;
   const tg = state.pendingTakeGround!;
   const u = (state.units as any)[tg.unitId];
   const fromHex = unitHexOf(state, tg.unitId);
@@ -451,10 +460,12 @@ function chooseTakeGround(state: GameState, rules: Rules, ai: PlayerId, clientId
 
   if (!u || !fromHex || !target || target.unitId) return cancel;
   if (capturableObjective(target, u.ownerId)) return advance; // objektiv se bere vždy
-  if (target.overlayTypeId === 'wire') return cancel;         // na drát se neleze
+  if (target.overlayTypeId === 'wire') return cancel;         // na drát se neleze (ani vabank)
+  if (p.takeGround === 'objectivesOnly') return cancel;       // obrana/konsolidace nevylézá
+  if (p.takeGround === 'always') return advance;              // vabank žene vpřed
   if (strengthOf(u) < 2) return cancel;                       // oslabení nepronásledují
   const betterCover = coverAt(rules, target, cat) >= coverAt(rules, fromHex, cat);
-  const saferEnough = dangerAt(state, rules, u, utype, target) <= dangerAt(state, rules, u, utype, fromHex) + 1;
+  const saferEnough = dangerAt(state, rules, u, utype, target, w) <= dangerAt(state, rules, u, utype, fromHex, w) + 1;
   return betterCover && saferEnough ? advance : cancel;
 }
 
@@ -467,6 +478,10 @@ export function chooseAiAction(state: GameState, rules: Rules, aiPlayerId: Playe
   if (!state || state.winner) return null;
   if (!rules.unitTypes?.length || !rules.terrainTypes?.length) return null;
 
+  // Postoj podle bojové situace (část II doktríny) – vybírá se před každým
+  // rozhodnutím, ale jeho vstupy se mění po tazích, takže drží celý tah.
+  const posture = opts.posture ?? postureFor(state, rules, aiPlayerId);
+
   // Kostky na stole: na svém tahu je AI zavře (v UI to obvykle stihne dřív
   // časovač animace – DISMISS je idempotentní), jinak čeká.
   if (state.pendingCombat) {
@@ -475,24 +490,24 @@ export function chooseAiAction(state: GameState, rules: Rules, aiPlayerId: Playe
   // Ústup / obsazení pozice vlastní jednotky se řeší i během tahu člověka.
   if (state.pendingRetreat) {
     const owner = (state.units as any)[state.pendingRetreat.unitId]?.ownerId;
-    return owner === aiPlayerId ? chooseRetreat(state, rules, aiPlayerId, clientId) : null;
+    return owner === aiPlayerId ? chooseRetreat(state, rules, aiPlayerId, clientId, posture) : null;
   }
   if (state.pendingTakeGround) {
     const owner = (state.units as any)[state.pendingTakeGround.unitId]?.ownerId;
-    return owner === aiPlayerId ? chooseTakeGround(state, rules, aiPlayerId, clientId) : null;
+    return owner === aiPlayerId ? chooseTakeGround(state, rules, aiPlayerId, clientId, posture) : null;
   }
 
   if (state.activePlayerId !== aiPlayerId) return null;
 
   switch (state.phase) {
     case 'distribution-sections':
-      return chooseDistribution(state, rules, aiPlayerId, clientId) ?? { type: 'NEXT_PHASE', clientId };
+      return chooseDistribution(state, rules, aiPlayerId, clientId, posture) ?? { type: 'NEXT_PHASE', clientId };
     case 'distribution-units':
-      return chooseAssignment(state, rules, aiPlayerId, clientId) ?? { type: 'NEXT_PHASE', clientId };
+      return chooseAssignment(state, rules, aiPlayerId, clientId, posture) ?? { type: 'NEXT_PHASE', clientId };
     case 'movement':
-      return chooseMove(state, rules, aiPlayerId, clientId) ?? { type: 'NEXT_PHASE', clientId };
+      return chooseMove(state, rules, aiPlayerId, clientId, posture) ?? { type: 'NEXT_PHASE', clientId };
     case 'attack':
-      return chooseAttack(state, rules, aiPlayerId, clientId, seedFn) ?? { type: 'END_TURN', clientId };
+      return chooseAttack(state, rules, aiPlayerId, clientId, seedFn, posture) ?? { type: 'END_TURN', clientId };
     default:
       return null;
   }
