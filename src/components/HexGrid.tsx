@@ -9,8 +9,9 @@ const getHexPoints = (radius) => {
   }
   return pts;
 };
-const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], onHexClick, onHexMouseEnter, onHexMouseLeave, leftWidth, centerWidth, selectedUnitId, highlightedHexes, hoveredHex, activePhase, unitSections, onSectionSelect, labelMode = 'below' }) => {
+const HexGrid = ({ width, height, hexes, units, terrainTypes, overlayTypes = [], unitTypes = [], onHexClick, onHexMouseEnter, onHexMouseLeave, leftWidth, centerWidth, selectedUnitId, highlightedHexes, hoveredHex, activePhase, unitSections, onSectionSelect, labelMode = 'below' }) => {
   const getTerrain = (id) => terrainTypes.find(t => t.id === id) || terrainTypes[0];
+  const getOverlay = (id) => overlayTypes.find(o => o.id === id) || null;
   const getUnitSymbol = (typeId) => unitTypes.find(ut => ut.id === typeId)?.natoSymbol || typeId;
   const padding = 60; const viewBoxWidth = (width + 0.5) * HEX_SIZE * Math.sqrt(3) + padding; const viewBoxHeight = (height * 1.5 - 0.5) * HEX_SIZE + padding;
   // Tři vrstvy kreslené v tomto pořadí: terén (interaktivní políčka) → popisky →
@@ -36,46 +37,67 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], on
           {isHovered && highlight && <polygon points={pts.join(' ')} fill={highlight === 'move' ? "rgba(58,166,87,0.5)" : "rgba(192,57,43,0.5)"} className="pointer-events-none" />}
           {isSelected && <polygon points={pts.join(' ')} fill="none" stroke="#ffce4a" strokeWidth="7" opacity="0.65" className="pointer-events-none" />}
           {isSelected && <polygon points={pts.join(' ')} fill="none" stroke="#fff" strokeWidth="3" className="pointer-events-none" />}
-          {hex?.overlayTypeId === 'sandbags' && (
-            <g transform={`translate(${x}, ${y})`}>
-              <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#8b4513" strokeWidth="8" strokeDasharray="12,4" strokeLinecap="round" />
-              <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#a0522d" strokeWidth="4" strokeDasharray="12,4" strokeDashoffset="2" strokeLinecap="round" />
-            </g>
-          )}
-          {hex?.overlayTypeId === 'wire' && (
-            <g transform={`translate(${x}, ${y})`}>
-               <polygon points={getHexPoints(HEX_SIZE - 6).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#444" strokeWidth="1" strokeDasharray="2,4" />
-               {(() => {
-                 const pts = getHexPoints(HEX_SIZE - 6);
-                 let d = "";
-                 for (let i = 0; i < 6; i++) {
-                   const p1 = pts[i];
-                   const p2 = pts[(i+1)%6];
-                   for (let j = 0; j <= 4; j++) {
-                     const t = j / 4;
-                     const mx = p1.x + (p2.x - p1.x) * t;
-                     const my = p1.y + (p2.y - p1.y) * t;
-                     const perpX = -(p2.y - p1.y);
-                     const perpY = (p2.x - p1.x);
-                     const len = Math.sqrt(perpX*perpX + perpY*perpY);
-                     const offset = (j % 2 === 0 ? 3 : -3);
-                     const nx = mx + (perpX / len) * offset;
-                     const ny = my + (perpY / len) * offset;
-                     if (i === 0 && j === 0) d += `M${nx},${ny}`; else d += ` L${nx},${ny}`;
-                   }
-                 }
-                 return <path d={d} fill="none" stroke="#444" strokeWidth="1" />;
-               })()}
-            </g>
-          )}
-          {hex?.overlayTypeId === 'bunker' && (
-            <g transform={`translate(${x}, ${y})`}>
-              <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#666" strokeWidth="6" strokeLinecap="round" />
-              {hex.overlayOwnerId && (
-                <polygon points={getHexPoints(HEX_SIZE - 6).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={hex.overlayOwnerId === 'player1' ? '#1e40af' : '#b91c1c'} strokeWidth="1.5" strokeLinecap="round" />
-              )}
-            </g>
-          )}
+          {(() => {
+            if (!hex?.overlayTypeId) return null;
+            const overlay = getOverlay(hex.overlayTypeId);
+            let style = overlay?.visualStyle || hex.overlayTypeId;
+
+            // Robust fallback: if visualStyle is missing, try to infer from name or ID
+            if (overlay && !overlay.visualStyle) {
+              const name = (overlay.name || '').toLowerCase();
+              if (name.includes('bunkr')) style = 'bunker';
+              else if (name.includes('pytl')) style = 'sandbags';
+              else if (name.includes('drát') || name.includes('ostnat')) style = 'wire';
+            }
+
+            if (style === 'sandbags') {
+              return (
+                <g transform={`translate(${x}, ${y})`}>
+                  <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#8b4513" strokeWidth="8" strokeDasharray="12,4" strokeLinecap="round" />
+                  <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#a0522d" strokeWidth="4" strokeDasharray="12,4" strokeDashoffset="2" strokeLinecap="round" />
+                </g>
+              );
+            }
+            if (style === 'wire') {
+              return (
+                <g transform={`translate(${x}, ${y})`}>
+                   <polygon points={getHexPoints(HEX_SIZE - 6).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#444" strokeWidth="1" strokeDasharray="2,4" />
+                   {(() => {
+                     const pts = getHexPoints(HEX_SIZE - 6);
+                     let d = "";
+                     for (let i = 0; i < 6; i++) {
+                       const p1 = pts[i];
+                       const p2 = pts[(i+1)%6];
+                       for (let j = 0; j <= 4; j++) {
+                         const t = j / 4;
+                         const mx = p1.x + (p2.x - p1.x) * t;
+                         const my = p1.y + (p2.y - p1.y) * t;
+                         const perpX = -(p2.y - p1.y);
+                         const perpY = (p2.x - p1.x);
+                         const len = Math.sqrt(perpX*perpX + perpY*perpY);
+                         const offset = (j % 2 === 0 ? 3 : -3);
+                         const nx = mx + (perpX / len) * offset;
+                         const ny = my + (perpY / len) * offset;
+                         if (i === 0 && j === 0) d += `M${nx},${ny}`; else d += ` L${nx},${ny}`;
+                       }
+                     }
+                     return <path d={d} fill="none" stroke="#444" strokeWidth="1" />;
+                   })()}
+                </g>
+              );
+            }
+            if (style === 'bunker') {
+              return (
+                <g transform={`translate(${x}, ${y})`}>
+                  <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#666" strokeWidth="6" strokeLinecap="round" />
+                  {hex.overlayOwnerId && (
+                    <polygon points={getHexPoints(HEX_SIZE - 6).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={hex.overlayOwnerId === 'player1' ? '#1e40af' : '#b91c1c'} strokeWidth="1.5" strokeLinecap="round" />
+                  )}
+                </g>
+              );
+            }
+            return null;
+          })()}
           {hex?.objective && (
             <g transform={`translate(${x}, ${y-35})`}>
                {hex.objective.groupId && (

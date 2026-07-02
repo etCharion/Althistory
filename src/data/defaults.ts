@@ -13,11 +13,12 @@ export const DEFAULT_TERRAIN_TYPES = [
 ];
 
 export const DEFAULT_OVERLAY_TYPES = [
-  { id: 'sandbags', name: 'Pytle s pískem', diceModifierDefense: 1, ignoreFlags: 1, color: '#8b4513', description: 'Obranný bonus +1 kostka. Ignoruje 1 vlajku. Zničeny při opuštění pole.' },
-  { id: 'wire', name: 'Ostnatý drát', movementRestriction: 'stop', diceModifierAttackInfantry: -1, diceModifierAttackArtillery: -1, color: '#808080', description: 'Zastavuje pohyb. Pěchota a dělostřelectvo: -1 kostka při útoku z tohoto pole. Tanky drát při vstupu zničí.' },
+  { id: 'sandbags', name: 'Pytle s pískem', visualStyle: 'sandbags' as any, diceModifierDefense: 1, ignoreFlags: 1, color: '#8b4513', description: 'Obranný bonus +1 kostka. Ignoruje 1 vlajku. Zničeny při opuštění pole.' },
+  { id: 'wire', name: 'Ostnatý drát', visualStyle: 'wire' as any, movementRestriction: 'stop', diceModifierAttackInfantry: -1, diceModifierAttackArtillery: -1, color: '#808080', description: 'Zastavuje pohyb. Pěchota a dělostřelectvo: -1 kostka při útoku z tohoto pole. Tanky drát při vstupu zničí.' },
   {
     id: 'bunker',
     name: 'Bunkr',
+    visualStyle: 'bunker' as any,
     diceModifierDefenseInfantry: 1,
     diceModifierDefenseTank: 2,
     ignoreFlags: 1,

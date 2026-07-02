@@ -52,6 +52,7 @@ export type TerrainType = {
 export type OverlayType = {
   id: string;
   name: string;
+  visualStyle?: 'sandbags' | 'wire' | 'bunker';
   diceModifierDefense?: number;
   diceModifierDefenseInfantry?: number;
   diceModifierDefenseTank?: number;

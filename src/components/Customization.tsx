@@ -357,10 +357,19 @@ const Customization = ({ onBack, onEditScenario }) => {
             <div className="space-y-4">
               {overlays.map((o, idx) => (
                 <div key={o.id} className="p-4 border-2 border-tan-border rounded-[12px] bg-parchment-card shadow-sm">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
                     <div className="md:col-span-2">
                       <label className="text-[10px] font-bold uppercase text-gray-400">Název překážky</label>
                       <input className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold text-lg" value={o.name} onChange={e => updateOverlay({ ...o, name: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-gray-400">Vizuální styl</label>
+                      <select className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold" value={o.visualStyle || ''} onChange={e => updateOverlay({ ...o, visualStyle: e.target.value || undefined })}>
+                        <option value="">Žádný (jen barva)</option>
+                        <option value="sandbags">Pytle s pískem</option>
+                        <option value="wire">Ostnatý drát</option>
+                        <option value="bunker">Bunkr</option>
+                      </select>
                     </div>
                     <div>
                       <label className="text-[10px] font-bold uppercase text-gray-400">Barva (HEX)</label>
