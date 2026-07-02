@@ -61,6 +61,8 @@ const SELECT_CLASS =
 // A single operation/scenario card in the field-map menu grid.
 function ScenarioCard({ s, countries, campaigns, onLocal, onVsAi, onOnline }) {
   const [showOnlineHelp, setShowOnlineHelp] = useState(false);
+  // Výběr strany hráče pro hru proti počítači (AI dostane tu druhou).
+  const [showSidePick, setShowSidePick] = useState(false);
   // Volba pravidla pro tuto partii. Doplní se do scénáře až při spuštění hry.
   const [logisticsLimit, setLogisticsLimit] = useState(false);
   const configured = { ...s, logisticsLimit };
@@ -111,13 +113,35 @@ function ScenarioCard({ s, countries, campaigns, onLocal, onVsAi, onOnline }) {
         >
           <Play size={15} fill="currentColor" strokeWidth={0} /> Místní hra
         </button>
-        <button
-          onClick={() => onVsAi(configured)}
-          title={`Hra proti počítači — počítač velí straně ${s.player2?.name || 'Osa'}.`}
-          className="flex items-center justify-center gap-1.5 py-[11px] px-[13px] rounded-[10px] border-2 border-army bg-army/[0.08] text-army font-condensed font-extrabold text-[13px] tracking-[0.04em] uppercase hover:bg-army hover:text-white transition-colors"
-        >
-          <Bot size={15} /> Proti PC
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowSidePick(o => !o)}
+            title="Hra proti počítači — vyberte si stranu, té druhé velí počítač."
+            className="h-full flex items-center justify-center gap-1.5 py-[11px] px-[13px] rounded-[10px] border-2 border-army bg-army/[0.08] text-army font-condensed font-extrabold text-[13px] tracking-[0.04em] uppercase hover:bg-army hover:text-white transition-colors"
+          >
+            <Bot size={15} /> Proti PC
+          </button>
+          {showSidePick && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowSidePick(false)} />
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2.5 bg-white border-2 border-army rounded-xl shadow-2xl z-20 flex flex-col gap-1.5">
+                <div className="text-[10px] font-condensed font-extrabold uppercase tracking-[0.12em] text-tan text-center mb-0.5">Hrát za stranu</div>
+                <button
+                  onClick={() => { setShowSidePick(false); onVsAi(configured, 'player2'); }}
+                  className="w-full py-2 rounded-lg border-2 border-ally text-ally font-condensed font-extrabold text-[12px] uppercase tracking-[0.04em] hover:bg-ally hover:text-white transition-colors"
+                >
+                  {s.player1?.name || 'Spojenci'}
+                </button>
+                <button
+                  onClick={() => { setShowSidePick(false); onVsAi(configured, 'player1'); }}
+                  className="w-full py-2 rounded-lg border-2 border-army text-army font-condensed font-extrabold text-[12px] uppercase tracking-[0.04em] hover:bg-army hover:text-white transition-colors"
+                >
+                  {s.player2?.name || 'Osa'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
         <button
           onClick={() => onOnline(configured)}
           className="flex items-center justify-center gap-1.5 py-[11px] px-[15px] rounded-[10px] border-2 border-ally-soft bg-ally-soft/[0.08] text-ally-soft font-condensed font-extrabold text-[13px] tracking-[0.04em] uppercase hover:bg-ally-soft hover:text-white transition-colors"
@@ -204,13 +228,14 @@ function MainMenu() {
     setMode('editor');
   };
 
-  // Hra proti počítači je lokální hra, kde druhou stranu řídí AI (viz
-  // docs/AI-STRATEGY.md); volba se drží mimo scénář, aby se neukládala.
-  const [vsAi, setVsAi] = useState(false);
+  // Hra proti počítači je lokální hra, kde jednu stranu řídí AI (viz
+  // docs/AI-STRATEGY.md); hráč si při spuštění vybírá, které straně velí.
+  // Volba se drží mimo scénář, aby se neukládala.
+  const [aiSide, setAiSide] = useState<'player1' | 'player2' | null>(null);
 
-  const startLocalGame = (scenario, againstAi = false) => {
+  const startLocalGame = (scenario, aiPlayerId: 'player1' | 'player2' | null = null) => {
     setCurrentScenario(scenario);
-    setVsAi(againstAi);
+    setAiSide(aiPlayerId);
     setMode('game');
   };
 
@@ -227,7 +252,7 @@ function MainMenu() {
 
   if (mode === 'editor') return <ScenarioEditor onBack={() => setMode('menu')} initialScenario={editingScenario} />;
   if (mode === 'custom') return <Customization onBack={() => setMode('menu')} onEditScenario={handleEditScenario} />;
-  if (mode === 'game' && currentScenario) return <GameView scenario={currentScenario} aiPlayerId={vsAi ? 'player2' : null} onExit={() => setMode('menu')} />;
+  if (mode === 'game' && currentScenario) return <GameView scenario={currentScenario} aiPlayerId={aiSide} onExit={() => setMode('menu')} />;
 
   return (
     <div className="min-h-screen text-ink">
@@ -310,7 +335,7 @@ function MainMenu() {
         ) : (
           <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
             {filteredScenarios.map(s => (
-              <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns} onLocal={startLocalGame} onVsAi={(sc) => startLocalGame(sc, true)} onOnline={startOnlineGame} />
+              <ScenarioCard key={s.id} s={s} countries={countries} campaigns={campaigns} onLocal={(sc) => startLocalGame(sc)} onVsAi={startLocalGame} onOnline={startOnlineGame} />
             ))}
           </div>
         )}
