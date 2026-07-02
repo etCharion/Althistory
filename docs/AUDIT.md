@@ -106,8 +106,8 @@ Pro hru v okruhu přátel je to přijatelný kompromis. Pokud má být hra veře
 | **P1** ✅ | Opravit validaci pohybu v `MOVE` (použít `getReachableHexes`) — **hotovo** | malá |
 | **P1** ✅ | Opravit ústup do neprůchodného terénu (`RESOLVE_RETREAT` + `getRetreatHexes`) — **hotovo** | malá |
 | **P1** ✅ | Zčistit reducer: klonovat mutované hexy, hod kostkou předávat v akci (seed) — **hotovo** | malá–střední |
-| **P2** | Unit testy reduceru (Vitest) — čistý reducer je ideální kandidát; testy pohybu, útoku, ústupu, objektivů, undo | střední |
-| **P2** | CI: `npm run build` (+ testy) na pull requesty | malá |
+| **P2** ✅ | Unit testy reduceru (Vitest) — testy pohybu, útoku, ústupu, objektivů, undo, rolí (`src/logic/*.test.ts`, 50 testů) — **hotovo** | střední |
+| **P2** ✅ | CI: `npm run build` + `npm test` na pull requesty (`.github/workflows/ci.yml`) — **hotovo** | malá |
 | **P3** | Kombat log + toast při odmítnuté akci + indikace „hotových" jednotek | střední |
 | **P3** | Ošetření výpadků sítě (chybová hláška, retry) | malá |
 | **P4** | Anonymní Firebase Auth + Firestore security rules; katalogy pravidel zmrazit do dokumentu hry | střední |
