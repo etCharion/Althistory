@@ -49,8 +49,8 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], ov
           )}
           {hex?.overlayTypeId === 'bunker' && (
             <g transform={`translate(${x}, ${y})`}>
-              <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#666" strokeWidth="8" strokeLinecap="round" />
-              <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#999" strokeWidth="4" strokeLinecap="round" />
+              <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#666" strokeWidth="8" strokeDasharray="12,4" strokeLinecap="round" />
+              <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#999" strokeWidth="4" strokeDasharray="12,4" strokeDashoffset="2" strokeLinecap="round" />
               {hex.overlayOwnerId && (
                 <polygon points={getHexPoints(HEX_SIZE - 8).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={hex.overlayOwnerId === 'player1' ? '#1e40af' : '#b91c1c'} strokeWidth="1.5" strokeLinecap="round" />
               )}
@@ -87,7 +87,6 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], ov
             const verts = getHexPoints(HEX_SIZE - 5);
             return (
               <g transform={`translate(${x}, ${y})`}>
-                <polygon points={verts.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={oColor} strokeWidth="2.5" strokeLinecap="round" opacity="0.9" />
                 {verts.map((p1, i) => {
                   const p2 = verts[(i + 1) % 6];
                   const mx = (p1.x + p2.x) / 2;
