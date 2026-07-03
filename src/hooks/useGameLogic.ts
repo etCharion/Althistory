@@ -7,9 +7,15 @@ import { reducer, createInitialGameState, isGeneral } from '../logic/gameReducer
 import type { Action, Rules } from '../logic/gameReducer';
 
 // Zvýraznění poslední akce AI na mapě: jednotka + odkud + kam (viz GameView).
-export type AiActionHighlight = { kind: 'move' | 'attack'; unitId: string; from: string; to: string } | null;
+export type AiActionHighlight = { kind: 'move' | 'attack' | 'assign'; unitId: string; from: string; to: string } | null;
 // Záznam akce AI pro zpětné (čistě vizuální) prohlížení tahu počítače.
-export type AiLogEntry = { id: number; kind: 'move' | 'attack'; unitId: string; from: string; to: string; label: string };
+// `units`/`grid` je snímek herního stavu TĚSNĚ PŘED touto akcí – reducer je
+// čistý (nikdy nemutuje), takže stačí uložit reference. Při prohlížení kroku
+// se hrací deska vykreslí z tohoto snímku: jednotka je vidět tam, kde stála,
+// zničené jednotky se znovu objeví a barevně se označí, co s nimi AI provedla.
+export type AiLogEntry = { id: number; kind: 'move' | 'attack' | 'assign'; unitId: string; from: string; to: string; label: string; units: Record<string, any>; grid: Record<string, any> };
+
+const SECTION_LABEL: Record<string, string> = { left: 'Levá', center: 'Střed', right: 'Pravá' };
 
 export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, gameId?: string, clientId: string = 'local', aiPlayerId: 'player1' | 'player2' | null = null, aiRun: boolean = true, aiSpeed: number = 1) {
   const rules: Rules = useMemo(() => ({ unitTypes, terrainTypes, overlayTypes }), [unitTypes, terrainTypes, overlayTypes]);
@@ -86,11 +92,19 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
         const u: any = (gameState.units as any)[uid];
         return unitTypes.find((t: any) => t.id === u?.typeId)?.name || 'Jednotka';
       };
-      const record = (kind: 'move' | 'attack', unitId: string, from: string, to: string, label: string) => {
+      // Snímek stavu před akcí – stav je immutable, takže stačí uložit reference.
+      const beforeUnits = gameState.units;
+      const beforeGrid = gameState.grid;
+      const record = (kind: 'move' | 'attack' | 'assign', unitId: string, from: string, to: string, label: string) => {
         setAiLastAction({ kind, unitId, from, to });
-        setAiLog(prev => [...prev, { id: prev.length, kind, unitId, from, to, label }]);
+        setAiLog(prev => [...prev, { id: prev.length, kind, unitId, from, to, label, units: beforeUnits, grid: beforeGrid }]);
       };
-      if (action.type === 'MOVE') {
+      if (action.type === 'ASSIGN_RESOURCE') {
+        const uid = (action as any).unitId;
+        const at = hexOf(uid);
+        const sec = (action as any).sectionId;
+        record('assign', uid, '', at, sec ? `Zdroj: ${typeName(uid)} (${SECTION_LABEL[sec] || sec})` : `Zdroj: ${typeName(uid)}`);
+      } else if (action.type === 'MOVE') {
         record('move', (action as any).unitId, hexOf((action as any).unitId), `${(action as any).q},${(action as any).r}`, `Pohyb: ${typeName((action as any).unitId)}`);
       } else if (action.type === 'RESOLVE_RETREAT') {
         const from = hexOf((action as any).unitId);
