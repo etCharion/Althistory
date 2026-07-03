@@ -9,10 +9,16 @@ const getHexPoints = (radius) => {
   }
   return pts;
 };
-// Overlay ids, které mají vlastní vykreslení výše. Ostatní překážky (např.
-// vlastní „Zátaras“) se kreslí obecným stylem: šedý obrys s malými křížky (X)
-// po stranách políčka.
-const SPECIAL_OVERLAY_IDS = ['sandbags', 'wire', 'bunker'];
+// Odvodí vzhled překážky na mapě. Přednost má `mapStyle` u typu překážky;
+// jinak se použije mapování podle id built-in typů a jako výchozí obecný
+// barevný obrys ('outline').
+const resolveOverlayStyle = (overlayTypes, id) => {
+  const t = overlayTypes.find(o => o.id === id);
+  if (t?.mapStyle) return t.mapStyle;
+  if (id === 'sandbags' || id === 'wire' || id === 'bunker') return id;
+  if (id === 'barrier') return 'x';
+  return 'outline';
+};
 
 const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], overlayTypes = [], onHexClick, onHexMouseEnter, onHexMouseLeave, leftWidth, centerWidth, selectedUnitId, highlightedHexes, hoveredHex, activePhase, unitSections, onSectionSelect, labelMode = 'below' }) => {
   const getTerrain = (id) => terrainTypes.find(t => t.id === id) || terrainTypes[0];
@@ -33,6 +39,7 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], ov
       const isSelected = hex?.unitId && hex.unitId === selectedUnitId;
       const highlight = highlightedHexes?.[key];
       const isHovered = hoveredHex === key;
+      const overlayStyle = hex?.overlayTypeId ? resolveOverlayStyle(overlayTypes, hex.overlayTypeId) : null;
       const pts = []; for (let i = 0; i < 6; i++) { const a = (Math.PI / 180) * (60 * i - 30); pts.push(`${x + HEX_SIZE * Math.cos(a)},${y + HEX_SIZE * Math.sin(a)}`); }
       terrainLayer.push(
         <g key={key} data-testid={`hex-${q}-${r}`} onClick={() => onHexClick?.(q, r)} onMouseEnter={() => onHexMouseEnter?.(q, r)} onMouseLeave={() => onHexMouseLeave?.(q, r)} className="cursor-pointer">
@@ -41,13 +48,13 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], ov
           {isHovered && !highlight && (activePhase === 'movement' || activePhase === 'attack') && selectedUnitId && <polygon points={pts.join(' ')} fill="rgba(239, 68, 68, 0.5)" />}
           {isHovered && highlight && <polygon points={pts.join(' ')} fill={highlight === 'move' ? "rgba(34, 197, 94, 0.5)" : "rgba(239, 68, 68, 0.5)"} />}
           {isSelected && <polygon points={pts.join(' ')} fill="none" stroke="black" strokeWidth="1" opacity="0.5" />}
-          {hex?.overlayTypeId === 'sandbags' && (
+          {overlayStyle === 'sandbags' && (
             <g transform={`translate(${x}, ${y})`}>
               <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#8b4513" strokeWidth="8" strokeDasharray="12,4" strokeLinecap="round" />
               <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#a0522d" strokeWidth="4" strokeDasharray="12,4" strokeDashoffset="2" strokeLinecap="round" />
             </g>
           )}
-          {hex?.overlayTypeId === 'bunker' && (
+          {overlayStyle === 'bunker' && (
             <g transform={`translate(${x}, ${y})`}>
               <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#666" strokeWidth="8" strokeDasharray="12,4" strokeLinecap="round" />
               <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#999" strokeWidth="4" strokeDasharray="12,4" strokeDashoffset="2" strokeLinecap="round" />
@@ -56,7 +63,7 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], ov
               )}
             </g>
           )}
-          {hex?.overlayTypeId === 'wire' && (
+          {overlayStyle === 'wire' && (
             <g transform={`translate(${x}, ${y})`}>
                <polygon points={getHexPoints(HEX_SIZE - 6).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#444" strokeWidth="1" strokeDasharray="2,4" />
                {(() => {
@@ -82,7 +89,7 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], ov
                })()}
             </g>
           )}
-          {hex?.overlayTypeId && !SPECIAL_OVERLAY_IDS.includes(hex.overlayTypeId) && (() => {
+          {overlayStyle === 'x' && (() => {
             const oColor = getOverlayColor(hex.overlayTypeId);
             const verts = getHexPoints(HEX_SIZE - 5);
             return (
@@ -102,6 +109,9 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], ov
               </g>
             );
           })()}
+          {overlayStyle === 'outline' && (
+            <polygon points={getHexPoints(HEX_SIZE - 5).map(p => `${p.x},${p.y}`).join(' ')} transform={`translate(${x}, ${y})`} fill="none" stroke={getOverlayColor(hex.overlayTypeId)} strokeWidth="4" strokeLinecap="round" />
+          )}
           {hex?.objective && (
             <g transform={`translate(${x}, ${y-35})`}>
                {hex.objective.groupId && (

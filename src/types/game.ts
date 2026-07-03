@@ -71,6 +71,9 @@ export type OverlayType = {
   exitToAdjacentOnly?: boolean;
   blocksLOS?: boolean;
   color?: string;
+  // Jak se překážka vykreslí na mapě. Když není vyplněno, odvodí se z id
+  // (built-in typy), jinak se použije obecný obrys.
+  mapStyle?: 'outline' | 'x' | 'sandbags' | 'bunker' | 'wire';
   description?: string;
 };
 

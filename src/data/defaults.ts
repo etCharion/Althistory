@@ -29,7 +29,7 @@ export const DEFAULT_OVERLAY_TYPES = [
     color: '#808080',
     description: 'Obranný bonus: Pěchota +1, Tank +2. Ignoruje 1 vlajku. Neprůchodné pro tanky a dělostřelectvo. Dělostřelectvo v bunkru nemůže ustoupit ani z něj vyjít. Bonus platí pouze pro majitele.'
   },
-  { id: 'barrier', name: 'Zátaras', movementRestriction: 'stop', color: '#808080', description: 'Zastavuje pohyb. Na mapě znázorněn šedě s malými křížky (X) po stranách.' }
+  { id: 'barrier', name: 'Zátaras', movementRestriction: 'stop', color: '#808080', mapStyle: 'x' as const, description: 'Zastavuje pohyb. Na mapě znázorněn šedě s malými křížky (X) po stranách.' }
 ];
 
 export const DEFAULT_COUNTRIES = [
