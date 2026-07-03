@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './ClassicHexGrid'; import DiceAnimation from './ClassicDiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils'; import { getUnitSections, axialToOffset, getSection } from '../logic/hexGrid';
 import NatoSymbol from './NatoSymbol';
-import { Menu, Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check, Crown, Shield, Eye, EyeOff, QrCode, Undo2, Bot, Play, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Menu, Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check, Crown, Shield, Eye, EyeOff, QrCode, Undo2, Bot, Play, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { getGameState } from '../logic/firebaseService';
 import { controlsSection, isGeneral } from '../logic/gameReducer';
@@ -415,7 +415,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
         <div className="flex-1 relative flex flex-col overflow-hidden">
           <div className="flex-1 relative overflow-auto pb-16">
           <HexGrid
-            width={sc.boardWidth} height={sc.boardHeight} hexes={gameState.grid} units={gameState.units}
+            width={sc.boardWidth} height={sc.boardHeight} hexes={aiReviewEntry ? aiReviewEntry.grid : gameState.grid} units={aiReviewEntry ? aiReviewEntry.units : gameState.units}
             terrainTypes={tTypes} unitTypes={uTypes} overlayTypes={oTypes} onHexClick={handleHexClick} onHexMouseEnter={(q,r) => setHovered(`${q},${r}`)} onHexMouseLeave={() => setHovered(null)}
             leftWidth={sc.sections.leftWidth} centerWidth={sc.sections.centerWidth} selectedUnitId={(aiReviewEntry || aiLastAction) ? (aiReviewEntry || aiLastAction).unitId : selected}
             highlightedHexes={highlightedHexes} hoveredHex={hovered} activePhase={gameState.phase}
@@ -606,10 +606,15 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
               )}
               {/* Log tahu počítače: čistě vizuální krokování zpět (nemění stav hry). */}
               {!!aiPlayerId && aiLog.length > 0 && (
-                <div className="flex items-center gap-1 px-2 bg-white border-2 border-red-800/40 rounded-lg shadow-lg" title="Prohlídka tahu počítače – jen zvýraznění na mapě, stav hry se nemění.">
+                <div className="flex items-center gap-1 px-2 bg-white border-2 border-red-800/40 rounded-lg shadow-lg" title="Prohlídka tahu počítače – hrací deska se vrátí do stavu před krokem, barevně se označí, co s jednotkou AI provedla. Stav hry se nemění.">
                   <Bot size={14} className="text-red-800" />
+                  <button onClick={() => setAiReviewIdx(0)}
+                    disabled={aiReviewIdx === 0} title="Na začátek tahu"
+                    className="px-1 py-1.5 rounded text-slate-700 hover:bg-slate-100 disabled:opacity-30 transition-colors">
+                    <ChevronsLeft size={14} />
+                  </button>
                   <button onClick={() => setAiReviewIdx(i => i === null ? aiLog.length - 1 : Math.max(0, i - 1))}
-                    disabled={aiReviewIdx === 0}
+                    disabled={aiReviewIdx === 0} title="Krok zpět"
                     className="px-1 py-1.5 rounded text-slate-700 hover:bg-slate-100 disabled:opacity-30 transition-colors">
                     <ChevronLeft size={14} />
                   </button>
@@ -617,9 +622,14 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
                     {aiReviewIdx === null ? `${aiLog.length}` : `${aiReviewIdx + 1}/${aiLog.length}`}
                   </span>
                   <button onClick={() => setAiReviewIdx(i => (i === null || i >= aiLog.length - 1) ? null : i + 1)}
-                    disabled={aiReviewIdx === null}
+                    disabled={aiReviewIdx === null} title="Krok vpřed"
                     className="px-1 py-1.5 rounded text-slate-700 hover:bg-slate-100 disabled:opacity-30 transition-colors">
                     <ChevronRight size={14} />
+                  </button>
+                  <button onClick={() => setAiReviewIdx(null)}
+                    disabled={aiReviewIdx === null} title="Na konec tahu"
+                    className="px-1 py-1.5 rounded text-slate-700 hover:bg-slate-100 disabled:opacity-30 transition-colors">
+                    <ChevronsRight size={14} />
                   </button>
                   {aiReviewEntry ? (
                     <>

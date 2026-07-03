@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './HexGrid'; import DiceAnimation from './DiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils'; import { getUnitSections, axialToOffset, getSection, terrainColor } from '../logic/hexGrid';
 import NatoSymbol from './NatoSymbol';
-import { Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check, Crown, Shield, Eye, EyeOff, QrCode, Undo2, ArrowLeft, ArrowRight, Bot, Play, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check, Crown, Shield, Eye, EyeOff, QrCode, Undo2, ArrowLeft, ArrowRight, Bot, Play, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { getGameState } from '../logic/firebaseService';
 import { controlsSection, isGeneral } from '../logic/gameReducer';
@@ -587,7 +587,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
         <div className="flex-1 relative min-w-0 min-h-0 px-4 pt-3 pb-2.5">
           <div className="absolute inset-[12px_16px_10px_16px] flex items-center justify-center">
             <HexGrid
-              width={sc.boardWidth} height={sc.boardHeight} hexes={gameState.grid} units={gameState.units}
+              width={sc.boardWidth} height={sc.boardHeight} hexes={aiReviewEntry ? aiReviewEntry.grid : gameState.grid} units={aiReviewEntry ? aiReviewEntry.units : gameState.units}
               terrainTypes={tTypes} unitTypes={uTypes} overlayTypes={oTypes} onHexClick={handleHexClick} onHexMouseEnter={(q,r) => setHovered(`${q},${r}`)} onHexMouseLeave={() => setHovered(null)}
               leftWidth={sc.sections.leftWidth} centerWidth={sc.sections.centerWidth} selectedUnitId={(aiReviewEntry || aiLastAction) ? (aiReviewEntry || aiLastAction).unitId : selected}
               highlightedHexes={highlightedHexes} hoveredHex={hovered} activePhase={gameState.phase}
@@ -775,10 +775,15 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
               )}
               {/* Log tahu počítače: čistě vizuální krokování zpět (nemění stav hry). */}
               {!!aiPlayerId && aiLog.length > 0 && (
-                <div className="flex items-center gap-1 px-2 h-[36px] rounded-[10px] bg-parchment-card border border-axis/30 shadow-md" title="Prohlídka tahu počítače – jen zvýraznění na mapě, stav hry se nemění.">
+                <div className="flex items-center gap-1 px-2 h-[36px] rounded-[10px] bg-parchment-card border border-axis/30 shadow-md" title="Prohlídka tahu počítače – hrací deska se vrátí do stavu před krokem, barevně se označí, co s jednotkou AI provedla. Stav hry se nemění.">
                   <Bot size={14} className="text-axis flex-shrink-0" />
+                  <button onClick={() => setAiReviewIdx(0)}
+                    disabled={aiReviewIdx === 0} title="Na začátek tahu"
+                    className="w-[22px] h-[26px] flex items-center justify-center rounded-md text-tan-deep hover:bg-[#f7f0df] disabled:opacity-30 transition-colors">
+                    <ChevronsLeft size={15} />
+                  </button>
                   <button onClick={() => setAiReviewIdx(i => i === null ? aiLog.length - 1 : Math.max(0, i - 1))}
-                    disabled={aiReviewIdx === 0}
+                    disabled={aiReviewIdx === 0} title="Krok zpět"
                     className="w-[22px] h-[26px] flex items-center justify-center rounded-md text-tan-deep hover:bg-[#f7f0df] disabled:opacity-30 transition-colors">
                     <ChevronLeft size={15} />
                   </button>
@@ -786,9 +791,14 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
                     {aiReviewIdx === null ? `${aiLog.length}` : `${aiReviewIdx + 1}/${aiLog.length}`}
                   </span>
                   <button onClick={() => setAiReviewIdx(i => (i === null || i >= aiLog.length - 1) ? null : i + 1)}
-                    disabled={aiReviewIdx === null}
+                    disabled={aiReviewIdx === null} title="Krok vpřed"
                     className="w-[22px] h-[26px] flex items-center justify-center rounded-md text-tan-deep hover:bg-[#f7f0df] disabled:opacity-30 transition-colors">
                     <ChevronRight size={15} />
+                  </button>
+                  <button onClick={() => setAiReviewIdx(null)}
+                    disabled={aiReviewIdx === null} title="Na konec tahu"
+                    className="w-[22px] h-[26px] flex items-center justify-center rounded-md text-tan-deep hover:bg-[#f7f0df] disabled:opacity-30 transition-colors">
+                    <ChevronsRight size={15} />
                   </button>
                   {aiReviewEntry ? (
                     <>
