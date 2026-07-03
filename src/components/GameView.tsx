@@ -588,7 +588,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
           <div className="absolute inset-[12px_16px_10px_16px] flex items-center justify-center">
             <HexGrid
               width={sc.boardWidth} height={sc.boardHeight} hexes={gameState.grid} units={gameState.units}
-              terrainTypes={tTypes} unitTypes={uTypes} onHexClick={handleHexClick} onHexMouseEnter={(q,r) => setHovered(`${q},${r}`)} onHexMouseLeave={() => setHovered(null)}
+              terrainTypes={tTypes} unitTypes={uTypes} overlayTypes={oTypes} onHexClick={handleHexClick} onHexMouseEnter={(q,r) => setHovered(`${q},${r}`)} onHexMouseLeave={() => setHovered(null)}
               leftWidth={sc.sections.leftWidth} centerWidth={sc.sections.centerWidth} selectedUnitId={(aiReviewEntry || aiLastAction) ? (aiReviewEntry || aiLastAction).unitId : selected}
               highlightedHexes={highlightedHexes} hoveredHex={hovered} activePhase={gameState.phase}
               unitSections={currentUnitSections} onSectionSelect={(s) => assignResourceToUnit(selected, s)}

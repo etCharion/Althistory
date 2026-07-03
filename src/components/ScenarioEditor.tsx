@@ -452,6 +452,7 @@ const ScenarioEditor = ({ onBack, initialScenario }) => {
               units={units}
               terrainTypes={terrainTypes}
               unitTypes={unitTypes}
+              overlayTypes={overlayTypes}
               onHexClick={handleHexClick}
               leftWidth={scenario.sections.leftWidth}
               centerWidth={scenario.sections.centerWidth}
