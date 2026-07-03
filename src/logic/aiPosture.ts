@@ -1,30 +1,35 @@
 // Situační postoje AI (docs/AI-STRATEGY.md, část II).
 //
-// Jedna doktrína, pět „nálad": postoj mění jen váhy a několik behaviorálních
-// přepínačů, rozhodovací kostra v ai.ts zůstává stejná. Postoj se vyhodnocuje
-// deterministicky z aktuálního stavu (žádná paměť) a jeho vstupy se mění po
-// tazích, ne po akcích – drží tedy přirozeně celý tah.
-import { getUnitSections } from './hexGrid';
-import type { GameState, PlayerId } from '../types/game';
+// Dvě vrstvy: globální postoj (strategický filtr – nálada celé armády podle
+// role, skóre a poměru sil) a sekční postoje (levá/střed/pravá se chovají
+// podle místní situace: průlom, palebná základna, držet, zdržovat, přesun
+// tlaku). Obojí mění jen váhy a pár přepínačů, rozhodovací kostra v ai.ts
+// zůstává stejná. Vše se vyhodnocuje deterministicky z aktuálního stavu
+// (žádná paměť) a vstupy se mění po tazích, ne po akcích – postoje tedy
+// přirozeně drží celý tah.
+import { getUnitSections, getTargetableUnits } from './hexGrid';
+import { unitHexOf, unitsOf, capturableObjective, typeOf, strengthOf } from './aiEval';
+import type { GameState, PlayerId, SectionId } from '../types/game';
 import type { Rules } from './gameReducer';
 
 // ---------------------------------------------------------------------------
-// Základní váhy doktríny (AI-STRATEGY.md §8). Jednotka ≈ 1 očekávaný zásah.
-// Postoje je násobí; ai.ts s nimi pracuje výhradně přes `posture.weights`.
+// Základní váhy doktríny (AI-STRATEGY.md §7). Jednotka ≈ 1 očekávaný zásah.
+// Postoje je násobí; ai.ts i aiPlanner.ts s nimi pracují výhradně přes
+// `posture.weights`.
 // ---------------------------------------------------------------------------
 export type AiWeights = {
-  KILL: number;            // §5.1 dorážení – bonus za pravděpodobné zničení cíle (VP)
-  FOCUS: number;           // §5.2 koncentrace palby na už poškozené cíle
-  PUSH_OFF_OBJ: number;    // §5.3 bonus za palbu na jednotku držící objektiv
-  OBJ_CAPTURE: number;     // §4 vstup na neobsazený objektiv (za 1 bod objektivu)
-  OBJ_LEAVE: number;       // §4 penalizace za opuštění drženého dočasného objektivu
-  APPROACH: number;        // §4 přiblížení k atraktoru (za 1 hex)
-  DANGER: number;          // §4 váha hrozby nepřátelské palby na cílovém poli
-  COVER: number;           // §4 terénní obranný bonus (za 1 kostku), platí u fronty
-  MOVE_MARGIN: number;     // §4 pohyb jen když nové pole překoná stání o tento práh
-  RESOURCE_COST: number;   // §4 setrvačnost proti bezcílnému přešlapování
-  HOLD_OBJ: number;        // §6 ochota brát ztráty při držení objektivu
-  ARTY_MIN_DIST: number;   // §4 dělostřelectvo si drží odstup
+  KILL: number;            // §3 dorážení – bonus za pravděpodobné zničení cíle (VP)
+  FOCUS: number;           // §3 koncentrace palby na už poškozené cíle
+  PUSH_OFF_OBJ: number;    // §3 bonus za palbu na jednotku držící objektiv
+  OBJ_CAPTURE: number;     // §3 vstup na neobsazený objektiv (za 1 bod objektivu)
+  OBJ_LEAVE: number;       // §3 penalizace za opuštění drženého dočasného objektivu
+  APPROACH: number;        // §3 přiblížení k atraktoru (za 1 hex)
+  DANGER: number;          // §3 váha hrozby nepřátelské palby na cílovém poli
+  COVER: number;           // §3 terénní obranný bonus (za 1 kostku), platí u fronty
+  MOVE_MARGIN: number;     // §3 pohyb jen když nové pole překoná stání o tento práh
+  RESOURCE_COST: number;   // §3 setrvačnost proti bezcílnému přešlapování
+  HOLD_OBJ: number;        // §4 ochota brát ztráty při držení objektivu
+  ARTY_MIN_DIST: number;   // §3 dělostřelectvo si drží odstup
 };
 
 export const BASE_WEIGHTS: AiWeights = {
@@ -119,14 +124,10 @@ export type Posture = {
   label: string;
   description: string;
   weights: AiWeights;
-  // §7: kdy obsazovat uvolněnou pozici po zničeném nepříteli.
+  // §5: kdy obsazovat uvolněnou pozici po zničeném nepříteli.
   takeGround: 'standard' | 'objectivesOnly' | 'always';
-  // §6: násobek ochoty brát ztráty při držení objektivu.
+  // §4: násobek ochoty brát ztráty při držení objektivu.
   retreatHoldFactor: number;
-  // §2: rezerva 1 zdroj každé aktivní sekci (vabank ji vynechává).
-  supplyReserve: boolean;
-  // §3: dělostřelectvo a posádky objektivů zásobovat přednostně.
-  defensiveSupply: boolean;
 };
 
 type PostureDef = {
@@ -136,8 +137,6 @@ type PostureDef = {
   set: Partial<AiWeights>;
   takeGround: Posture['takeGround'];
   retreatHoldFactor: number;
-  supplyReserve: boolean;
-  defensiveSupply: boolean;
 };
 
 const POSTURE_DEFS: Record<PostureId, PostureDef> = {
@@ -146,35 +145,35 @@ const POSTURE_DEFS: Record<PostureId, PostureDef> = {
     description: 'Ofenzíva: tempo, zábor prostoru a objektivů, nižší opatrnost.',
     mult: { APPROACH: 1.4, OBJ_CAPTURE: 1.3, PUSH_OFF_OBJ: 1.5, DANGER: 0.8 },
     set: { MOVE_MARGIN: 0.3 },
-    takeGround: 'standard', retreatHoldFactor: 1, supplyReserve: true, defensiveSupply: false,
+    takeGround: 'standard', retreatHoldFactor: 1,
   },
   obrana: {
     label: 'Obrana',
     description: 'Drž linii a krytí, take-ground jen na objektivy, šetři jednotky.',
     mult: { APPROACH: 0.5, COVER: 1.6, HOLD_OBJ: 1.4, DANGER: 1.3 },
     set: { MOVE_MARGIN: 0.6 },
-    takeGround: 'objectivesOnly', retreatHoldFactor: 1.3, supplyReserve: true, defensiveSupply: true,
+    takeGround: 'objectivesOnly', retreatHoldFactor: 1.3,
   },
   vypad: {
     label: 'Výpad',
     description: 'Protiútok z obrany: cílem je dorazit oslabené síly, ne dobývat.',
     mult: { APPROACH: 1.4, OBJ_CAPTURE: 1.3, PUSH_OFF_OBJ: 1.5, DANGER: 0.8, KILL: 1.3, FOCUS: 1.5 },
     set: { MOVE_MARGIN: 0.3 },
-    takeGround: 'standard', retreatHoldFactor: 1, supplyReserve: true, defensiveSupply: false,
+    takeGround: 'standard', retreatHoldFactor: 1,
   },
   konsolidace: {
     label: 'Konsolidace',
     description: 'Vedu na body: neriskovat, držet objektivy, střílet jen z pozic.',
     mult: { APPROACH: 0.3, DANGER: 1.5, HOLD_OBJ: 1.5 },
     set: { MOVE_MARGIN: 0.7 },
-    takeGround: 'objectivesOnly', retreatHoldFactor: 0.8, supplyReserve: true, defensiveSupply: true,
+    takeGround: 'objectivesOnly', retreatHoldFactor: 0.8,
   },
   vabank: {
     label: 'Vabank',
     description: 'Zoufalý útok: opatrnost stranou, maximální tlak na objektivy a zabití.',
     mult: { DANGER: 0.3, APPROACH: 1.8, OBJ_CAPTURE: 2, KILL: 1.5 },
     set: { MOVE_MARGIN: 0.1 },
-    takeGround: 'always', retreatHoldFactor: 1.5, supplyReserve: false, defensiveSupply: false,
+    takeGround: 'always', retreatHoldFactor: 1.5,
   },
 };
 
@@ -186,7 +185,7 @@ function buildPosture(id: PostureId, turn: number): Posture {
   // Modifikátor otevření (§12): v 1.–2. tahu žádné riskování – ani vabank
   // neposílá jednotky osamoceně přes celou mapu.
   if (turn <= 2) weights.DANGER = Math.max(weights.DANGER, BASE_WEIGHTS.DANGER);
-  return { id, label: def.label, description: def.description, weights, takeGround: def.takeGround, retreatHoldFactor: def.retreatHoldFactor, supplyReserve: def.supplyReserve, defensiveSupply: def.defensiveSupply };
+  return { id, label: def.label, description: def.description, weights, takeGround: def.takeGround, retreatHoldFactor: def.retreatHoldFactor };
 }
 
 // ---------------------------------------------------------------------------
@@ -214,5 +213,104 @@ export function forcedPosture(id: PostureId, turn: number = 3): Posture {
   return buildPosture(id, turn);
 }
 
-// Re-export pro případné budoucí sekční využití (zatím jen informativní).
-export { getUnitSections };
+// ---------------------------------------------------------------------------
+// Sekční postoje (AI-STRATEGY.md §14) – místní chování nad globálním filtrem
+// ---------------------------------------------------------------------------
+// V Memoir stylu se často zároveň brání jeden bok a tlačí středem. Sekční
+// postoj se odvozuje z místní situace (poměr sil, objektivy, palebné
+// příležitosti) a jen dolaďuje váhy jednotek dané sekce – zdroje sekcím
+// nepřiděluje (o ty soutěží konkrétní akce v aiPlanner.ts).
+export type SectionStance = 'prulom' | 'palebna' | 'drzet' | 'zdrzovat' | 'presun';
+
+export const SECTION_STANCE_INFO: Record<SectionStance, { label: string; description: string }> = {
+  prulom: { label: 'průlom', description: 'Oslabený nepřítel nebo dosažitelný objektiv – tlačit vpřed.' },
+  palebna: { label: 'palebná základna', description: 'Dobré střelecké pozice – stát a pálit.' },
+  drzet: { label: 'drží', description: 'Držený objektiv – neopouštět, brát ztráty.' },
+  zdrzovat: { label: 'zdržuje', description: 'Místní slabost – ustupovat do krytu, nedarovat medaili.' },
+  presun: { label: 'přesun tlaku', description: 'Žádná dobrá akce – zdroje patří jinam.' },
+};
+
+// Modulace vah pro jednotky sekce (násobí se navrch globálního postoje).
+const STANCE_MODS: Record<SectionStance, { mult: Partial<AiWeights>; holdFactor: number }> = {
+  prulom: { mult: { APPROACH: 1.2, MOVE_MARGIN: 0.75 }, holdFactor: 1 },
+  palebna: { mult: { MOVE_MARGIN: 1.3, COVER: 1.2 }, holdFactor: 1 },
+  drzet: { mult: { HOLD_OBJ: 1.3, OBJ_LEAVE: 1.3 }, holdFactor: 1.2 },
+  zdrzovat: { mult: { DANGER: 1.3, APPROACH: 0.6 }, holdFactor: 0.7 },
+  presun: { mult: {}, holdFactor: 1 },
+};
+
+// Poměr místních sil s mrtvou zónou obdobnou globálnímu hodnocení.
+const LOCAL_WEAK_RATIO = 0.6;
+
+export function sectionStances(state: GameState, rules: Rules, ai: PlayerId): Record<SectionId, SectionStance | null> {
+  type Stat = { myForce: number; enemyForce: number; myUnits: number; canShoot: boolean; weakEnemy: boolean; capturable: boolean; held: boolean };
+  const stats: Record<SectionId, Stat> = {
+    left: { myForce: 0, enemyForce: 0, myUnits: 0, canShoot: false, weakEnemy: false, capturable: false, held: false },
+    center: { myForce: 0, enemyForce: 0, myUnits: 0, canShoot: false, weakEnemy: false, capturable: false, held: false },
+    right: { myForce: 0, enemyForce: 0, myUnits: 0, canShoot: false, weakEnemy: false, capturable: false, held: false },
+  };
+
+  for (const u of Object.values(state.units) as any[]) {
+    const hex = unitHexOf(state, u.id);
+    if (!hex) continue;
+    const utype: any = typeOf(rules, u);
+    const value = strengthOf(u) * (CATEGORY_VALUE[utype?.category || 'infantry'] ?? 1);
+    const secs = getUnitSections(hex.q, hex.r, state.scenario) as SectionId[];
+    for (const s of secs) {
+      if (u.ownerId === ai) {
+        stats[s].myForce += value;
+        stats[s].myUnits += 1;
+        if (!stats[s].canShoot && utype && getTargetableUnits(hex.q, hex.r, utype, state, rules.terrainTypes, rules.overlayTypes).length > 0) {
+          stats[s].canShoot = true;
+        }
+      } else {
+        stats[s].enemyForce += value;
+        if (strengthOf(u) <= 2) stats[s].weakEnemy = true;
+      }
+    }
+  }
+  for (const h of Object.values(state.grid) as any[]) {
+    const secs = getUnitSections(h.q, h.r, state.scenario) as SectionId[];
+    for (const s of secs) {
+      if (capturableObjective(h, ai)) stats[s].capturable = true;
+      if (h.objective?.controllingPlayerId === ai) stats[s].held = true;
+    }
+  }
+
+  const classify = (st: Stat): SectionStance | null => {
+    if (st.myUnits === 0) return null;
+    const ratio = st.enemyForce <= 0 ? Infinity : st.myForce / st.enemyForce;
+    if ((st.capturable || st.weakEnemy) && ratio >= 1) return 'prulom';
+    if (st.held) return 'drzet';
+    if (st.enemyForce > 0 && ratio <= LOCAL_WEAK_RATIO) return 'zdrzovat';
+    if (st.canShoot) return 'palebna';
+    return 'presun';
+  };
+
+  return { left: classify(stats.left), center: classify(stats.center), right: classify(stats.right) };
+}
+
+// Postoj dané sekce aplikovaný na globální postoj (váhy jednotek sekce).
+export function applyStance(p: Posture, stance: SectionStance | null): Posture {
+  if (!stance) return p;
+  const def = STANCE_MODS[stance];
+  const weights: AiWeights = { ...p.weights };
+  for (const [k, m] of Object.entries(def.mult)) (weights as any)[k] = (weights as any)[k] * (m as number);
+  return { ...p, weights, retreatHoldFactor: p.retreatHoldFactor * def.holdFactor };
+}
+
+// Krátký souhrn nápadných sekčních postojů pro odznak v UI
+// („průlom ve středu · drží vlevo"). Palebná základna a přesun tlaku se
+// nevypisují – jsou to klidové stavy.
+const SECTION_LABEL: Record<SectionId, string> = { left: 'vlevo', center: 've středu', right: 'vpravo' };
+
+export function stanceSummary(stances: Record<SectionId, SectionStance | null>): string | null {
+  const notable: string[] = [];
+  for (const s of ['center', 'left', 'right'] as SectionId[]) {
+    const st = stances[s];
+    if (st === 'prulom' || st === 'drzet' || st === 'zdrzovat') {
+      notable.push(`${SECTION_STANCE_INFO[st].label} ${SECTION_LABEL[s]}`);
+    }
+  }
+  return notable.length > 0 ? notable.join(' · ') : null;
+}
