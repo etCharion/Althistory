@@ -527,7 +527,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
               <span className="font-bold uppercase text-[11px] text-red-800 tracking-wide">Tah počítače</span>
               {aiPosture && (
                 <span title={aiPosture.description} className="px-1.5 py-0.5 rounded bg-red-50 border border-red-200 text-red-800 text-[10px] font-bold uppercase cursor-help">
-                  {aiPosture.label}
+                  {aiPosture.label}{aiPosture.sectionNote ? ` · ${aiPosture.sectionNote}` : ''}
                 </span>
               )}
             </div>
