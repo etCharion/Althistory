@@ -41,6 +41,15 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], on
               <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#a0522d" strokeWidth="4" strokeDasharray="12,4" strokeDashoffset="2" strokeLinecap="round" />
             </g>
           )}
+          {hex?.overlayTypeId === 'bunker' && (
+            <g transform={`translate(${x}, ${y})`}>
+              <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#666" strokeWidth="8" strokeLinecap="round" />
+              <polygon points={getHexPoints(HEX_SIZE - 4).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#999" strokeWidth="4" strokeLinecap="round" />
+              {hex.overlayOwnerId && (
+                <polygon points={getHexPoints(HEX_SIZE - 8).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={hex.overlayOwnerId === 'player1' ? '#1e40af' : '#b91c1c'} strokeWidth="1.5" strokeLinecap="round" />
+              )}
+            </g>
+          )}
           {hex?.overlayTypeId === 'wire' && (
             <g transform={`translate(${x}, ${y})`}>
                <polygon points={getHexPoints(HEX_SIZE - 6).map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#444" strokeWidth="1" strokeDasharray="2,4" />
