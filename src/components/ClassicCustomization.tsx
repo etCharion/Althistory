@@ -369,6 +369,16 @@ const Customization = ({ onBack, onEditScenario }) => {
                         <input className="flex-1 border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-mono text-xs" value={o.color} onChange={e => updateOverlay({ ...o, color: e.target.value })} />
                       </div>
                     </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-gray-400">Vzhled na mapě</label>
+                      <select className="w-full border p-1 rounded mt-1 text-xs" value={o.mapStyle || 'outline'} onChange={e => updateOverlay({ ...o, mapStyle: e.target.value as any })}>
+                        <option value="outline">Barevný obrys</option>
+                        <option value="x">Křížky (X) – zátaras</option>
+                        <option value="sandbags">Pytle s pískem (hnědé)</option>
+                        <option value="bunker">Pytle s pískem (šedé) – bunkr</option>
+                        <option value="wire">Ostnatý drát</option>
+                      </select>
+                    </div>
                     <div className="flex items-center gap-2 pt-4">
                       <input type="checkbox" id={`los-o-${o.id}`} checked={o.blocksLOS} onChange={e => updateOverlay({ ...o, blocksLOS: e.target.checked })} />
                       <label htmlFor={`los-o-${o.id}`} className="text-[10px] font-bold uppercase text-gray-600">Blokuje viditelnost</label>
