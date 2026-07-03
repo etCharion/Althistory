@@ -9,8 +9,14 @@ const getHexPoints = (radius) => {
   }
   return pts;
 };
-const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], onHexClick, onHexMouseEnter, onHexMouseLeave, leftWidth, centerWidth, selectedUnitId, highlightedHexes, hoveredHex, activePhase, unitSections, onSectionSelect, labelMode = 'below' }) => {
+// Overlay ids, které mají vlastní vykreslení výše. Ostatní překážky (např.
+// vlastní „Zátaras“) se kreslí obecným stylem: šedý obrys s malými křížky (X)
+// po stranách políčka.
+const SPECIAL_OVERLAY_IDS = ['sandbags', 'wire', 'bunker'];
+
+const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], overlayTypes = [], onHexClick, onHexMouseEnter, onHexMouseLeave, leftWidth, centerWidth, selectedUnitId, highlightedHexes, hoveredHex, activePhase, unitSections, onSectionSelect, labelMode = 'below' }) => {
   const getTerrain = (id) => terrainTypes.find(t => t.id === id) || terrainTypes[0];
+  const getOverlayColor = (id) => overlayTypes.find(o => o.id === id)?.color || '#808080';
   const getUnitSymbol = (typeId) => unitTypes.find(ut => ut.id === typeId)?.natoSymbol || typeId;
   const padding = 60; const viewBoxWidth = (width + 0.5) * HEX_SIZE * Math.sqrt(3) + padding; const viewBoxHeight = (height * 1.5 - 0.5) * HEX_SIZE + padding;
   // Tři vrstvy kreslené v tomto pořadí: terén (interaktivní políčka) → popisky →
@@ -76,6 +82,27 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], on
                })()}
             </g>
           )}
+          {hex?.overlayTypeId && !SPECIAL_OVERLAY_IDS.includes(hex.overlayTypeId) && (() => {
+            const oColor = getOverlayColor(hex.overlayTypeId);
+            const verts = getHexPoints(HEX_SIZE - 5);
+            return (
+              <g transform={`translate(${x}, ${y})`}>
+                <polygon points={verts.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={oColor} strokeWidth="2.5" strokeLinecap="round" opacity="0.9" />
+                {verts.map((p1, i) => {
+                  const p2 = verts[(i + 1) % 6];
+                  const mx = (p1.x + p2.x) / 2;
+                  const my = (p1.y + p2.y) / 2;
+                  const s = 4;
+                  return (
+                    <g key={i} transform={`translate(${mx}, ${my})`}>
+                      <line x1={-s} y1={-s} x2={s} y2={s} stroke={oColor} strokeWidth="2" strokeLinecap="round" />
+                      <line x1={-s} y1={s} x2={s} y2={-s} stroke={oColor} strokeWidth="2" strokeLinecap="round" />
+                    </g>
+                  );
+                })}
+              </g>
+            );
+          })()}
           {hex?.objective && (
             <g transform={`translate(${x}, ${y-35})`}>
                {hex.objective.groupId && (
