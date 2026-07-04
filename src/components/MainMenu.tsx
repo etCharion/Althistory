@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, ChevronDown, Target, Play, Bot } from 'lucide-react';
+import { Search, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, ChevronDown, Target, Play, Bot, X as CloseIcon } from 'lucide-react';
 import ScenarioEditor from './ScenarioEditor';
 import GameView from './GameView';
 import Customization from './Customization';
 import { getAllScenarios, getAllCountries, getAllCampaigns, getScenarioCountryIds, getScenarioCountryNames } from '../data/typeUtils';
+import { loadLocalGame, clearLocalGame, type SavedLocalGame } from '../logic/localGameStorage';
 import { ThemeToggle } from '../theme';
 
 // A dropdown that lets the user filter by one or more countries at once.
@@ -232,10 +233,23 @@ function MainMenu() {
   // docs/AI-STRATEGY.md); hráč si při spuštění vybírá, které straně velí.
   // Volba se drží mimo scénář, aby se neukládala.
   const [aiSide, setAiSide] = useState<'player1' | 'player2' | null>(null);
+  // Zda navazujeme na uloženou místní hru (jinak startuje nová partie).
+  const [resumeLocal, setResumeLocal] = useState(false);
 
   const startLocalGame = (scenario, aiPlayerId: 'player1' | 'player2' | null = null) => {
+    setResumeLocal(false);
     setCurrentScenario(scenario);
     setAiSide(aiPlayerId);
+    setMode('game');
+  };
+
+  // Obnovení rozehrané místní hry (hot-seat i proti počítači) z localStorage.
+  const resumeLocalGame = () => {
+    const saved = loadLocalGame();
+    if (!saved) return;
+    setResumeLocal(true);
+    setCurrentScenario(saved.state.scenario);
+    setAiSide(saved.aiPlayerId);
     setMode('game');
   };
 
@@ -246,13 +260,21 @@ function MainMenu() {
   };
 
   const [lastGameId, setLastGameId] = useState<string | null>(null);
+  const [savedLocal, setSavedLocal] = useState<SavedLocalGame | null>(null);
   useEffect(() => {
     setLastGameId(localStorage.getItem('lastGameId'));
-  }, []);
+    // Znovu načteme při návratu do menu, ať tlačítko odpovídá poslednímu stavu.
+    setSavedLocal(loadLocalGame());
+  }, [mode]);
+
+  const discardLocalGame = () => {
+    clearLocalGame();
+    setSavedLocal(null);
+  };
 
   if (mode === 'editor') return <ScenarioEditor onBack={() => setMode('menu')} initialScenario={editingScenario} />;
   if (mode === 'custom') return <Customization onBack={() => setMode('menu')} onEditScenario={handleEditScenario} />;
-  if (mode === 'game' && currentScenario) return <GameView scenario={currentScenario} aiPlayerId={aiSide} onExit={() => setMode('menu')} />;
+  if (mode === 'game' && currentScenario) return <GameView scenario={currentScenario} aiPlayerId={aiSide} resume={resumeLocal} onExit={() => setMode('menu')} />;
 
   return (
     <div className="min-h-screen text-ink">
@@ -316,6 +338,27 @@ function MainMenu() {
             </div>
           </div>
         </div>
+
+        {savedLocal && (
+          <div className="mb-[14px] flex items-stretch gap-2">
+            <button
+              onClick={resumeLocalGame}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-[12px] bg-army/[0.08] border-2 border-army/30 text-army font-condensed font-extrabold uppercase tracking-[0.05em] hover:bg-army hover:text-white transition-colors"
+            >
+              {savedLocal.aiPlayerId ? <Bot size={18} /> : <Play size={18} fill="currentColor" strokeWidth={0} />}
+              {savedLocal.aiPlayerId ? 'Pokračovat ve hře proti počítači' : 'Pokračovat v místní hře'}
+              <span className="normal-case font-semibold opacity-80">— {savedLocal.state?.scenario?.name}</span>
+            </button>
+            <button
+              onClick={discardLocalGame}
+              title="Zahodit uloženou místní hru"
+              aria-label="Zahodit uloženou místní hru"
+              className="px-3 rounded-[12px] border-2 border-army/30 text-army/70 hover:bg-danger hover:border-danger hover:text-white transition-colors"
+            >
+              <CloseIcon size={18} />
+            </button>
+          </div>
+        )}
 
         {lastGameId && (
           <button
