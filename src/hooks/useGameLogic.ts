@@ -3,6 +3,7 @@ import { getNeighbors, getReachableHexes, getTargetableUnits, isImpassableForUni
 import { newDiceSeed } from '../logic/dice';
 import { chooseAiAction } from '../logic/ai';
 import { subscribeToGame, applyAction, createGameIfMissing } from '../logic/firebaseService';
+import { saveLocalGame, loadLocalGame } from '../logic/localGameStorage';
 import { reducer, createInitialGameState, isGeneral } from '../logic/gameReducer';
 import type { Action, Rules } from '../logic/gameReducer';
 
@@ -17,17 +18,34 @@ export type AiLogEntry = { id: number; kind: 'move' | 'attack' | 'assign'; unitI
 
 const SECTION_LABEL: Record<string, string> = { left: 'Levá', center: 'Střed', right: 'Pravá' };
 
-export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, gameId?: string, clientId: string = 'local', aiPlayerId: 'player1' | 'player2' | null = null, aiRun: boolean = true, aiSpeed: number = 1) {
+export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, gameId?: string, clientId: string = 'local', aiPlayerId: 'player1' | 'player2' | null = null, aiRun: boolean = true, aiSpeed: number = 1, resume: boolean = false) {
   const rules: Rules = useMemo(() => ({ unitTypes, terrainTypes, overlayTypes }), [unitTypes, terrainTypes, overlayTypes]);
 
-  // Local (hot-seat) games keep their state in React; online games mirror Firestore.
-  const [localState, setLocalState] = useState<any>(() => (scenario && !gameId ? createInitialGameState(scenario) : null));
+  // Local (hot-seat / vs AI) games keep their state in React and are mirrored to
+  // localStorage so they survive an exit or reload; online games mirror Firestore.
+  // `resume` říká, že se má navázat na uloženou místní hru místo nové partie.
+  const initLocalState = () => {
+    if (gameId || !scenario) return null;
+    if (resume) {
+      const saved = loadLocalGame();
+      if (saved) return saved.state;
+    }
+    return createInitialGameState(scenario);
+  };
+  const [localState, setLocalState] = useState<any>(initLocalState);
   const [remoteState, setRemoteState] = useState<any>(null);
 
   // Initialise local state once a scenario is available (local games only).
   useEffect(() => {
-    if (!gameId && scenario && !localState) setLocalState(createInitialGameState(scenario));
+    if (!gameId && scenario && !localState) setLocalState(initLocalState());
   }, [scenario, gameId, localState]);
+
+  // Zrcadlení místní hry do localStorage po každé změně stavu (viz
+  // localGameStorage). Online hry se ukládají do Firestore, ty přeskakujeme.
+  useEffect(() => {
+    if (gameId || !localState) return;
+    saveLocalGame(localState, aiPlayerId);
+  }, [localState, gameId, aiPlayerId]);
 
   // Online: make sure the shared document exists, then subscribe to it.
   useEffect(() => {
