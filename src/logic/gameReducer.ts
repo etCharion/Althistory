@@ -8,7 +8,12 @@ export type Rules = { unitTypes: any[]; terrainTypes: any[]; overlayTypes: any[]
 
 export type Action =
   | { type: 'DISTRIBUTE'; clientId: string; section: SectionId; amount: number | 'max' }
-  | { type: 'NEXT_PHASE'; clientId: string }
+  // Sloučená distribuce: přesune jeden zdroj ze skladu přes sklad sekce rovnou
+  // na jednotku (jen ve sloučeném režimu, viz scenario.mergedDistribution).
+  | { type: 'DISTRIBUTE_TO_UNIT'; clientId: string; unitId: string; sectionId?: SectionId }
+  // `skipUnitPhase` přeskočí fázi přidělení jednotkám (sloučený režim jde ze
+  // sekcí rovnou na pohyb). AI ho nikdy neposílá – hraje obě fáze jako dnes.
+  | { type: 'NEXT_PHASE'; clientId: string; skipUnitPhase?: boolean }
   | { type: 'END_TURN'; clientId: string }
   | { type: 'ASSIGN_RESOURCE'; clientId: string; unitId: string; sectionId?: SectionId }
   | { type: 'MOVE'; clientId: string; unitId: string; q: number; r: number }
@@ -59,6 +64,7 @@ export function createInitialGameState(scenario: any, opts: { online?: boolean }
     activePlayerId: scenario?.firstPlayerId || 'player1',
     phase: 'distribution-sections',
     sectionResources: { player1: { left: 0, center: 0, right: 0 }, player2: { left: 0, center: 0, right: 0 } },
+    sectionThroughput: { player1: { left: 0, center: 0, right: 0 }, player2: { left: 0, center: 0, right: 0 } },
     centralWarehouse: { player1: scenario?.player1.income || 0, player2: scenario?.player2.income || 0 },
     units,
     grid,
@@ -118,7 +124,8 @@ function pushUndo(state: GameState, clientId: string): UndoSnapshot[] {
     unitStats: state.unitStats,
     victoryPoints: state.victoryPoints,
     sectionResources: state.sectionResources,
-    centralWarehouse: state.centralWarehouse
+    centralWarehouse: state.centralWarehouse,
+    sectionThroughput: state.sectionThroughput
   };
   return [...(state.undoStack || []), snap];
 }
@@ -301,10 +308,78 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       };
     }
 
+    // ---------------------------------------- Sloučený režim: distribuce na jednotku
+    case 'DISTRIBUTE_TO_UNIT': {
+      // Klik na jednotku přesune jeden zdroj ze skladu přes sklad sekce rovnou
+      // na jednotku. Sklad sekce se přitom nenaplní (zdroj jím jen protéká),
+      // logistická přirážka se proto počítá z průtoku sekcí za tah.
+      if (!state.scenario.mergedDistribution) return state;
+      if (state.phase !== 'distribution-sections') return state;
+      const { unitId, sectionId } = action;
+      const unit = state.units[unitId];
+      if (!unit || unit.ownerId !== active) return state;
+      // Kombinace obou práv (generál pro krok sklad→sekce, controlsUnit pro krok
+      // sekce→jednotka) sama zajistí, že sloučeně distribuuje jen samostatný
+      // ovladatel strany – v online hře s veliteli sekcí akce neprojde.
+      if (!isGeneral(state, action.clientId, active)) return state;
+      if (!controlsUnit(state, action.clientId, unitId)) return state;
+      const hex = unitHex(state, unitId);
+      if (!hex) return state;
+
+      const pid = active;
+      const sections = getUnitSections((hex as any).q, (hex as any).r, state.scenario);
+      const isBoundaryUnit = sections.length > 1;
+      // Explicitně zadaná sekce musí být jednou ze sekcí jednotky (reducer je
+      // jediná autorita). Hraniční jednotka (2 sekce) sekci vyžaduje.
+      if (sectionId && !sections.includes(sectionId)) return state;
+      let sec = sectionId;
+      if (!sec && !isBoundaryUnit) sec = sections[0];
+
+      const throughput = state.sectionThroughput || { player1: { left: 0, center: 0, right: 0 }, player2: { left: 0, center: 0, right: 0 } };
+      const logistics = !!state.scenario.logisticsLimit;
+      const cost = sec ? (logistics && throughput[pid][sec] >= 4 ? 2 : 1) : 1;
+      const affordable = !!sec && state.centralWarehouse[pid] >= cost;
+      const canAdd = affordable && unit.resources < 2;
+
+      const isAtMax = unit.resources >= 2;
+      const clickedUnitBody = !sectionId;
+      // Klik na plnou (nebo hraniční obsazenou) jednotku vrací její zdroje do
+      // skladu, aby šlo přerozdělit – obdoba návratu do sekce u ASSIGN_RESOURCE.
+      if (isAtMax || (clickedUnitBody && isBoundaryUnit && unit.resources > 0) || (clickedUnitBody && !isBoundaryUnit && unit.resources > 0 && !canAdd)) {
+        const origins = unit.resourceOrigins || [];
+        const back = origins.length || unit.resources;
+        const newThru = { ...throughput[pid] } as any;
+        origins.forEach((o: SectionId) => { if (newThru[o] > 0) newThru[o]--; });
+        return {
+          ...state,
+          centralWarehouse: { ...state.centralWarehouse, [pid]: state.centralWarehouse[pid] + back },
+          sectionThroughput: { ...throughput, [pid]: newThru },
+          units: { ...state.units, [unitId]: { ...unit, resources: 0, resourceOrigins: [] } }
+        };
+      }
+
+      if (canAdd) {
+        const newOrigins = [...(unit.resourceOrigins || []), sec as SectionId];
+        return {
+          ...state,
+          undoStack: pushUndo(state, action.clientId),
+          centralWarehouse: { ...state.centralWarehouse, [pid]: state.centralWarehouse[pid] - cost },
+          sectionThroughput: { ...throughput, [pid]: { ...throughput[pid], [sec!]: throughput[pid][sec!] + 1 } },
+          units: { ...state.units, [unitId]: { ...unit, resources: unit.resources + 1, resourceOrigins: newOrigins } }
+        };
+      }
+      return state;
+    }
+
     // -------------------------------------------------- General: advance phase
     case 'NEXT_PHASE': {
       if (!isGeneral(state, action.clientId, active)) return state;
       if (state.phase === 'distribution-sections') {
+        // Sloučený režim přeskakuje fázi přidělení jednotkám a jde rovnou na
+        // pohyb (zdroje už jsou na jednotkách). Nevyužité zdroje propadají.
+        if (action.skipUnitPhase) {
+          return { ...state, phase: 'movement', centralWarehouse: { ...state.centralWarehouse, [active]: 0 }, sectionResources: { ...state.sectionResources, [active]: { left: 0, center: 0, right: 0 } }, undoStack: [] };
+        }
         return { ...state, phase: 'distribution-units', centralWarehouse: { ...state.centralWarehouse, [active]: 0 }, undoStack: [] };
       }
       if (state.phase === 'distribution-units') {
@@ -332,6 +407,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
         phase: 'distribution-sections',
         currentTurn: active === 'player2' ? state.currentTurn + 1 : state.currentTurn,
         centralWarehouse: { ...state.centralWarehouse, [next]: state.scenario[next].income },
+        sectionThroughput: { player1: { left: 0, center: 0, right: 0 }, player2: { left: 0, center: 0, right: 0 } },
         units: newUnits,
         grid: updatedGrid,
         victoryPoints: nVP,
@@ -740,6 +816,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
         victoryPoints: top.victoryPoints,
         sectionResources: top.sectionResources,
         centralWarehouse: top.centralWarehouse,
+        sectionThroughput: top.sectionThroughput,
         undoStack: stack.slice(0, -1),
         winner: computeWinner(state.scenario, top.units, top.victoryPoints)
       };

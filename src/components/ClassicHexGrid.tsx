@@ -155,7 +155,7 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], ov
           </g>
         );
       }
-      if (isSelected && activePhase === 'distribution-units' && unitSections?.length > 1) {
+      if (isSelected && (activePhase === 'distribution-units' || activePhase === 'distribution-sections') && unitSections?.length > 1) {
         unitLayer.push(
           <g key={`sec-${key}`} transform={`translate(${x}, ${y})`}>
              <g onClick={(e) => { e.stopPropagation(); onSectionSelect?.(unitSections[0]); }} className="cursor-pointer hover:scale-110 transition-transform">

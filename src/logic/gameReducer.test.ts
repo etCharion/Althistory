@@ -89,6 +89,103 @@ describe('ASSIGN_RESOURCE (fáze B – zdroje jednotkám)', () => {
   });
 });
 
+describe('DISTRIBUTE_TO_UNIT (sloučená distribuce)', () => {
+  function mergedState(extraScenario: any = {}, hexes?: any[], units?: any[]) {
+    return buildState({
+      scenario: { mergedDistribution: true, ...extraScenario },
+      hexes: hexes || [hexEntry(0, 0, 'grass', { unitId: 'u1' })],
+      units: units || [unitEntry('u1', 'infantry', 'player1')],
+    });
+  }
+
+  it('přesune zdroj ze skladu rovnou na jednotku (sekce jen protéká), max 2', () => {
+    let s: any = mergedState();
+    s = reducer(deepFreeze(s), local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u1' }), rules);
+    expect(s.units.u1.resources).toBe(1);
+    expect(s.centralWarehouse.player1).toBe(5);
+    // Sklad sekce se nenaplní – zdroj jím jen protekl.
+    expect(s.sectionResources.player1.left).toBe(0);
+    expect(s.sectionThroughput.player1.left).toBe(1);
+    s = reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u1' }), rules);
+    expect(s.units.u1.resources).toBe(2);
+    expect(s.centralWarehouse.player1).toBe(4);
+    // Třetí klik na plnou jednotku zdroje vrátí do skladu.
+    s = reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u1' }), rules);
+    expect(s.units.u1.resources).toBe(0);
+    expect(s.centralWarehouse.player1).toBe(6);
+    expect(s.sectionThroughput.player1.left).toBe(0);
+  });
+
+  it('bez zapnutého mergedDistribution je akce no-op', () => {
+    const s: any = buildState({
+      hexes: [hexEntry(0, 0, 'grass', { unitId: 'u1' })],
+      units: [unitEntry('u1', 'infantry', 'player1')],
+    });
+    expect(reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u1' }), rules)).toBe(s);
+  });
+
+  it('mimo fázi distribuce do sekcí je akce no-op', () => {
+    const s: any = mergedState({}, [hexEntry(0, 0, 'grass', { unitId: 'u1' })], [unitEntry('u1', 'infantry', 'player1')]);
+    const inUnits = { ...s, phase: 'distribution-units' };
+    expect(reducer(inUnits, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u1' }), rules)).toBe(inUnits);
+  });
+
+  it('odmítne sekci, která jednotce nepatří', () => {
+    const s: any = mergedState();
+    expect(reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u1', sectionId: 'right' }), rules)).toBe(s);
+    const ok = reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u1', sectionId: 'left' }), rules);
+    expect(ok.units.u1.resources).toBe(1);
+  });
+
+  it('logistická přirážka podle průtoku: 5. zdroj protečený sekcí stojí 2', () => {
+    let s: any = mergedState(
+      { logisticsLimit: true },
+      [hexEntry(0, 0, 'grass', { unitId: 'u1' }), hexEntry(1, 0, 'grass', { unitId: 'u2' }), hexEntry(2, 0, 'grass', { unitId: 'u3' })],
+      [unitEntry('u1', 'infantry', 'player1'), unitEntry('u2', 'infantry', 'player1'), unitEntry('u3', 'infantry', 'player1')],
+    );
+    // 4 zdroje po 1 (sklad 6->2), pátý přes tutéž sekci za 2 (sklad 2->0).
+    s = reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u1' }), rules);
+    s = reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u1' }), rules);
+    s = reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u2' }), rules);
+    s = reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u2' }), rules);
+    expect(s.centralWarehouse.player1).toBe(2);
+    expect(s.sectionThroughput.player1.left).toBe(4);
+    s = reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u3' }), rules);
+    expect(s.units.u3.resources).toBe(1);
+    expect(s.centralWarehouse.player1).toBe(0);
+    expect(s.sectionThroughput.player1.left).toBe(5);
+  });
+
+  it('lze vrátit tlačítkem Zpět (undo obnoví sklad i průtok)', () => {
+    let s: any = mergedState();
+    s = reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u1' }), rules);
+    s = reducer(s, local({ type: 'UNDO' }), rules);
+    expect(s.units.u1.resources).toBe(0);
+    expect(s.centralWarehouse.player1).toBe(6);
+    expect(s.sectionThroughput.player1.left).toBe(0);
+  });
+
+  it('online: samostatný generál (1v1) smí, ale s vlastním velitelem sekce ne', () => {
+    const hexes = [hexEntry(0, 0, 'grass', { unitId: 'u1' })];
+    const units = [unitEntry('u1', 'infantry', 'player1')];
+    // 1v1: strana má jen generála -> ovládá všechny sekce, sloučeně smí.
+    const solo = buildState({ scenario: { mergedDistribution: true }, hexes, units, seats: { player1: { general: 'G' }, player2: { general: 'X' } } });
+    expect(reducer(solo, { type: 'DISTRIBUTE_TO_UNIT', clientId: 'G', unitId: 'u1' } as any, rules).units.u1.resources).toBe(1);
+    // S vyhrazeným velitelem levé sekce: generál levou neovládá, velitel není generál -> nikdo sloučeně nesmí.
+    const split = buildState({ scenario: { mergedDistribution: true }, hexes, units, seats: { player1: { general: 'G', left: 'L' }, player2: { general: 'X' } } });
+    expect(reducer(split, { type: 'DISTRIBUTE_TO_UNIT', clientId: 'G', unitId: 'u1' } as any, rules)).toBe(split);
+    expect(reducer(split, { type: 'DISTRIBUTE_TO_UNIT', clientId: 'L', unitId: 'u1' } as any, rules)).toBe(split);
+  });
+
+  it('NEXT_PHASE se skipUnitPhase jde ze sekcí rovnou na pohyb', () => {
+    const s: any = mergedState();
+    const skipped = reducer(s, local({ type: 'NEXT_PHASE', skipUnitPhase: true }), rules);
+    expect(skipped.phase).toBe('movement');
+    const normal = reducer(s, local({ type: 'NEXT_PHASE' }), rules);
+    expect(normal.phase).toBe('distribution-units');
+  });
+});
+
 describe('MOVE (fáze C – pohyb)', () => {
   it('legální pohyb: stojí 1 zdroj, označí hasMoved, přesune jednotku', () => {
     const s = buildState({

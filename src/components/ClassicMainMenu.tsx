@@ -63,7 +63,10 @@ function ScenarioCard({ s, countries, campaigns, onLocal, onVsAi, onOnline }) {
   const [showSidePick, setShowSidePick] = useState(false);
   // Volba pravidla pro tuto partii. Doplní se do scénáře až při spuštění hry.
   const [logisticsLimit, setLogisticsLimit] = useState(false);
-  const configured = { ...s, logisticsLimit };
+  // Sloučení distribučních fází – pro stranu ovládanou jediným hráčem klik na
+  // jednotku přidělí zdroj rovnou ze skladu (méně klikání).
+  const [mergedDistribution, setMergedDistribution] = useState(false);
+  const configured = { ...s, logisticsLimit, mergedDistribution };
   return (
     <div className="p-4 border-2 border-gray-100 rounded-xl bg-white hover:border-map-ink-blue transition-all group shadow-sm flex flex-col">
       <div className="flex justify-between items-start mb-2 gap-3">
@@ -142,6 +145,15 @@ function ScenarioCard({ s, countries, campaigns, onLocal, onVsAi, onOnline }) {
               onChange={e => setLogisticsLimit(e.target.checked)}
             />
             <span className="text-[9px] font-bold uppercase text-gray-600 tracking-wide">Logistické omezení</span>
+          </label>
+          <label className="flex items-center gap-1.5 cursor-pointer select-none mt-0.5" title="Fáze rozdělení do sekcí a přidělení jednotkám splynou v jednu: klik na jednotku jí přidělí zdroj rovnou ze skladu. Platí pro stranu ovládanou jediným hráčem; kde je na straně víc velitelů, zůstávají obě fáze.">
+            <input
+              type="checkbox"
+              className="w-3.5 h-3.5 accent-map-ink-blue flex-shrink-0"
+              checked={mergedDistribution}
+              onChange={e => setMergedDistribution(e.target.checked)}
+            />
+            <span className="text-[9px] font-bold uppercase text-gray-600 tracking-wide">Sloučit distribuční fáze</span>
           </label>
         </div>
       </div>

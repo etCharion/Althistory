@@ -212,7 +212,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const aiSpeed = AI_SPEEDS.find(s => s.id === aiSpeedId)?.factor ?? 1;
   const pickAiSpeed = (id) => { setAiSpeedId(id); localStorage.setItem('ai-speed', id); };
 
-  const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, undoLastAction, canUndo, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions, aiLastAction, clearAiHighlight, aiLog } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId, aiPlayerId, aiRun, aiSpeed);
+  const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, distributeToUnit, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, undoLastAction, canUndo, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions, aiLastAction, clearAiHighlight, aiLog } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId, aiPlayerId, aiRun, aiSpeed);
 
   // Zpětné (čistě vizuální) prohlížení tahu počítače – nemění stav hry.
   const [aiReviewIdx, setAiReviewIdx] = useState<number | null>(null);
@@ -283,7 +283,10 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   }, [selected, actType, gameState?.phase, gameState?.units, gameState?.grid, retreatingUnitId, takeGroundOption, gameState?.scenario, aiLastAction, aiReviewEntry, aiPlayerId]);
 
   const currentUnitSections = useMemo(() => {
-    if (!gameState || !selected || gameState.phase !== 'distribution-units' || !gameState.scenario) return [];
+    if (!gameState || !selected || !gameState.scenario) return [];
+    // Šipky výběru sekce u hraniční jednotky – ve fázi přidělení i ve sloučené distribuci.
+    const inMergedDistribution = gameState.phase === 'distribution-sections' && !!gameState.scenario.mergedDistribution;
+    if (gameState.phase !== 'distribution-units' && !inMergedDistribution) return [];
     const hex = getUnitHex(selected); if (!hex) return [];
     return getUnitSections(hex.q, hex.r, gameState.scenario);
   }, [selected, gameState?.phase, gameState?.scenario]);
@@ -303,6 +306,15 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const isMyTurn = (!online || (!spectator && myTeam === activeP)) && !isAiTurn;
   const iAmGeneral = !online || (!spectator && isGeneral(gameState, clientId, activeP));
   const canDistribute = isMyTurn && iAmGeneral;
+  // Sloučený režim je aktivní, jen když stranu ovládá jediný hráč – generál drží
+  // všechny tři sekce (vždy v lokální hře i online 1v1). Kde má strana
+  // samostatné velitele sekcí, zůstávají obě fáze jako dnes.
+  const mergedActive = !!sc.mergedDistribution && canDistribute &&
+    (['left', 'center', 'right'] as const).every(s => controlsSection(gameState, clientId, activeP, s));
+  // Ve sloučeném režimu prezentujeme fázi zdrojů jako jednu „Distribuci".
+  const phaseDesc = (mergedActive && gameState.phase === 'distribution-sections')
+    ? { title: 'A) Distribuce zdrojů', text: 'Klikni na svou jednotku a zdroj se jí přidělí rovnou z centrálního skladu (přes sklad její sekce). Každá jednotka unese max. 2 zdroje. Klikem na plnou jednotku zdroje vrátíš. Nevyužité zdroje na konci propadají.' }
+    : PHASE_DESCRIPTIONS[gameState.phase];
   const canControlUnit = (uid: string) => {
     // Jednotky počítače člověk neovládá (vč. jeho ústupů a obsazování pozic).
     if (aiPlayerId && gameState.units[uid]?.ownerId === aiPlayerId) return false;
@@ -326,6 +338,17 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
 
     if (gameState.phase === 'distribution-sections') {
       if (!canDistribute) return;
+      if (mergedActive) {
+        // Sloučený režim: klik na vlastní jednotku jí přidělí zdroj rovnou ze
+        // skladu (přes sklad sekce). Hraniční jednotka pak nabídne výběr sekce.
+        if (unitAtHex && unitAtHex.ownerId === activeP && canControlUnit(hex.unitId)) {
+          setSelected(hex.unitId);
+          distributeToUnit(hex.unitId);
+        } else {
+          setSelected(null);
+        }
+        return;
+      }
       const { col } = axialToOffset(q, r);
       const section = getSection(col, gameState.scenario.sections.leftWidth, gameState.scenario.sections.centerWidth);
       distributeResource(activeP, section);
@@ -419,7 +442,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
             terrainTypes={tTypes} unitTypes={uTypes} overlayTypes={oTypes} onHexClick={handleHexClick} onHexMouseEnter={(q,r) => setHovered(`${q},${r}`)} onHexMouseLeave={() => setHovered(null)}
             leftWidth={sc.sections.leftWidth} centerWidth={sc.sections.centerWidth} selectedUnitId={(aiReviewEntry || aiLastAction) ? (aiReviewEntry || aiLastAction).unitId : selected}
             highlightedHexes={highlightedHexes} hoveredHex={hovered} activePhase={gameState.phase}
-            unitSections={currentUnitSections} onSectionSelect={(s) => assignResourceToUnit(selected, s)}
+            unitSections={currentUnitSections} onSectionSelect={(s) => (gameState.phase === 'distribution-sections' ? distributeToUnit(selected, s) : assignResourceToUnit(selected, s))}
             labelMode={labelMode}
           />
           {retreatingUnitId && (
@@ -557,7 +580,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
               <div className="flex w-[90vw] max-w-[800px] pointer-events-auto gap-12 items-end justify-center mb-1">
                 {(['left', 'center', 'right'] as const).map((section) => (
                   <div key={section} className="flex flex-col items-center gap-1">
-                    {gameState.phase === 'distribution-sections' && (
+                    {gameState.phase === 'distribution-sections' && !mergedActive && (
                       <div className="flex gap-1 mb-0.5">
                         {[1, 2, 3, 'Max'].map(v => (
                           <button
@@ -656,7 +679,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
               {(gameState.winner || (isMyTurn && iAmGeneral)) && <button onClick={() => {
                   if (gameState.winner) { onExit(); return; }
                   if (hasAvailableActions()) { setShowConfirm(true); }
-                  else { if (gameState.phase === 'attack') endTurn(); else nextPhase(); setSelected(null); setActType('none'); }
+                  else { if (gameState.phase === 'attack') endTurn(); else nextPhase(mergedActive && gameState.phase === 'distribution-sections'); setSelected(null); setActType('none'); }
                 }} className={`px-4 py-2 rounded-lg shadow-lg font-bold uppercase text-sm transition-colors border-2 ${gameState.winner ? 'bg-red-600 border-red-800 text-white hover:bg-red-700' : (gameState.phase === 'attack' ? 'bg-red-800 border-red-900 text-white hover:bg-red-700' : 'bg-slate-800 border-slate-900 text-white hover:bg-slate-700')}`}>
                 {(() => {
                   if (gameState.winner) return 'Ukončit hru';
@@ -690,14 +713,14 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
               >
                 <Info size={14} className="text-slate-800" />
                 <span className="font-bold uppercase text-[10px] whitespace-nowrap text-slate-800">
-                  {PHASE_DESCRIPTIONS[gameState.phase].title}
+                  {phaseDesc.title}
                 </span>
               </div>
 
               {showPhaseInfo && (
                 <div className="absolute bottom-full left-0 mb-3 w-72 bg-white border-2 border-slate-800 p-4 shadow-2xl rounded-lg animate-in fade-in slide-in-from-bottom-2 duration-200 z-50 pointer-events-none">
-                   <h4 className="font-bold font-handwriting text-xl border-b-2 border-slate-800 pb-1 mb-2">{PHASE_DESCRIPTIONS[gameState.phase].title}</h4>
-                   <p className="text-xs text-gray-700 leading-relaxed italic">{PHASE_DESCRIPTIONS[gameState.phase].text}</p>
+                   <h4 className="font-bold font-handwriting text-xl border-b-2 border-slate-800 pb-1 mb-2">{phaseDesc.title}</h4>
+                   <p className="text-xs text-gray-700 leading-relaxed italic">{phaseDesc.text}</p>
                 </div>
               )}
            </div>
@@ -862,7 +885,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
           <p className="mb-8 font-bold text-lg uppercase tracking-wide">Opravdu chcete pokračovat?</p>
           <div className="flex gap-6 justify-center">
             <button onClick={() => setShowConfirm(false)} className="bg-gray-200 px-8 py-3 rounded-lg font-bold text-slate-800 hover:bg-gray-300 transition-colors">Zrušit</button>
-            <button onClick={() => { setShowConfirm(false); if (gameState.phase === 'attack') endTurn(); else nextPhase(); setSelected(null); setActType('none'); }} className="bg-slate-800 text-white px-8 py-3 rounded-lg font-bold hover:bg-slate-700 transition-colors">Pokračovat</button>
+            <button onClick={() => { setShowConfirm(false); if (gameState.phase === 'attack') endTurn(); else nextPhase(mergedActive && gameState.phase === 'distribution-sections'); setSelected(null); setActType('none'); }} className="bg-slate-800 text-white px-8 py-3 rounded-lg font-bold hover:bg-slate-700 transition-colors">Pokračovat</button>
           </div>
         </div>
       </div>}

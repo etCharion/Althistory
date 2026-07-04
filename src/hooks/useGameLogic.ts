@@ -124,7 +124,9 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
 
   // ---- Action creators (thin wrappers around dispatch) ----
   const distributeResource = (_pid, sec, amount: number | 'max' = 1) => dispatch({ type: 'DISTRIBUTE', clientId, section: sec, amount });
-  const nextPhase = () => dispatch({ type: 'NEXT_PHASE', clientId });
+  // Sloučený režim: klik na jednotku přesune zdroj ze skladu rovnou na ni.
+  const distributeToUnit = (uid, sectionId?) => dispatch({ type: 'DISTRIBUTE_TO_UNIT', clientId, unitId: uid, sectionId });
+  const nextPhase = (skipUnitPhase = false) => dispatch({ type: 'NEXT_PHASE', clientId, skipUnitPhase });
   const endTurn = () => dispatch({ type: 'END_TURN', clientId });
   const assignResourceToUnit = (uid, sectionId?) => dispatch({ type: 'ASSIGN_RESOURCE', clientId, unitId: uid, sectionId });
   const moveUnit = (uid, q, r) => dispatch({ type: 'MOVE', clientId, unitId: uid, q, r });
@@ -254,7 +256,7 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
   return {
     gameState, combatResult, retreatingUnitId, takeGroundOption,
     dismissCombat, cancelTakeGround, takeGround, destroyOverlay,
-    distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit,
+    distributeResource, distributeToUnit, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit,
     undoLastAction, canUndo,
     getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions,
     aiLastAction, clearAiHighlight, aiLog
