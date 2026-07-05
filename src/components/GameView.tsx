@@ -182,7 +182,7 @@ const VPItem = ({ vp, player, color, onMouseEnter }) => (
   </div>
 );
 
-const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clientId = 'local', seat = null, onChangeSeat = null, aiPlayerId = null }) => {
+const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clientId = 'local', seat = null, onChangeSeat = null, aiPlayerId = null, resume = false }) => {
   const online = !!gameId;
   const spectator = !!seat?.spectator;
   const [uTypes, setUTypes] = useState([]);
@@ -226,7 +226,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const aiSpeed = AI_SPEEDS.find(s => s.id === aiSpeedId)?.factor ?? 1;
   const pickAiSpeed = (id) => { setAiSpeedId(id); localStorage.setItem('ai-speed', id); };
 
-  const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, distributeToUnit, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, undoLastAction, canUndo, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions, aiLastAction, clearAiHighlight, aiLog } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId, aiPlayerId, aiRun, aiSpeed);
+  const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, distributeToUnit, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, undoLastAction, canUndo, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions, aiLastAction, clearAiHighlight, aiLog } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId, aiPlayerId, aiRun, aiSpeed, resume);
 
   // Zpětné (čistě vizuální) prohlížení tahu počítače: index do aiLog,
   // null = živý pohled. Nemění stav hry, jen zvýraznění na mapě.

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, Maximize2, X, ChevronDown, Target, Bot } from 'lucide-react';
+import { Search, Filter, Sword, Settings, Plus, Info, Globe, Wifi, HelpCircle, Maximize2, X, ChevronDown, Target, Bot, Play } from 'lucide-react';
 import ScenarioEditor from './ClassicScenarioEditor';
 import GameView from './ClassicGameView';
 import Customization from './ClassicCustomization';
 import { getAllScenarios, getAllCountries, getAllCampaigns, getScenarioCountryIds, getScenarioCountryNames } from '../data/typeUtils';
+import { loadLocalGame, clearLocalGame, type SavedLocalGame } from '../logic/localGameStorage';
 import { ThemeToggle } from '../theme';
 
 // A dropdown that lets the user filter by one or more countries at once.
@@ -248,10 +249,24 @@ function MainMenu() {
   // Hra proti počítači je lokální hra, kde jednu stranu řídí AI; hráč si
   // při spuštění vybírá, které straně velí.
   const [aiSide, setAiSide] = useState<'player1' | 'player2' | null>(null);
+  // Zda navazujeme na uloženou místní hru (jinak startuje nová partie).
+  const [resumeLocal, setResumeLocal] = useState(false);
 
   const startLocalGame = (scenario, aiPlayerId: 'player1' | 'player2' | null = null) => {
+    setResumeLocal(false);
     setCurrentScenario(scenario);
     setAiSide(aiPlayerId);
+    setShowBrowser(false);
+    setMode('game');
+  };
+
+  // Obnovení rozehrané místní hry (hot-seat i proti počítači) z localStorage.
+  const resumeLocalGame = () => {
+    const saved = loadLocalGame();
+    if (!saved) return;
+    setResumeLocal(true);
+    setCurrentScenario(saved.state.scenario);
+    setAiSide(saved.aiPlayerId);
     setShowBrowser(false);
     setMode('game');
   };
@@ -263,13 +278,21 @@ function MainMenu() {
   };
 
   const [lastGameId, setLastGameId] = useState<string | null>(null);
+  const [savedLocal, setSavedLocal] = useState<SavedLocalGame | null>(null);
   useEffect(() => {
     setLastGameId(localStorage.getItem('lastGameId'));
-  }, []);
+    // Znovu načteme při návratu do menu, ať tlačítko odpovídá poslednímu stavu.
+    setSavedLocal(loadLocalGame());
+  }, [mode]);
+
+  const discardLocalGame = () => {
+    clearLocalGame();
+    setSavedLocal(null);
+  };
 
   if (mode === 'editor') return <ScenarioEditor onBack={() => setMode('menu')} initialScenario={editingScenario} />;
   if (mode === 'custom') return <Customization onBack={() => setMode('menu')} onEditScenario={handleEditScenario} />;
-  if (mode === 'game' && currentScenario) return <GameView scenario={currentScenario} aiPlayerId={aiSide} onExit={() => setMode('menu')} />;
+  if (mode === 'game' && currentScenario) return <GameView scenario={currentScenario} aiPlayerId={aiSide} resume={resumeLocal} onExit={() => setMode('menu')} />;
 
   // Search + filter controls, reused in the compact list and the full-screen browser.
   const filterControls = (
@@ -335,6 +358,27 @@ function MainMenu() {
             <Settings /> Nastavení
           </button>
         </div>
+
+        {savedLocal && (
+          <div className="mb-4 flex items-stretch gap-2">
+            <button
+              onClick={resumeLocalGame}
+              className="flex-1 bg-green-50 text-green-800 py-3 rounded-lg font-black uppercase border-2 border-green-200 hover:bg-green-100 transition-all flex items-center justify-center gap-2"
+            >
+              {savedLocal.aiPlayerId ? <Bot size={18} /> : <Play size={18} fill="currentColor" strokeWidth={0} />}
+              {savedLocal.aiPlayerId ? 'Pokračovat proti počítači' : 'Pokračovat v místní hře'}
+              <span className="normal-case font-bold opacity-80">— {savedLocal.state?.scenario?.name}</span>
+            </button>
+            <button
+              onClick={discardLocalGame}
+              title="Zahodit uloženou místní hru"
+              aria-label="Zahodit uloženou místní hru"
+              className="px-3 rounded-lg border-2 border-green-200 text-green-700/70 hover:bg-red-500 hover:border-red-500 hover:text-white transition-all"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        )}
 
         {lastGameId && (
           <button
