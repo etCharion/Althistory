@@ -66,7 +66,10 @@ function ScenarioCard({ s, countries, campaigns, onLocal, onVsAi, onOnline }) {
   const [showSidePick, setShowSidePick] = useState(false);
   // Volba pravidla pro tuto partii. Doplní se do scénáře až při spuštění hry.
   const [logisticsLimit, setLogisticsLimit] = useState(false);
-  const configured = { ...s, logisticsLimit };
+  // Sloučení distribučních fází – pro stranu ovládanou jediným hráčem klik na
+  // jednotku přidělí zdroj rovnou ze skladu (méně klikání).
+  const [mergedDistribution, setMergedDistribution] = useState(false);
+  const configured = { ...s, logisticsLimit, mergedDistribution };
   return (
     <div className="bg-parchment-card border-2 border-tan-border rounded-[15px] p-[18px_19px] flex flex-col shadow-[0_12px_30px_-22px_rgba(60,45,20,0.55)] hover:border-ally transition-colors">
       <div className="flex items-start justify-between gap-2.5 mb-[7px]">
@@ -105,6 +108,17 @@ function ScenarioCard({ s, countries, campaigns, onLocal, onVsAi, onOnline }) {
         />
         <span className="font-condensed font-bold text-[12px] uppercase tracking-[0.04em] text-tan-deep" title="Každý zdroj do sekce, která už má 4 zdroje, stojí ze skladu 2 zdroje. Nadlimitní zdroje jsou barevně odlišené.">
           Logistické omezení
+        </span>
+      </label>
+      <label className="flex items-center gap-2.5 mb-2.5 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          className="w-4 h-4 accent-ally flex-shrink-0"
+          checked={mergedDistribution}
+          onChange={e => setMergedDistribution(e.target.checked)}
+        />
+        <span className="font-condensed font-bold text-[12px] uppercase tracking-[0.04em] text-tan-deep" title="Fáze rozdělení do sekcí a přidělení jednotkám splynou v jednu: klik na jednotku jí přidělí zdroj rovnou ze skladu. Platí pro stranu ovládanou jediným hráčem; kde je na straně víc velitelů, zůstávají obě fáze.">
+          Sloučit distribuční fáze
         </span>
       </label>
       <div className="flex gap-2.5">

@@ -226,7 +226,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const aiSpeed = AI_SPEEDS.find(s => s.id === aiSpeedId)?.factor ?? 1;
   const pickAiSpeed = (id) => { setAiSpeedId(id); localStorage.setItem('ai-speed', id); };
 
-  const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, undoLastAction, canUndo, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions, aiLastAction, clearAiHighlight, aiLog } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId, aiPlayerId, aiRun, aiSpeed, resume);
+  const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, distributeToUnit, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, undoLastAction, canUndo, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions, aiLastAction, clearAiHighlight, aiLog } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId, aiPlayerId, aiRun, aiSpeed, resume);
 
   // Zpětné (čistě vizuální) prohlížení tahu počítače: index do aiLog,
   // null = živý pohled. Nemění stav hry, jen zvýraznění na mapě.
@@ -298,7 +298,11 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   }, [selected, actType, gameState?.phase, gameState?.units, gameState?.grid, retreatingUnitId, takeGroundOption, gameState?.scenario, aiLastAction, aiReviewEntry, aiPlayerId]);
 
   const currentUnitSections = useMemo(() => {
-    if (!gameState || !selected || gameState.phase !== 'distribution-units' || !gameState.scenario) return [];
+    if (!gameState || !selected || !gameState.scenario) return [];
+    // Šipky výběru sekce u hraniční jednotky se ukazují ve fázi přidělení a také
+    // ve sloučené distribuci (kde klik na jednotku rovnou zásobuje).
+    const inMergedDistribution = gameState.phase === 'distribution-sections' && !!gameState.scenario.mergedDistribution;
+    if (gameState.phase !== 'distribution-units' && !inMergedDistribution) return [];
     const hex = getUnitHex(selected); if (!hex) return [];
     return getUnitSections(hex.q, hex.r, gameState.scenario);
   }, [selected, gameState?.phase, gameState?.scenario]);
@@ -319,6 +323,11 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const isMyTurn = (!online || (!spectator && myTeam === activeP)) && !isAiTurn;
   const iAmGeneral = !online || (!spectator && isGeneral(gameState, clientId, activeP));
   const canDistribute = isMyTurn && iAmGeneral;
+  // Sloučený režim je aktivní, jen když stranu ovládá jediný hráč – generál drží
+  // všechny tři sekce (vždy v lokální hře i online 1v1). Kde má strana
+  // samostatné velitele sekcí, zůstávají obě fáze jako dnes.
+  const mergedActive = !!sc.mergedDistribution && canDistribute &&
+    (['left', 'center', 'right'] as const).every(s => controlsSection(gameState, clientId, activeP, s));
   const canControlUnit = (uid: string) => {
     // Jednotky počítače člověk neovládá (vč. jeho ústupů a obsazování pozic).
     if (aiPlayerId && gameState.units[uid]?.ownerId === aiPlayerId) return false;
@@ -342,6 +351,18 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
 
     if (gameState.phase === 'distribution-sections') {
       if (!canDistribute) return;
+      if (mergedActive) {
+        // Sloučený režim: klik na vlastní jednotku jí přidělí zdroj rovnou ze
+        // skladu (přes sklad sekce). U hraniční jednotky se pak sekce vybere
+        // šipkami (viz onSectionSelect).
+        if (unitAtHex && unitAtHex.ownerId === activeP && canControlUnit(hex.unitId)) {
+          setSelected(hex.unitId);
+          distributeToUnit(hex.unitId);
+        } else {
+          setSelected(null);
+        }
+        return;
+      }
       const { col } = axialToOffset(q, r);
       const section = getSection(col, gameState.scenario.sections.leftWidth, gameState.scenario.sections.centerWidth);
       distributeResource(activeP, section);
@@ -376,6 +397,18 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   };
 
   const phaseIndex = PHASE_ORDER.indexOf(gameState.phase);
+  // Ve sloučeném režimu prezentujeme fáze zdrojů jako jeden krok „Distribuce".
+  const displaySteps = mergedActive
+    ? [{ l: 'A', t: 'Distribuce' }, { l: 'B', t: 'Pohyb' }, { l: 'C', t: 'Útok' }]
+    : PHASE_STEPS;
+  const displayPhaseIndex = mergedActive
+    ? ['distribution-sections', 'movement', 'attack'].indexOf(gameState.phase)
+    : phaseIndex;
+  const mergedDistDesc = { title: 'A) Distribuce zdrojů', text: 'Klikni na svou jednotku a zdroj se jí přidělí rovnou z centrálního skladu (přes sklad její sekce). Každá jednotka unese max. 2 zdroje. Klikem na plnou jednotku zdroje vrátíš. Nevyužité zdroje na konci propadají.' };
+  const phaseDesc = (mergedActive && gameState.phase === 'distribution-sections') ? mergedDistDesc : PHASE_DESCRIPTIONS[gameState.phase];
+  const phaseHint = (mergedActive && gameState.phase === 'distribution-sections')
+    ? 'Klikni na svou jednotku – zdroj se jí přidělí rovnou ze skladu.'
+    : (PHASE_HINTS[gameState.phase] || PHASE_DESCRIPTIONS[gameState.phase]?.text);
   const sideName = (p) => (p === 'player1' ? sc.player1.name : sc.player2.name);
   const turnLabel = `TAH ${gameState.currentTurn} · ${sideName(activeP).toUpperCase()}${isAiTurn ? ' · POČÍTAČ' : ''}`;
 
@@ -407,10 +440,13 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
       default: return 'Další';
     }
   })();
+  // Ve sloučeném režimu ukončení fáze distribuce přeskočí fázi přidělení
+  // jednotkám (zdroje už jsou rozdané) a jde rovnou na pohyb.
+  const advancePhase = () => nextPhase(mergedActive && gameState.phase === 'distribution-sections');
   const onEndClick = () => {
     if (gameState.winner) { onExit(); return; }
     if (hasAvailableActions()) { setShowConfirm(true); }
-    else { if (gameState.phase === 'attack') endTurn(); else nextPhase(); setSelected(null); setActType('none'); }
+    else { if (gameState.phase === 'attack') endTurn(); else advancePhase(); setSelected(null); setActType('none'); }
   };
   const showEndButton = !!(gameState.winner || (isMyTurn && iAmGeneral));
   const EndButton = showEndButton ? (
@@ -427,6 +463,22 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
 
   const renderDock = () => {
     if (gameState.phase === 'distribution-sections') {
+      if (mergedActive) {
+        // Sloučený režim: ruční plnění sekcí zmizí, hráč klikáním na jednotky
+        // rozděluje zdroje přímo ze skladu (sklad sekce je jen mezikrok).
+        return (
+          <div className="p-[12px_20px] flex items-stretch gap-4">
+            <div className="flex flex-col items-center gap-1.5 pr-4 border-r-[1.5px] border-dashed border-[#ccbc94]">
+              <span className="font-condensed font-extrabold text-[11px] tracking-[0.1em] uppercase text-tan">Sklad · {wh}</span>
+              <CubeBox count={wh} capacity={20} className="flex-1 w-[118px]" />
+            </div>
+            <div className="flex-1 flex items-center">
+              <span className="text-[13px] text-tan-text leading-[1.5] font-semibold">Klikni na svou jednotku → dostane kostku rovnou ze skladu (max. 2 na jednotku). Klik na plnou jednotku kostky vrátí. Hraniční jednotka nabídne výběr sekce.</span>
+            </div>
+            {EndButton}
+          </div>
+        );
+      }
       return (
         <div className="p-[12px_20px] flex items-stretch gap-4">
           <div className="flex flex-col items-center gap-1.5 pr-4 border-r-[1.5px] border-dashed border-[#ccbc94]">
@@ -555,8 +607,8 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
         {/* Phase strip */}
         <div className="h-[54px] flex-shrink-0 flex items-center justify-between px-5 border-b border-[#ddccaa]" style={{ background: 'rgba(247,240,223,.7)' }}>
           <div className="flex items-center gap-0.5">
-            {PHASE_STEPS.map((s, i) => {
-              const active = i === phaseIndex; const done = phaseIndex < 0 ? true : i < phaseIndex;
+            {displaySteps.map((s, i) => {
+              const active = i === displayPhaseIndex; const done = displayPhaseIndex < 0 ? true : i < displayPhaseIndex;
               return (
                 <div key={i} className="flex items-center gap-1.5 px-3 py-1.5 rounded-[9px] font-condensed font-extrabold text-[14px] tracking-[0.04em] whitespace-nowrap"
                   style={{ background: active ? '#1c3f6b' : 'transparent', color: active ? '#fff' : (done ? '#7c8aa0' : '#a99c78') }}>
@@ -572,12 +624,12 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
           <div className="relative" onMouseEnter={() => setShowPhaseInfo(true)} onMouseLeave={() => setShowPhaseInfo(false)}>
             <div className="flex items-center gap-2.5 bg-ally/[0.07] border border-ally/20 rounded-[9px] px-3 py-1.5 max-w-[560px] cursor-help">
               <Info size={15} className="text-ally flex-shrink-0" />
-              <span className="font-semibold text-[13px] text-ally truncate">{PHASE_HINTS[gameState.phase] || PHASE_DESCRIPTIONS[gameState.phase]?.text}</span>
+              <span className="font-semibold text-[13px] text-ally truncate">{phaseHint}</span>
             </div>
-            {showPhaseInfo && PHASE_DESCRIPTIONS[gameState.phase] && (
+            {showPhaseInfo && phaseDesc && (
               <div className="absolute top-full right-0 mt-2 w-80 bg-parchment-card border-2 border-ally p-4 shadow-2xl rounded-lg z-50">
-                <h4 className="font-condensed font-extrabold text-lg border-b-2 border-ally/30 pb-1 mb-2 text-ally uppercase">{PHASE_DESCRIPTIONS[gameState.phase].title}</h4>
-                <p className="text-xs text-tan-text leading-relaxed italic">{PHASE_DESCRIPTIONS[gameState.phase].text}</p>
+                <h4 className="font-condensed font-extrabold text-lg border-b-2 border-ally/30 pb-1 mb-2 text-ally uppercase">{phaseDesc.title}</h4>
+                <p className="text-xs text-tan-text leading-relaxed italic">{phaseDesc.text}</p>
               </div>
             )}
           </div>
@@ -591,7 +643,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
               terrainTypes={tTypes} unitTypes={uTypes} overlayTypes={oTypes} onHexClick={handleHexClick} onHexMouseEnter={(q,r) => setHovered(`${q},${r}`)} onHexMouseLeave={() => setHovered(null)}
               leftWidth={sc.sections.leftWidth} centerWidth={sc.sections.centerWidth} selectedUnitId={(aiReviewEntry || aiLastAction) ? (aiReviewEntry || aiLastAction).unitId : selected}
               highlightedHexes={highlightedHexes} hoveredHex={hovered} activePhase={gameState.phase}
-              unitSections={currentUnitSections} onSectionSelect={(s) => assignResourceToUnit(selected, s)}
+              unitSections={currentUnitSections} onSectionSelect={(s) => (gameState.phase === 'distribution-sections' ? distributeToUnit(selected, s) : assignResourceToUnit(selected, s))}
               labelMode={labelMode}
             />
           </div>
@@ -921,7 +973,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
             <p className="mb-8 font-condensed font-extrabold text-lg uppercase tracking-wide text-ink">Opravdu chcete pokračovat?</p>
             <div className="flex gap-4 justify-center">
               <button onClick={() => setShowConfirm(false)} className="bg-[#e6dcc2] px-8 py-3 rounded-lg font-condensed font-extrabold text-ink hover:bg-[#dccfa8] transition-colors">Zrušit</button>
-              <button onClick={() => { setShowConfirm(false); if (gameState.phase === 'attack') endTurn(); else nextPhase(); setSelected(null); setActType('none'); }} className="bg-ally text-white px-8 py-3 rounded-lg font-condensed font-extrabold hover:opacity-90 transition-opacity">Pokračovat</button>
+              <button onClick={() => { setShowConfirm(false); if (gameState.phase === 'attack') endTurn(); else advancePhase(); setSelected(null); setActType('none'); }} className="bg-ally text-white px-8 py-3 rounded-lg font-condensed font-extrabold hover:opacity-90 transition-opacity">Pokračovat</button>
             </div>
           </div>
         </div>

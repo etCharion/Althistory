@@ -128,6 +128,12 @@ export type Scenario = {
   // zdroje, stojí ze skladu 2 zdroje (místo 1). Nadlimitní zdroje jsou barevně
   // odlišené. Volí se při spuštění hry v jejím nastavení.
   logisticsLimit?: boolean;
+  // Sloučení distribučních fází: pro stranu ovládanou jediným hráčem (hot-seat,
+  // proti AI i online 1v1) splynou fáze „rozdělení do sekcí" a „přidělení
+  // jednotkám" v jednu – klik na jednotku přesune zdroj rovnou ze skladu přes
+  // sklad sekce na jednotku. Kde má strana samostatné velitele sekcí, zůstávají
+  // obě fáze beze změny. Volí se při spuštění hry.
+  mergedDistribution?: boolean;
   firstPlayerId: PlayerId;
   initialHexes: Hex[];
   initialUnits: Unit[];
@@ -186,6 +192,7 @@ export type UndoSnapshot = {
   victoryPoints: { player1: VPDetail[]; player2: VPDetail[]; };
   sectionResources: { player1: { left: number; center: number; right: number }; player2: { left: number; center: number; right: number }; };
   centralWarehouse: { player1: number; player2: number; };
+  sectionThroughput?: { player1: { left: number; center: number; right: number }; player2: { left: number; center: number; right: number }; };
 };
 
 export type GameState = {
@@ -195,6 +202,11 @@ export type GameState = {
   phase: GamePhase;
   sectionResources: { player1: { left: number; center: number; right: number }; player2: { left: number; center: number; right: number }; };
   centralWarehouse: { player1: number; player2: number; };
+  // Kolik zdrojů za aktuální tah proteklo každou sekcí ve sloučeném režimu
+  // distribuce. Slouží k zachování logistické přirážky (sklad sekce se ve
+  // sloučeném režimu nenaplní, protože zdroj hned pokračuje na jednotku).
+  // Nuluje se na začátku tahu.
+  sectionThroughput?: { player1: { left: number; center: number; right: number }; player2: { left: number; center: number; right: number }; };
   units: Record<string, Unit>;
   grid: Record<string, Hex>;
   winner?: PlayerId;
