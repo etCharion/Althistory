@@ -20,7 +20,7 @@ const resolveOverlayStyle = (overlayTypes, id) => {
   return 'outline';
 };
 
-const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], overlayTypes = [], onHexClick, onHexMouseEnter, onHexMouseLeave, leftWidth, centerWidth, selectedUnitId, highlightedHexes, hoveredHex, activePhase, unitSections, onSectionSelect, labelMode = 'below' }) => {
+const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], overlayTypes = [], onHexClick, onHexMouseEnter, onHexMouseLeave, leftWidth, centerWidth, selectedUnitId, highlightedHexes, hoveredHex, activePhase, unitSections, onSectionSelect, overLimitSections = [], labelMode = 'below' }) => {
   const getTerrain = (id) => terrainTypes.find(t => t.id === id) || terrainTypes[0];
   const getOverlayColor = (id) => overlayTypes.find(o => o.id === id)?.color || '#808080';
   const getUnitSymbol = (typeId) => unitTypes.find(ut => ut.id === typeId)?.natoSymbol || typeId;
@@ -152,7 +152,12 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], ov
           <g key={`unit-${key}`} transform={`translate(${x}, ${y})`} style={{ pointerEvents: 'none' }}>
              <NatoSymbol type={getUnitSymbol(unit.typeId)} owner={unit.ownerId} />
              <g transform="translate(0, 18)">{Array.from({ length: unit.figures }).map((_, i) => <circle key={i} cx={(i - (unit.figures-1)/2) * 6} cy="0" r="2.2" fill={unit.ownerId === 'player1' ? '#1e40af' : '#b91c1c'} />)}</g>
-             {unit.resources > 0 && <g transform="translate(0, -20)">{Array.from({ length: unit.resources }).map((_, i) => <rect key={i} x={(i - (unit.resources-1)/2) * 7 - 2.5} y="-2.5" width="5" height="5" rx="1" fill="#3aa657" stroke="#2c7d42" strokeWidth="0.8" />)}</g>}
+             {unit.resources > 0 && <g transform="translate(0, -20)">{Array.from({ length: unit.resources }).map((_, i) => {
+               // Kostka je „nadlimitní" (stála 2 a při vrácení vrátí 2), pokud
+               // její původní sekce je aktuálně nad distribučním limitem.
+               const over = overLimitSections.includes((unit.resourceOrigins || [])[i]);
+               return <rect key={i} x={(i - (unit.resources-1)/2) * 7 - 2.5} y="-2.5" width="5" height="5" rx="1" fill={over ? '#f59e0b' : '#3aa657'} stroke={over ? '#b45309' : '#2c7d42'} strokeWidth="0.8" />;
+             })}</g>}
           </g>
         );
       }

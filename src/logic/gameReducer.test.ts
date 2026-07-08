@@ -156,6 +156,38 @@ describe('DISTRIBUTE_TO_UNIT (sloučená distribuce)', () => {
     expect(s.sectionThroughput.player1.left).toBe(5);
   });
 
+  function overLimitState() {
+    let s: any = mergedState(
+      { logisticsLimit: true },
+      [hexEntry(0, 0, 'grass', { unitId: 'u1' }), hexEntry(1, 0, 'grass', { unitId: 'u2' }), hexEntry(2, 0, 'grass', { unitId: 'u3' })],
+      [unitEntry('u1', 'infantry', 'player1'), unitEntry('u2', 'infantry', 'player1'), unitEntry('u3', 'infantry', 'player1')],
+    );
+    // Protečeme levou sekcí 5 kostek: 4 po 1 (sklad 6->2), pátá za 2 (sklad 0).
+    ['u1', 'u1', 'u2', 'u2', 'u3'].forEach(u => { s = reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: u }), rules); });
+    return s;
+  }
+
+  it('vrácení zdroje přidaného nad limit vrátí do skladu 2, ne 1', () => {
+    let s = overLimitState();
+    expect(s.centralWarehouse.player1).toBe(0);
+    expect(s.units.u3.resources).toBe(1);
+    // u3 má nadlimitní kostku; sklad je 0, takže klik nepřidává, ale vrací.
+    s = reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u3' }), rules);
+    expect(s.units.u3.resources).toBe(0);
+    expect(s.centralWarehouse.player1).toBe(2); // vrátily se 2, ne 1
+    expect(s.sectionThroughput.player1.left).toBe(4); // sekce už není nad limitem
+  });
+
+  it('postupné vrácení všech zdrojů z přeplněné sekce zachová sklad (nezneužitelné)', () => {
+    let s = overLimitState();
+    // Vrátíme u3 (nadlimit, +2), pak plné u1 a u2 (po 2 kostkách) – celkem zpět 6.
+    s = reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u3' }), rules);
+    s = reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u1' }), rules);
+    s = reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u2' }), rules);
+    expect(s.centralWarehouse.player1).toBe(6);
+    expect(s.sectionThroughput.player1.left).toBe(0);
+  });
+
   it('lze vrátit tlačítkem Zpět (undo obnoví sklad i průtok)', () => {
     let s: any = mergedState();
     s = reducer(s, local({ type: 'DISTRIBUTE_TO_UNIT', unitId: 'u1' }), rules);

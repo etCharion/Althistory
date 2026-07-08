@@ -311,6 +311,12 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   // samostatné velitele sekcí, zůstávají obě fáze jako dnes.
   const mergedActive = !!sc.mergedDistribution && canDistribute &&
     (['left', 'center', 'right'] as const).every(s => controlsSection(gameState, clientId, activeP, s));
+  // Sekce nad logistickým limitem (průtok > 4) – jejich zdroje se kreslí oranžově
+  // a při vrácení vracejí do skladu 2.
+  const overLimitSections: ('left' | 'center' | 'right')[] =
+    (mergedActive && gameState.phase === 'distribution-sections' && sc.logisticsLimit)
+      ? (['left', 'center', 'right'] as const).filter(s => ((gameState.sectionThroughput?.[activeP]?.[s]) ?? 0) > 4)
+      : [];
   // Ve sloučeném režimu prezentujeme fázi zdrojů jako jednu „Distribuci".
   const phaseDesc = (mergedActive && gameState.phase === 'distribution-sections')
     ? { title: 'A) Distribuce zdrojů', text: 'Klikni na svou jednotku a zdroj se jí přidělí rovnou z centrálního skladu (přes sklad její sekce). Každá jednotka unese max. 2 zdroje. Klikem na plnou jednotku zdroje vrátíš. Nevyužité zdroje na konci propadají.' }
@@ -443,6 +449,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
             leftWidth={sc.sections.leftWidth} centerWidth={sc.sections.centerWidth} selectedUnitId={(aiReviewEntry || aiLastAction) ? (aiReviewEntry || aiLastAction).unitId : selected}
             highlightedHexes={highlightedHexes} hoveredHex={hovered} activePhase={gameState.phase}
             unitSections={currentUnitSections} onSectionSelect={(s) => (gameState.phase === 'distribution-sections' ? distributeToUnit(selected, s) : assignResourceToUnit(selected, s))}
+            overLimitSections={overLimitSections}
             labelMode={labelMode}
           />
           {retreatingUnitId && (

@@ -20,7 +20,7 @@ const resolveOverlayStyle = (overlayTypes, id) => {
   return 'outline';
 };
 
-const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], overlayTypes = [], onHexClick, onHexMouseEnter, onHexMouseLeave, leftWidth, centerWidth, selectedUnitId, highlightedHexes, hoveredHex, activePhase, unitSections, onSectionSelect, labelMode = 'below' }) => {
+const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], overlayTypes = [], onHexClick, onHexMouseEnter, onHexMouseLeave, leftWidth, centerWidth, selectedUnitId, highlightedHexes, hoveredHex, activePhase, unitSections, onSectionSelect, overLimitSections = [], labelMode = 'below' }) => {
   const getTerrain = (id) => terrainTypes.find(t => t.id === id) || terrainTypes[0];
   const getOverlayColor = (id) => overlayTypes.find(o => o.id === id)?.color || '#808080';
   const getUnitSymbol = (typeId) => unitTypes.find(ut => ut.id === typeId)?.natoSymbol || typeId;
@@ -151,7 +151,12 @@ const HexGrid = ({ width, height, hexes, units, terrainTypes, unitTypes = [], ov
           <g key={`unit-${key}`} transform={`translate(${x}, ${y})`} style={{ pointerEvents: 'none' }}>
              <NatoSymbol type={getUnitSymbol(unit.typeId)} owner={unit.ownerId} />
              <g transform="translate(0, 18)">{Array.from({ length: unit.figures }).map((_, i) => <circle key={i} cx={(i - (unit.figures-1)/2) * 6} cy="0" r="2" fill="black" />)}</g>
-             {unit.resources > 0 && <g transform="translate(0, -20)">{Array.from({ length: unit.resources }).map((_, i) => <circle key={i} cx={(i - (unit.resources-1)/2) * 8} cy="0" r="3" fill="#006400" stroke="white" strokeWidth="0.5" />)}</g>}
+             {unit.resources > 0 && <g transform="translate(0, -20)">{Array.from({ length: unit.resources }).map((_, i) => {
+               // Nadlimitní kostka (její sekce je nad distribučním limitem) –
+               // vykreslí se oranžově, protože při vrácení vrátí do skladu 2.
+               const over = overLimitSections.includes((unit.resourceOrigins || [])[i]);
+               return <circle key={i} cx={(i - (unit.resources-1)/2) * 8} cy="0" r="3" fill={over ? '#f59e0b' : '#006400'} stroke="white" strokeWidth="0.5" />;
+             })}</g>}
           </g>
         );
       }
