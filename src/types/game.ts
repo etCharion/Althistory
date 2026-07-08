@@ -10,7 +10,13 @@ export type UnitType = {
   natoSymbol: string;
   category: 'infantry' | 'tank' | 'artillery';
 };
-export type Unit = { id: string; typeId: string; ownerId: PlayerId; figures: number; resources: number; hasMoved: boolean; hasAttacked: boolean; movementUsed: number; resourceOrigins?: SectionId[]; };
+export type Unit = { id: string; typeId: string; ownerId: PlayerId; figures: number; resources: number; hasMoved: boolean; hasAttacked: boolean; movementUsed: number; resourceOrigins?: SectionId[];
+  // Armor Overrun (Memoir '44): po úspěšném útoku zblízka (close assault), kdy
+  // obrněná jednotka zničí nebo zažene nepřítele a obsadí uvolněné pole, může
+  // ještě jednou zaútočit. `hasOverrun` značí, že jednotka svůj jeden overrun
+  // za tah už dostala (brání řetězení); `overrunReady` je právě nabídnutý
+  // bonusový útok zdarma (nespotřebovává zdroj). Obojí se nuluje na konci tahu.
+  hasOverrun?: boolean; overrunReady?: boolean; };
 
 // --- Multiplayer roles & seats ---
 export type Role = 'general' | 'left' | 'center' | 'right';
@@ -178,7 +184,9 @@ export type GamePhase = 'distribution-sections' | 'distribution-units' | 'moveme
 // Shared combat state so dice rolls / retreats are visible to every connected player.
 export type PendingCombat = { attackerId: string; targetId: string; dice: string[]; hits: number; flags: number };
 export type PendingRetreat = { unitId: string; count: number; attackerId: string; targetHex: { q: number; r: number } };
-export type PendingTakeGround = { unitId: string; hex: { q: number; r: number } };
+// `overrun` = obsazení tohoto pole obrněnou jednotkou po úspěšném close assaultu
+// jí umožní ještě jeden útok (Armor Overrun). U pěchoty / druhého overrunu je false.
+export type PendingTakeGround = { unitId: string; hex: { q: number; r: number }; overrun?: boolean };
 
 // A snapshot of the mutable, per-phase state taken before a reversible action
 // (distributing resources to sections, moving a unit). Popping it restores the

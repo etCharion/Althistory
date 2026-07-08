@@ -190,7 +190,8 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     const unit = gameState.units[uid]; if (!unit) return [];
     const hex = getUnitHex(uid); if (!hex) return [];
     const utype = unitTypes.find(u => u.id === unit.typeId);
-    if (unit.resources <= 0 || unit.hasAttacked) return [];
+    // overrunReady = bonusový útok (Armor Overrun), který obchází limit útoku i zdroj.
+    if (!unit.overrunReady && (unit.resources <= 0 || unit.hasAttacked)) return [];
     const category = utype?.category || (utype?.id === 'tank' ? 'tank' : (utype?.id === 'artillery' ? 'artillery' : 'infantry'));
     if (category === 'artillery' && (unit.movementUsed > 0 || unit.hasMoved)) return [];
     return getTargetableUnits((hex as any).q, (hex as any).r, utype, gameState, terrainTypes, overlayTypes);
@@ -243,7 +244,7 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     } else if (gameState.phase === 'attack') {
       const attackable = Object.values(gameState.units).filter((u: any) => {
         const utype = unitTypes.find(ut => ut.id === u.typeId);
-        if (u.ownerId !== activeP || u.resources <= 0 || u.hasAttacked) return false;
+        if (u.ownerId !== activeP || (!u.overrunReady && (u.resources <= 0 || u.hasAttacked))) return false;
         const category = utype?.category || (utype?.id === 'tank' ? 'tank' : (utype?.id === 'artillery' ? 'artillery' : 'infantry'));
         if (category === 'artillery' && (u.movementUsed > 0 || u.hasMoved)) return false;
         const hex = getUnitHex(u.id);

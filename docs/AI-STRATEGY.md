@@ -142,10 +142,21 @@ Když po vlajkách rozhoduje o ústupu vlastní jednotky (i během tahu člověk
 Po zničení souseda AI postoupí, pokud:
 
 - uvolněné pole je **objektiv** (vždy), nebo
+- jde o **Armor Overrun** (tank v close assaultu) a z obsazeného pole má na
+  koho pálit – bonusový útok zdarma se vyplatí vzít, nebo
 - nabízí **stejné či lepší krytí** a jednotka je zdravá a nevstupuje do
   zjevné přesily.
 
 Jinak zůstane — bezhlavé pronásledování je nejsnadnější cesta, jak darovat VP.
+
+### Armor Overrun (průlom obrněné jednotky)
+
+Podle pravidel Memoir '44: když obrněná jednotka (tank) v útoku zblízka (close
+assault, vzdálenost 1) zničí nebo zažene nepřítele a **obsadí uvolněné pole**,
+smí ještě jednou zaútočit (bonusový útok zdarma – nevyžaduje ani nespotřebuje
+zdroj). Za tah je povolen **jen jeden** takový průlom; druhé obsazení pole už
+další útok nenabídne. Stav nese jednotka v příznacích `hasOverrun` (jednorázový
+limit) a `overrunReady` (nabídnutý bonusový útok); oba se nulují na konci tahu.
 
 ## 6. Architektura modulů
 
