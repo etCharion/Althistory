@@ -507,6 +507,75 @@ describe('RESOLVE_TAKE_GROUND / CANCEL_TAKE_GROUND', () => {
   });
 });
 
+describe('Armor Overrun (průlom obrněné jednotky – pravidla Memoir \'44)', () => {
+  // Tank a1 sousedí s d1 (1 figurka); po jeho zničení v close assaultu a obsazení
+  // pole je vedle další cíl d2 (1 figurka), na který smí tank ještě jednou pálit.
+  function overrunState(attOpts: any = {}) {
+    return buildState({
+      phase: 'attack',
+      hexes: [
+        hexEntry(0, 4, 'grass', { unitId: 'a1' }),
+        hexEntry(0, 5, 'grass', { unitId: 'd1' }),
+        hexEntry(0, 6, 'grass', { unitId: 'd2' }),
+      ],
+      units: [
+        unitEntry('a1', 'tank', 'player1', { resources: 1, figures: 3, ...attOpts }),
+        unitEntry('d1', 'infantry', 'player2', { figures: 1, resources: 0 }),
+        unitEntry('d2', 'infantry', 'player2', { figures: 1, resources: 0 }),
+      ],
+    });
+  }
+  const killSeed = () => findSeed(3, d => countHits(d, 'infantry') >= 1 && countFlags(d) === 0);
+
+  it('close assault tankem nabídne obsazení pozice s nárokem na overrun', () => {
+    const after = reducer(overrunState(), local({ type: 'ATTACK', attackerId: 'a1', targetId: 'd1', seed: killSeed() }), rules);
+    expect(after.units.d1).toBeUndefined();
+    expect(after.pendingTakeGround).toMatchObject({ unitId: 'a1', hex: { q: 0, r: 5 }, overrun: true });
+  });
+
+  it('pěchota overrun nedostává (jen nabídku obsazení pozice)', () => {
+    const s = buildState({
+      phase: 'attack',
+      hexes: [hexEntry(0, 4, 'grass', { unitId: 'a1' }), hexEntry(0, 5, 'grass', { unitId: 'd1' })],
+      units: [unitEntry('a1', 'infantry', 'player1', { resources: 1 }), unitEntry('d1', 'infantry', 'player2', { figures: 1 })],
+    });
+    const after = reducer(s, local({ type: 'ATTACK', attackerId: 'a1', targetId: 'd1', seed: killSeed() }), rules);
+    expect(after.pendingTakeGround).toMatchObject({ unitId: 'a1', overrun: false });
+  });
+
+  it('obsazení pole s overrun nastaví jednotce overrunReady + hasOverrun', () => {
+    const killed = reducer(overrunState(), local({ type: 'ATTACK', attackerId: 'a1', targetId: 'd1', seed: killSeed() }), rules);
+    const advanced = reducer(killed, local({ type: 'RESOLVE_TAKE_GROUND', unitId: 'a1', q: 0, r: 5 }), rules);
+    expect(advanced.grid['0,5'].unitId).toBe('a1');
+    expect(advanced.units.a1).toMatchObject({ overrunReady: true, hasOverrun: true });
+  });
+
+  it('bonusový útok je zdarma (bez zdroje, i po hasAttacked) a spotřebuje overrunReady', () => {
+    const killed = reducer(overrunState(), local({ type: 'ATTACK', attackerId: 'a1', targetId: 'd1', seed: killSeed() }), rules);
+    const advancedRaw = reducer(killed, local({ type: 'RESOLVE_TAKE_GROUND', unitId: 'a1', q: 0, r: 5 }), rules);
+    const advanced = reducer(advancedRaw, local({ type: 'DISMISS_COMBAT' }), rules); // zavře animaci prvního souboje
+    expect(advanced.units.a1.resources).toBe(0); // první útok spotřeboval jediný zdroj
+    const overrun = reducer(advanced, local({ type: 'ATTACK', attackerId: 'a1', targetId: 'd2', seed: killSeed() }), rules);
+    expect(overrun.units.d2).toBeUndefined();       // bonusový útok proběhl a zabil
+    expect(overrun.units.a1.resources).toBe(0);     // zdroj se neodečetl
+    expect(overrun.units.a1.overrunReady).toBe(false);
+  });
+
+  it('overrun se neřetězí: druhé obsazení pole už další útok nenabídne', () => {
+    const killed = reducer(overrunState(), local({ type: 'ATTACK', attackerId: 'a1', targetId: 'd1', seed: killSeed() }), rules);
+    const advancedRaw = reducer(killed, local({ type: 'RESOLVE_TAKE_GROUND', unitId: 'a1', q: 0, r: 5 }), rules);
+    const advanced = reducer(advancedRaw, local({ type: 'DISMISS_COMBAT' }), rules);
+    const overrun = reducer(advanced, local({ type: 'ATTACK', attackerId: 'a1', targetId: 'd2', seed: killSeed() }), rules);
+    expect(overrun.pendingTakeGround).toMatchObject({ unitId: 'a1', hex: { q: 0, r: 6 }, overrun: false });
+  });
+
+  it('konec tahu vynuluje overrun příznaky', () => {
+    const s = overrunState({ hasOverrun: true, overrunReady: true, hasAttacked: true });
+    const after = reducer(s, local({ type: 'END_TURN' }), rules);
+    expect(after.units.a1).toMatchObject({ hasOverrun: false, overrunReady: false });
+  });
+});
+
 describe('END_TURN a NEXT_PHASE', () => {
   it('konec tahu: předá tah, dá soupeři příjem, všechny nevyužité zdroje propadají', () => {
     const s = buildState({

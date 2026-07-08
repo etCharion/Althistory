@@ -335,7 +335,13 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
 
   const handleHexClick = (q, r) => {
     if (retreatingUnitId) { if (canControlUnit(retreatingUnitId.unitId)) retreatUnit(retreatingUnitId.unitId, q, r); return; }
-    if (takeGroundOption) { if (canControlUnit(takeGroundOption.unitId)) takeGround(takeGroundOption.unitId, q, r); return; }
+    if (takeGroundOption) {
+      if (canControlUnit(takeGroundOption.unitId)) {
+        if (takeGroundOption.overrun) { setSelected(takeGroundOption.unitId); setActType('attack'); }
+        takeGround(takeGroundOption.unitId, q, r);
+      }
+      return;
+    }
     if (spectator || isAiTurn) return;
     clearAiHighlight(); // klik hráče ruší zvýraznění posledního tahu AI
     setAiReviewIdx(null); // …i prohlížení logu
@@ -469,6 +475,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
               <div className={`bg-white border-4 border-blue-600 rounded-xl shadow-2xl ${dismissedOverlay ? 'p-3 flex items-center gap-4' : 'p-10'}`}>
                 <h2 className={`${dismissedOverlay ? 'text-sm' : 'text-3xl'} font-bold text-blue-600 font-handwriting`}>Obsadit pozici?</h2>
                 {!dismissedOverlay && <p className="text-sm mt-2 font-bold normal-case">Klikněte na pole pro přesun, nebo kamkoliv jinam pro zrušení.</p>}
+                {!dismissedOverlay && takeGroundOption?.overrun && <p className="text-xs mt-1 font-bold normal-case text-red-600">Průlom: po obsazení může tank ještě jednou zaútočit.</p>}
                 <div className={`${dismissedOverlay ? 'flex gap-2' : 'mt-6 flex flex-col gap-3'}`}>
                   <button onClick={() => setDismissedOverlay(!dismissedOverlay)} className="bg-blue-600 text-white px-6 py-2 text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors">
                     {dismissedOverlay ? 'Zobrazit' : 'Vyřešit'}
@@ -504,7 +511,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
                   {gameState.phase === 'movement' && <button disabled={gameState.units[selected].resources === 0 || (gameState.units[selected].movementUsed >= (uTypes.find(ut => ut.id === gameState.units[selected].typeId)?.movement || 0))} onClick={() => setActType('move')} className={`w-full p-2 rounded border text-[10px] font-bold ${actType === 'move' ? 'bg-yellow-200' : 'bg-white disabled:opacity-50 uppercase'}`}>POHYB</button>}
                   {gameState.phase === 'attack' && (
                     <>
-                      <button disabled={gameState.units[selected].resources === 0 || gameState.units[selected].hasAttacked} onClick={() => setActType('attack')} className={`w-full p-2 rounded border text-[10px] font-bold ${actType === 'attack' ? 'bg-red-200' : 'bg-white disabled:opacity-50 uppercase'}`}>ÚTOK</button>
+                      <button disabled={!gameState.units[selected].overrunReady && (gameState.units[selected].resources === 0 || gameState.units[selected].hasAttacked)} onClick={() => setActType('attack')} className={`w-full p-2 rounded border text-[10px] font-bold ${actType === 'attack' ? 'bg-red-200' : 'bg-white disabled:opacity-50 uppercase'}`}>{gameState.units[selected].overrunReady ? 'PRŮLOM' : 'ÚTOK'}</button>
                       {getUnitHex(selected)?.overlayTypeId === 'wire' && (() => {
                         const ut = uTypes.find(ut => ut.id === gameState.units[selected].typeId);
                         const category = ut?.category || (ut?.id === 'tank' ? 'tank' : (ut?.id === 'artillery' ? 'artillery' : 'infantry'));

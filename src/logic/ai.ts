@@ -149,7 +149,8 @@ function chooseAttack(state: GameState, rules: Rules, ai: PlayerId, clientId: st
   let wireBreaker: string | null = null;
 
   for (const u of unitsOf(state, ai)) {
-    if ((u.resources || 0) <= 0 || u.hasAttacked) continue;
+    // overrunReady = bonusový útok (Armor Overrun) zdarma – obchází limit i zdroj.
+    if (!u.overrunReady && ((u.resources || 0) <= 0 || u.hasAttacked)) continue;
     const utype = typeOf(rules, u);
     if (!utype) continue;
     const cat = categoryOf(utype);
@@ -158,7 +159,8 @@ function chooseAttack(state: GameState, rules: Rules, ai: PlayerId, clientId: st
     if (!hex) continue;
     const w = doc.forUnit(u, hex).weights;
 
-    const ev = bestAttackFrom(state, rules, u, utype, hex, 0, u.resources, w);
+    const attackResources = u.overrunReady ? Math.max(u.resources || 0, 1) : u.resources;
+    const ev = bestAttackFrom(state, rules, u, utype, hex, 0, attackResources, w);
     if (!ev) {
       // §3: pěchota na drátu bez cíle drát odstraní.
       if (cat === 'infantry' && hex.overlayTypeId === 'wire' && !wireBreaker
@@ -238,6 +240,12 @@ function chooseTakeGround(state: GameState, rules: Rules, ai: PlayerId, clientId
   if (capturableObjective(target, u.ownerId)) return advance; // objektiv se bere vždy
   if (target.overlayTypeId === 'wire') return cancel;         // na drát se neleze (ani vabank)
   if (p.takeGround === 'objectivesOnly') return cancel;       // obrana/konsolidace nevylézá
+  // Armor Overrun: obsazení pole tankem nabízí bonusový útok zdarma – vyplatí se
+  // ho vzít, pokud odtud má na koho pálit (§ pravidla Memoir '44).
+  if (tg.overrun) {
+    const follow = bestAttackFrom(state, rules, u, utype, target, 0, 1, w);
+    if (follow && follow.value > 0) return advance;
+  }
   if (p.takeGround === 'always') return advance;              // vabank žene vpřed
   if (strengthOf(u) < 2) return cancel;                       // oslabení nepronásledují
   const betterCover = coverAt(rules, target, cat) >= coverAt(rules, fromHex, cat);

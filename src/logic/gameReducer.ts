@@ -407,7 +407,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       // tahu (mechanika „ponechaného zdroje jako života navíc" byla ze hry
       // odstraněna).
       Object.keys(newUnits).forEach(id => {
-        newUnits[id] = { ...newUnits[id], resources: 0, resourceOrigins: [], hasMoved: false, hasAttacked: false, movementUsed: 0 };
+        newUnits[id] = { ...newUnits[id], resources: 0, resourceOrigins: [], hasMoved: false, hasAttacked: false, movementUsed: 0, hasOverrun: false, overrunReady: false };
       });
       const { nVP, newGrid: updatedGrid } = checkObjectives(state.grid, newUnits, next, 'startOfTurn', state.currentTurn, state.victoryPoints);
       return {
@@ -548,7 +548,11 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       const { attackerId: aid, targetId: tid } = action;
       const att = state.units[aid];
       const tar = state.units[tid];
-      if (state.phase !== 'attack' || !att || !tar || att.ownerId !== active || att.resources <= 0 || att.hasAttacked) return state;
+      // Armor Overrun: bonusový útok zdarma (nevyžaduje ani nespotřebovává zdroj
+      // a obchází jednorázový limit útoku za tah).
+      const isOverrunAttack = !!att.overrunReady;
+      if (state.phase !== 'attack' || !att || !tar || att.ownerId !== active) return state;
+      if (!isOverrunAttack && (att.resources <= 0 || att.hasAttacked)) return state;
       if (hasPendingCombat(state)) return state;
       if (!controlsUnit(state, action.clientId, aid)) return state;
 
@@ -611,13 +615,16 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       } else {
         nU[tid] = upT;
       }
-      nU[aid] = { ...nU[aid], resources: nU[aid].resources - 1, hasAttacked: true };
+      nU[aid] = { ...nU[aid], resources: isOverrunAttack ? nU[aid].resources : nU[aid].resources - 1, hasAttacked: true, overrunReady: false };
+      // Obrněná jednotka dostane overrun jen jednou za tah; bonusový útok sám už
+      // další overrun neuděluje (hasOverrun je v tu chvíli true).
+      const grantsOverrun = dist === 1 && attCategory === 'tank' && !nU[aid].hasOverrun;
 
       if (isEliminated) {
         const { nVP: updatedVP, newGrid: updatedGrid } = checkObjectives(nG, nU, active, 'immediate', state.currentTurn, { player1: nVP.player1, player2: nVP.player2 });
         nG = updatedGrid;
         nVP = updatedVP;
-        if (dist === 1 && attCategory !== 'artillery') pendingTakeGround = { unitId: aid, hex: { q: (targetHex as any).q, r: (targetHex as any).r } };
+        if (dist === 1 && attCategory !== 'artillery') pendingTakeGround = { unitId: aid, hex: { q: (targetHex as any).q, r: (targetHex as any).r }, overrun: grantsOverrun };
       } else if (finalFlags > 0) {
         const noRetreat = targetOverlay?.noRetreatCategories?.includes(targetCategory);
         if (noRetreat) {
@@ -638,7 +645,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
                 nG = updatedGrid;
                 nVP = updatedVP;
                 isEliminated = true;
-                if (dist === 1 && attCategory !== 'artillery') pendingTakeGround = { unitId: aid, hex: { q: (targetHex as any).q, r: (targetHex as any).r } };
+                if (dist === 1 && attCategory !== 'artillery') pendingTakeGround = { unitId: aid, hex: { q: (targetHex as any).q, r: (targetHex as any).r }, overrun: grantsOverrun };
                 break;
              }
           }
@@ -732,7 +739,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
           const category = categoryOf(attType);
           const attHex = att ? unitHex({ ...state, grid: updatedGrid } as any, pr.attackerId) : null;
           if (att && attHex && getDistance(attHex, pr.targetHex) === 1 && category !== 'artillery') {
-            pendingTakeGround = { unitId: pr.attackerId, hex: pr.targetHex };
+            pendingTakeGround = { unitId: pr.attackerId, hex: pr.targetHex, overrun: category === 'tank' && !att.hasOverrun };
           }
         } else {
           pendingRetreat = { ...pr, count: pr.count - 1 };
@@ -770,7 +777,7 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
         const category = categoryOf(attType);
         const attHex = att ? unitHex({ ...state, grid: updatedGrid } as any, pr.attackerId) : null;
         if (att && attHex && getDistance(attHex, pr.targetHex) === 1 && category !== 'artillery') {
-          pendingTakeGround = { unitId: pr.attackerId, hex: pr.targetHex };
+          pendingTakeGround = { unitId: pr.attackerId, hex: pr.targetHex, overrun: category === 'tank' && !att.hasOverrun };
         }
       }
       return { ...state, grid: updatedGrid, victoryPoints: nVP, unitStats: nStats, pendingRetreat, pendingTakeGround, winner: computeWinner(state.scenario, state.units, nVP) };
@@ -793,8 +800,13 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       nG[`${q},${r}`] = { ...nG[`${q},${r}`], unitId: uid };
       const nStats = { ...state.unitStats } as any;
       if (nStats[uid]) nStats[uid] = { ...nStats[uid], distanceTraveled: nStats[uid].distanceTraveled + 1 };
-      const { nVP, newGrid: updatedGrid } = checkObjectives(nG, state.units, active, 'immediate', state.currentTurn, state.victoryPoints);
-      return { ...state, grid: updatedGrid, victoryPoints: nVP, unitStats: nStats, pendingTakeGround: null, winner: computeWinner(state.scenario, state.units, nVP) };
+      // Armor Overrun: obsazení pole po úspěšném close assaultu obrněnou jednotkou
+      // jí nabídne ještě jeden bonusový útok (jen jednou za tah – hasOverrun).
+      const nUnits = tg.overrun
+        ? { ...state.units, [uid]: { ...state.units[uid], overrunReady: true, hasOverrun: true } }
+        : state.units;
+      const { nVP, newGrid: updatedGrid } = checkObjectives(nG, nUnits, active, 'immediate', state.currentTurn, state.victoryPoints);
+      return { ...state, units: nUnits, grid: updatedGrid, victoryPoints: nVP, unitStats: nStats, pendingTakeGround: null, winner: computeWinner(state.scenario, nUnits, nVP) };
     }
 
     case 'CANCEL_TAKE_GROUND': {
