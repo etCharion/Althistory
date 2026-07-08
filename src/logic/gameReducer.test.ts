@@ -533,6 +533,18 @@ describe('Armor Overrun (průlom obrněné jednotky – pravidla Memoir \'44)', 
     expect(after.pendingTakeGround).toMatchObject({ unitId: 'a1', hex: { q: 0, r: 5 }, overrun: true });
   });
 
+  it('platí pro libovolnou jednotku s category tank, ne jen pro typeId "tank"', () => {
+    // Vlastní jednotka z editoru (jiný typeId, ale category: 'tank') musí dostat overrun stejně.
+    const customTankRules = { ...rules, unitTypes: [...rules.unitTypes, { id: 'stug', name: 'StuG III', movement: 3, shootingRange: [3, 3, 3], canShootAfterMovingMax: 3, maxFigures: 3, natoSymbol: 'tank', category: 'tank' }] };
+    const s = buildState({
+      phase: 'attack',
+      hexes: [hexEntry(0, 4, 'grass', { unitId: 'a1' }), hexEntry(0, 5, 'grass', { unitId: 'd1' })],
+      units: [unitEntry('a1', 'stug', 'player1', { resources: 1, figures: 3 }), unitEntry('d1', 'infantry', 'player2', { figures: 1 })],
+    });
+    const after = reducer(s, local({ type: 'ATTACK', attackerId: 'a1', targetId: 'd1', seed: killSeed() }), customTankRules);
+    expect(after.pendingTakeGround).toMatchObject({ unitId: 'a1', overrun: true });
+  });
+
   it('pěchota overrun nedostává (jen nabídku obsazení pozice)', () => {
     const s = buildState({
       phase: 'attack',
