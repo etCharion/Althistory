@@ -1,8 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Trash2, Plus, Edit2, X as CloseIcon } from 'lucide-react';
 import NatoSymbol from './NatoSymbol';
-import { getAllUnitTypes, getAllTerrainTypes, getAllCountries, getAllCampaigns, getAllScenarios, getAllOverlayTypes, saveUnitType, deleteUnitType, saveTerrainType, deleteTerrainType, saveOverlayType, deleteOverlayType, saveCountry, deleteCountry, saveCampaign, deleteCampaign, saveScenario, deleteScenario, getScenarioCountryNames } from '../data/typeUtils';
+import { getAllUnitTypes, getAllTerrainTypes, getAllCountries, getAllCampaigns, getAllScenarios, getAllOverlayTypes, saveUnitType, deleteUnitType, saveTerrainType, deleteTerrainType, saveOverlayType, deleteOverlayType, saveCountry, deleteCountry, saveCampaign, deleteCampaign, deleteScenario, getScenarioCountryNames } from '../data/typeUtils';
 
+// --- Design tokens (field / new look). Mirror hodnot z designového handoffu. ---
+const C = {
+  paper: '#efe4c9', card: '#fffdf7', card2: '#faf4e6',
+  ally: '#1c3f6b', allySoft: '#2f6db0', axis: '#7c2018', army: '#2c7d42', ink: '#16202e',
+  tanBorder: '#e0d4af', tanBorderSoft: '#d3c39c', tanText: '#6b6450', tanDeep: '#8a7a52', tanLine: '#d8cba6', amber: '#b06a1e'
+};
+
+type Opt = readonly [string, string];
+const CATS: readonly Opt[] = [['infantry', 'Pěchota'], ['tank', 'Tank'], ['artillery', 'Dělostřelectvo']];
+const MOVE: readonly Opt[] = [['none', 'Žádné'], ['stop', 'Zastavit'], ['no-move', 'Neprůchodné']];
+const MS: readonly Opt[] = [['outline', 'Obrys'], ['x', 'Křížky'], ['sandbags', 'Pytle (hnědé)'], ['bunker', 'Pytle (šedé)'], ['wire', 'Drát']];
+const SIDE: readonly Opt[] = [['', 'Žádnou'], ['player1', 'Spojenci'], ['player2', 'Osa']];
+
+// Kompletní katalog NATO symbolů (zachováno beze změny – všech 26 typů).
 const NATO_SYMBOLS = [
   { id: 'infantry', name: 'Pěchota' },
   { id: 'tank', name: 'Tank' },
@@ -32,39 +45,160 @@ const NATO_SYMBOLS = [
   { id: 'paratroopers', name: 'Parašutisté' }
 ];
 
+// ---------------------------------------------------------------------------
+// Znovupoužitelné ovládací prvky (pixel-přesně dle handoffu, inline styly)
+// ---------------------------------------------------------------------------
+const Lbl: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <label style={{ display: 'block', font: '700 10px/1.3 Barlow,sans-serif', letterSpacing: '.06em', textTransform: 'uppercase', color: C.tanText, marginBottom: 5 }}>{children}</label>
+);
+
+const Field: React.FC<{ label: string; style?: React.CSSProperties; children: React.ReactNode }> = ({ label, style, children }) => (
+  <div style={style}><Lbl>{label}</Lbl>{children}</div>
+);
+
+const NatoPreview: React.FC<{ type: string; size: number }> = ({ type, size }) => (
+  <svg viewBox="-20 -15 40 30" width={size} height={size * 0.72} style={{ display: 'block' }}>
+    <NatoSymbol type={type} owner="player1" />
+  </svg>
+);
+
+const Stepper: React.FC<{ value: number; onChange: (v: number) => void; min?: number; max?: number; w?: number; sign?: boolean }> = ({ value, onChange, min = -9, max = 9, w = 40, sign }) => {
+  const disp = sign && value > 0 ? '+' + value : String(value);
+  const btn = (txt: string, d: number) => (
+    <button type="button" onClick={() => onChange(Math.max(min, Math.min(max, value + d)))} style={{ width: 26, height: 30, border: 'none', background: 'transparent', color: C.ally, fontSize: 16, fontWeight: 700, cursor: 'pointer', lineHeight: 1 }}>{txt}</button>
+  );
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', border: `1.5px solid ${C.tanBorder}`, borderRadius: 8, background: '#fff', overflow: 'hidden' }}>
+      {btn('−', -1)}
+      <span style={{ minWidth: w, textAlign: 'center', fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums', color: value > 0 ? C.army : (value < 0 ? C.axis : C.ink), borderLeft: `1px solid ${C.tanLine}`, borderRight: `1px solid ${C.tanLine}`, padding: '0 2px', lineHeight: '30px' }}>{disp}</span>
+      {btn('+', 1)}
+    </div>
+  );
+};
+
+const Toggle: React.FC<{ on: boolean; set: (v: boolean) => void }> = ({ on, set }) => (
+  <button type="button" onClick={() => set(!on)} aria-pressed={on} style={{ position: 'relative', width: 38, height: 22, borderRadius: 999, border: 'none', cursor: 'pointer', background: on ? C.army : '#cdc7bb', transition: 'background .15s', flex: 'none' }}>
+    <span style={{ position: 'absolute', top: 2, left: on ? 18 : 2, width: 18, height: 18, borderRadius: 999, background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,.3)', transition: 'left .15s' }} />
+  </button>
+);
+
+const ToggleField: React.FC<{ label: string; on: boolean; set: (v: boolean) => void }> = ({ label, on, set }) => (
+  <label onClick={() => set(!on)} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, cursor: 'pointer', padding: '6px 10px 6px 6px', border: `1.5px solid ${on ? C.army : C.tanBorder}`, background: on ? 'rgba(44,125,66,.08)' : '#fff', borderRadius: 9 }}>
+    <Toggle on={on} set={set} />
+    <span style={{ font: '700 11px/1.2 Barlow,sans-serif', letterSpacing: '.03em', textTransform: 'uppercase', color: C.ink }}>{label}</span>
+  </label>
+);
+
+const Segmented: React.FC<{ value: string; options: readonly Opt[]; set: (v: string) => void }> = ({ value, options, set }) => (
+  <div style={{ display: 'inline-flex', gap: 4, padding: 4, background: '#f1e9d4', border: `1.5px solid ${C.tanBorder}`, borderRadius: 10, flexWrap: 'wrap' }}>
+    {options.map(([v, label]) => {
+      const a = value === v;
+      return (
+        <button key={String(v)} type="button" onClick={() => set(v)} style={{ border: 'none', cursor: 'pointer', padding: '6px 12px', borderRadius: 7, font: '700 11px/1 Barlow,sans-serif', letterSpacing: '.03em', textTransform: 'uppercase', color: a ? '#fff' : C.tanText, background: a ? C.ally : 'transparent', boxShadow: a ? '0 1px 3px rgba(0,0,0,.2)' : 'none', transition: '.12s', whiteSpace: 'nowrap' }}>{label}</button>
+      );
+    })}
+  </div>
+);
+
+const Chips: React.FC<{ selected: string[]; set: (v: string[]) => void }> = ({ selected, set }) => (
+  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+    {CATS.map(([v, label]) => {
+      const a = selected.includes(v);
+      return (
+        <button key={v} type="button" onClick={() => set(a ? selected.filter(x => x !== v) : [...selected, v])} style={{ cursor: 'pointer', padding: '6px 12px', borderRadius: 999, font: '700 11px/1 Barlow,sans-serif', letterSpacing: '.03em', textTransform: 'uppercase', border: `1.5px solid ${a ? C.axis : C.tanBorder}`, background: a ? C.axis : '#fff', color: a ? '#fff' : C.tanText, transition: '.12s' }}>{label}</button>
+      );
+    })}
+  </div>
+);
+
+const ColorInput: React.FC<{ color: string; set: (v: string) => void }> = ({ color, set }) => (
+  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+    <input type="color" value={color || '#cccccc'} onChange={e => set(e.target.value)} style={{ width: 38, height: 32, padding: 2, border: `1.5px solid ${C.tanBorder}`, borderRadius: 8, background: '#fff', cursor: 'pointer' }} />
+    <input value={color || ''} onChange={e => set(e.target.value)} style={{ width: 96, border: `1.5px solid ${C.tanBorder}`, borderRadius: 8, padding: '7px 9px', font: '600 12px/1 monospace', color: C.ink, outline: 'none', background: '#fff' }} />
+  </div>
+);
+
+const TextInput: React.FC<{ value: string; set: (v: string) => void; big?: boolean }> = ({ value, set, big }) => (
+  <input value={value} onChange={e => set(e.target.value)} style={{ width: '100%', border: `1.5px solid ${C.tanBorder}`, borderRadius: 9, padding: big ? '9px 12px' : '8px 11px', font: big ? '700 17px/1.2 "Barlow Condensed",sans-serif' : '600 13px/1.3 Barlow,sans-serif', letterSpacing: big ? '.02em' : '0', textTransform: big ? 'uppercase' : 'none', color: C.ink, outline: 'none', background: '#fff' }} />
+);
+
+const TextArea: React.FC<{ value: string; set: (v: string) => void }> = ({ value, set }) => (
+  <textarea value={value} onChange={e => set(e.target.value)} rows={2} style={{ width: '100%', border: `1.5px solid ${C.tanBorder}`, borderRadius: 9, padding: '9px 11px', font: '500 13px/1.4 Barlow,sans-serif', color: C.ink, outline: 'none', resize: 'vertical', background: '#fff' }} />
+);
+
+const SectionHead: React.FC<{ title: string; accent: string; right?: React.ReactNode }> = ({ title, accent, right }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 13 }}>
+    <span style={{ width: 5, height: 16, borderRadius: 3, background: accent, flex: 'none' }} />
+    <h4 style={{ margin: 0, font: '700 12.5px/1 "Barlow Condensed",sans-serif', letterSpacing: '.09em', textTransform: 'uppercase', color: C.ally, whiteSpace: 'nowrap' }}>{title}</h4>
+    <span style={{ flex: 1, height: 1, background: C.tanLine }} />
+    {right || null}
+  </div>
+);
+
+const DiceMatrix: React.FC<{ rows: [string, string, string | null][]; item: any; up: (patch: any) => void }> = ({ rows, item, up }) => {
+  const hcell = (t: string, c: string) => (
+    <div style={{ font: '700 10px/1.2 Barlow,sans-serif', letterSpacing: '.05em', textTransform: 'uppercase', color: c, textAlign: 'center', paddingBottom: 2 }}>{t}</div>
+  );
+  return (
+    <div style={{ background: '#fff', border: `1.5px solid ${C.tanBorder}`, borderRadius: 11, padding: '12px 14px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 8, alignItems: 'end', paddingBottom: 6, borderBottom: `1px solid ${C.tanLine}`, marginBottom: 8 }}>
+        <div />{hcell('Obrana', C.army)}{hcell('Útok', C.axis)}
+      </div>
+      {rows.map(([label, dk, ak]) => (
+        <div key={label} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 8, alignItems: 'center', padding: '4px 0' }}>
+          <span style={{ font: '600 12.5px/1.2 Barlow,sans-serif', color: C.ink }}>{label}</span>
+          <div style={{ display: 'flex', justifyContent: 'center' }}><Stepper value={item[dk] || 0} onChange={v => up({ [dk]: v })} sign /></div>
+          {ak
+            ? <div style={{ display: 'flex', justifyContent: 'center' }}><Stepper value={item[ak] || 0} onChange={v => up({ [ak]: v })} sign /></div>
+            : <div style={{ textAlign: 'center', color: C.tanBorderSoft, fontSize: 13 }}>—</div>}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// Skloňování počtu (1 / 2–4 / 5+)
+const plural = (n: number, forms: [string, string, string]) => (n === 1 ? forms[0] : (n >= 2 && n <= 4 ? forms[1] : forms[2]));
+
+const ENTITY_WORDS: Record<string, [string, string, string]> = {
+  terrains: ['typ terénu', 'typy terénu', 'typů terénu'],
+  overlays: ['překážka', 'překážky', 'překážek'],
+  units: ['jednotka', 'jednotky', 'jednotek'],
+  countries: ['země', 'země', 'zemí'],
+  campaigns: ['kampaň', 'kampaně', 'kampaní'],
+  scenarios: ['scénář', 'scénáře', 'scénářů'],
+};
+
+const TABS: Opt[] = [
+  ['scenarios', 'Scénáře'], ['units', 'Jednotky'], ['terrains', 'Terén'],
+  ['overlays', 'Překážky'], ['countries', 'Země'], ['campaigns', 'Kampaně'],
+];
+
 const Customization = ({ onBack, onEditScenario }) => {
-  const [units, setUnits] = useState([]);
-  const [terrains, setTerrains] = useState([]);
-  const [overlays, setOverlays] = useState([]);
-  const [countries, setCountries] = useState([]);
-  const [campaigns, setCampaigns] = useState([]);
-  const [scenarios, setScenarios] = useState([]);
+  const [units, setUnits] = useState<any[]>([]);
+  const [terrains, setTerrains] = useState<any[]>([]);
+  const [overlays, setOverlays] = useState<any[]>([]);
+  const [countries, setCountries] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [scenarios, setScenarios] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('scenarios');
-  const [selectedUnitForSymbol, setSelectedUnitForSymbol] = useState(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [symbolPickerId, setSymbolPickerId] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
       const [u, t, o, c, cp, s] = await Promise.all([
-        getAllUnitTypes(),
-        getAllTerrainTypes(),
-        getAllOverlayTypes(),
-        getAllCountries(),
-        getAllCampaigns(),
-        getAllScenarios()
+        getAllUnitTypes(), getAllTerrainTypes(), getAllOverlayTypes(),
+        getAllCountries(), getAllCampaigns(), getAllScenarios()
       ]);
-      setUnits(u);
-      setTerrains(t);
-      setOverlays(o);
-      setCountries(c);
-      setCampaigns(cp);
-      setScenarios(s);
+      setUnits(u); setTerrains(t); setOverlays(o); setCountries(c); setCampaigns(cp); setScenarios(s);
     };
     load();
   }, []);
 
-  // Debounced persistence: update React state synchronously so controlled
-  // inputs keep their caret position, then save to Firestore in the background
-  // (debounced per item to avoid a write on every keystroke).
+  // Debounced persistence: React state se aktualizuje synchronně (aby si
+  // controlled inputy udržely pozici kurzoru), zápis do Firestore je debounced
+  // per položka, aby se nezapisovalo na každý stisk klávesy.
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const debouncedSave = (key: string, save: () => Promise<void>) => {
     if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
@@ -72,43 +206,46 @@ const Customization = ({ onBack, onEditScenario }) => {
   };
   useEffect(() => () => { Object.values(saveTimers.current).forEach(clearTimeout); }, []);
 
-  const updateUnit = (item) => { setUnits(prev => prev.map(u => u.id === item.id ? item : u)); debouncedSave(`unit-${item.id}`, () => saveUnitType(item)); };
-  const updateTerrain = (item) => { setTerrains(prev => prev.map(t => t.id === item.id ? item : t)); debouncedSave(`terrain-${item.id}`, () => saveTerrainType(item)); };
-  const updateOverlay = (item) => { setOverlays(prev => prev.map(o => o.id === item.id ? item : o)); debouncedSave(`overlay-${item.id}`, () => saveOverlayType(item)); };
-  const updateCountry = (item) => { setCountries(prev => prev.map(c => c.id === item.id ? item : c)); debouncedSave(`country-${item.id}`, () => saveCountry(item)); };
-  const updateCampaign = (item) => { setCampaigns(prev => prev.map(cp => cp.id === item.id ? item : cp)); debouncedSave(`campaign-${item.id}`, () => saveCampaign(item)); };
+  const updateUnit = (item: any) => { setUnits(prev => prev.map(u => u.id === item.id ? item : u)); debouncedSave(`unit-${item.id}`, () => saveUnitType(item)); };
+  const updateTerrain = (item: any) => { setTerrains(prev => prev.map(t => t.id === item.id ? item : t)); debouncedSave(`terrain-${item.id}`, () => saveTerrainType(item)); };
+  const updateOverlay = (item: any) => { setOverlays(prev => prev.map(o => o.id === item.id ? item : o)); debouncedSave(`overlay-${item.id}`, () => saveOverlayType(item)); };
+  const updateCountry = (item: any) => { setCountries(prev => prev.map(c => c.id === item.id ? item : c)); debouncedSave(`country-${item.id}`, () => saveCountry(item)); };
+  const updateCampaign = (item: any) => { setCampaigns(prev => prev.map(cp => cp.id === item.id ? item : cp)); debouncedSave(`campaign-${item.id}`, () => saveCampaign(item)); };
 
   const addUnit = async () => {
-    const newUnit = { id: `unit-${Date.now()}`, name: 'Nová jednotka', movement: 2, shootingRange: [3, 2, 1], canShootAfterMovingMax: 1, maxFigures: 4, natoSymbol: 'infantry', category: 'infantry' };
+    const newUnit = { id: `unit-${Date.now()}`, name: 'Nová jednotka', movement: 2, shootingRange: [3, 2, 1], canShootAfterMovingMax: 1, maxFigures: 4, natoSymbol: 'infantry', category: 'infantry', description: '' };
     await saveUnitType(newUnit);
-    setUnits([...units, newUnit]);
+    setUnits(prev => [...prev, newUnit]);
+    setExpandedId(newUnit.id);
   };
 
   const addTerrain = async () => {
-    const newTerrain = { id: `terrain-${Date.now()}`, name: 'Nový terén', blocksLOS: false, diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, ignoreFlags: 0, color: '#cccccc', description: '' };
+    const newTerrain = { id: `terrain-${Date.now()}`, name: 'Nový terén', color: '#cccccc', blocksLOS: false, movementRestriction: 'none', diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, ignoreFlags: 0, impassableForCategories: [], impassableForPlayer: undefined, entryFromAdjacentOnly: false, exitToAdjacentOnly: false, description: '' };
     await saveTerrainType(newTerrain);
-    setTerrains([...terrains, newTerrain]);
+    setTerrains(prev => [...prev, newTerrain]);
+    setExpandedId(newTerrain.id);
   };
 
   const addOverlay = async () => {
-    const newOverlay = { id: `overlay-${Date.now()}`, name: 'Nová překážka', diceModifierDefense: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, diceModifierAttackArtillery: 0, ignoreFlags: 0, movementRestriction: 'none', blocksLOS: false, color: '#cccccc', description: '' };
+    const newOverlay = { id: `overlay-${Date.now()}`, name: 'Nová překážka', color: '#cccccc', mapStyle: 'outline', blocksLOS: false, movementRestriction: 'none', allowAttackAfterStop: false, diceModifierDefense: 0, diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierDefenseArtillery: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, diceModifierAttackArtillery: 0, ignoreFlags: 0, onlyBonusForOwner: false, impassableForCategories: [], noRetreatCategories: [], cannotLeaveCategories: [], impassableForPlayer: undefined, entryFromAdjacentOnly: false, exitToAdjacentOnly: false, description: '' };
     await saveOverlayType(newOverlay);
-    setOverlays([...overlays, newOverlay]);
+    setOverlays(prev => [...prev, newOverlay]);
+    setExpandedId(newOverlay.id);
   };
 
   const addCountry = async () => {
     const newCountry = { id: `country-${Date.now()}`, name: 'Nová země' };
     await saveCountry(newCountry);
-    setCountries([...countries, newCountry]);
+    setCountries(prev => [...prev, newCountry]);
   };
 
   const addCampaign = async () => {
     const newCampaign = { id: `campaign-${Date.now()}`, name: 'Nová kampaň' };
     await saveCampaign(newCampaign);
-    setCampaigns([...campaigns, newCampaign]);
+    setCampaigns(prev => [...prev, newCampaign]);
   };
 
-  const deleteItem = async (type, setter, list, id) => {
+  const deleteItem = async (type: string, setter: any, list: any[], id: string) => {
     if (type === 'scenarios' && id === 'default-1') {
       alert('Výchozí scénář nelze smazat.');
       return;
@@ -125,472 +262,340 @@ const Customization = ({ onBack, onEditScenario }) => {
     setter(list.filter(item => item.id !== id));
   };
 
-  return (
-    <div className="min-h-screen bg-map-paper p-4 md:p-8 font-military overflow-y-auto">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6 border-b-2 border-ally pb-4">
-          <h1 className="text-[34px] font-condensed font-extrabold uppercase tracking-[0.02em] text-ally">Administrace</h1>
-          <button onClick={onBack} className="bg-ally text-white px-[22px] py-2.5 rounded-[10px] uppercase font-condensed font-extrabold text-sm tracking-[0.06em] hover:opacity-90 transition-opacity shadow-md">Zpět</button>
+  const switchTab = (tab: string) => { setActiveTab(tab); setExpandedId(null); };
+  const toggleExpand = (id: string) => setExpandedId(prev => (prev === id ? null : id));
+
+  // -------------------------------------------------------------------------
+  // Sekce polí uvnitř otevřené accordion položky
+  // -------------------------------------------------------------------------
+  const renderSectionVzhled = (entity: string, item: any, up: (p: any) => void) => (
+    <div style={{ display: 'grid', gap: 14 }}>
+      <Field label={'Název ' + (entity === 'overlays' ? 'překážky' : 'terénu')}>
+        <TextInput value={item.name} set={v => up({ name: v })} big />
+      </Field>
+      <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <Field label="Barva na mapě"><ColorInput color={item.color} set={v => up({ color: v })} /></Field>
+        {entity === 'overlays' && (
+          <Field label="Vzhled na mapě"><Segmented value={item.mapStyle || 'outline'} options={MS} set={v => up({ mapStyle: v })} /></Field>
+        )}
+        <div>
+          <Lbl>Viditelnost</Lbl>
+          <ToggleField label="Blokuje výhled" on={!!item.blocksLOS} set={v => up({ blocksLOS: v })} />
         </div>
-
-        <div className="flex flex-wrap gap-2 mb-7">
-          {['scenarios', 'units', 'terrains', 'overlays', 'countries', 'campaigns'].map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-[18px] py-2.5 rounded-[9px] font-condensed font-extrabold uppercase text-sm tracking-[0.05em] transition-all ${activeTab === tab ? 'bg-ally text-white shadow-md' : 'bg-white/50 text-ally border-[1.5px] border-ally hover:bg-ally/10'}`}
-            >
-              {tab === 'scenarios' ? 'Scénáře' : tab === 'units' ? 'Jednotky' : tab === 'terrains' ? 'Terén' : tab === 'overlays' ? 'Překážky' : tab === 'countries' ? 'Země' : 'Kampaně'}
-            </button>
-          ))}
-        </div>
-
-        {activeTab === 'scenarios' && (
-          <section className="animate-in fade-in duration-300">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold uppercase text-map-ink-blue">Správa scénářů</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {scenarios.map(s => (
-                <div key={s.id} className="p-4 border-2 border-tan-border rounded-[12px] bg-parchment-card shadow-sm flex flex-col justify-between hover:border-map-ink-blue transition-colors group">
-                  <div>
-                    <h3 className="font-bold text-lg text-map-ink-blue uppercase mb-1">{s.name}</h3>
-                    <p className="text-[10px] text-gray-500 italic mb-2 line-clamp-2">{s.description || 'Bez popisu.'}</p>
-                    <div className="text-[10px] space-y-1">
-                      <div className="flex justify-between"><span>Rok:</span> <span className="font-bold">{s.year || '-'}</span></div>
-                      <div className="flex justify-between gap-2"><span>Země:</span> <span className="font-bold text-right">{getScenarioCountryNames(s, countries) || '-'}</span></div>
-                      <div className="flex justify-between"><span>Kampaň:</span> <span className="font-bold">{campaigns.find(c => c.id === s.campaignId)?.name || '-'}</span></div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
-                    <button onClick={() => onEditScenario(s)} className="flex-1 flex items-center justify-center gap-1 bg-map-ink-green text-white py-2 rounded text-xs font-bold uppercase hover:bg-opacity-90 transition-all"><Edit2 size={12} /> Upravit</button>
-                    {s.id !== 'default-1' && (
-                      <button onClick={() => deleteItem('scenarios', setScenarios, scenarios, s.id)} className="bg-red-600 text-white p-2 rounded hover:bg-opacity-90 transition-all"><Trash2 size={14} /></button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {activeTab === 'units' && (
-          <section className="animate-in fade-in duration-300">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold uppercase text-map-ink-blue">Typy jednotek</h2>
-              <button onClick={addUnit} className="bg-map-ink-green text-white px-4 py-2 rounded flex items-center gap-2 text-xs font-bold uppercase shadow-sm hover:scale-105 transition-transform"><Plus size={16} /> Přidat jednotku</button>
-            </div>
-            <div className="space-y-4">
-              {units.map((u, idx) => (
-                <div key={u.id} className="p-4 border-2 border-tan-border rounded-[12px] bg-parchment-card shadow-sm">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                    <div className="flex flex-col items-center justify-center bg-gray-50 rounded border-2 border-gray-100 p-2 cursor-pointer hover:border-map-ink-blue transition-all group relative" onClick={() => setSelectedUnitForSymbol(u)}>
-                      <svg viewBox="-20 -15 40 30" className="w-16 h-12">
-                         <NatoSymbol type={u.natoSymbol} owner="player1" />
-                      </svg>
-                      <div className="absolute inset-0 bg-map-ink-blue/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                         <Edit2 size={20} className="text-map-ink-blue" />
-                      </div>
-                      <span className="text-[8px] font-bold uppercase text-gray-400 mt-1 group-hover:text-map-ink-blue transition-colors">Změnit symbol</span>
-                    </div>
-                    <div className="md:col-span-1">
-                      <label className="text-[10px] font-bold uppercase text-gray-400">Název jednotky</label>
-                      <input className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold text-lg" value={u.name} onChange={e => updateUnit({ ...u, name: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold uppercase text-gray-400">Typ (pro pravidla)</label>
-                      <select className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold" value={u.category || 'infantry'} onChange={e => updateUnit({ ...u, category: e.target.value })}>
-                        <option value="infantry">Pěchota</option>
-                        <option value="tank">Tank</option>
-                        <option value="artillery">Dělostřelectvo</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase text-gray-400">Pohyb</label>
-                      <input type="number" className="w-full border p-1 rounded mt-1" value={u.movement} onChange={e => updateUnit({ ...u, movement: parseInt(e.target.value) || 0 })} />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase text-gray-400">Max Figurek</label>
-                      <input type="number" className="w-full border p-1 rounded mt-1" value={u.maxFigures} onChange={e => updateUnit({ ...u, maxFigures: parseInt(e.target.value) || 0 })} />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase text-gray-400">Max pohyb pro střelbu</label>
-                      <input type="number" className="w-full border p-1 rounded mt-1" value={u.canShootAfterMovingMax} onChange={e => updateUnit({ ...u, canShootAfterMovingMax: parseInt(e.target.value) || 0 })} />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase text-gray-400">Dostřel (oddělený čárkou)</label>
-                      <input className="w-full border p-1 rounded mt-1" value={u.shootingRange.join(',')} onChange={e => updateUnit({ ...u, shootingRange: e.target.value.split(',').map(v => parseInt(v.trim()) || 0) })} />
-                    </div>
-                  </div>
-                  <div className="mt-4 flex justify-end">
-                    <button onClick={() => deleteItem('units', setUnits, units, u.id)} className="text-red-600 hover:text-red-800 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase"><Trash2 size={12} /> Smazat typ</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {activeTab === 'terrains' && (
-          <section className="animate-in fade-in duration-300">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold uppercase text-map-ink-blue">Typy terénu</h2>
-              <button onClick={addTerrain} className="bg-map-ink-green text-white px-4 py-2 rounded flex items-center gap-2 text-xs font-bold uppercase shadow-sm hover:scale-105 transition-transform"><Plus size={16} /> Přidat terén</button>
-            </div>
-            <div className="space-y-4">
-              {terrains.map((t, idx) => (
-                <div key={t.id} className="p-4 border-2 border-tan-border rounded-[12px] bg-parchment-card shadow-sm">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                    <div className="md:col-span-2">
-                      <label className="text-[10px] font-bold uppercase text-gray-400">Název terénu</label>
-                      <input className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold text-lg" value={t.name} onChange={e => updateTerrain({ ...t, name: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold uppercase text-gray-400">Barva (HEX)</label>
-                      <div className="flex gap-2 items-center">
-                        <div className="w-6 h-6 rounded border border-gray-300 shadow-inner" style={{ backgroundColor: t.color }}></div>
-                        <input className="flex-1 border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-mono text-xs" value={t.color} onChange={e => updateTerrain({ ...t, color: e.target.value })} />
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 pt-4">
-                      <input type="checkbox" id={`los-${t.id}`} checked={t.blocksLOS} onChange={e => updateTerrain({ ...t, blocksLOS: e.target.checked })} />
-                      <label htmlFor={`los-${t.id}`} className="text-[10px] font-bold uppercase text-gray-600">Blokuje viditelnost</label>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs mb-4">
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase text-gray-400">Omezení pohybu</label>
-                      <select className="w-full border p-1 rounded mt-1" value={t.movementRestriction || 'none'} onChange={e => updateTerrain({ ...t, movementRestriction: e.target.value as any })}>
-                        <option value="none">Žádné</option>
-                        <option value="stop">Zastavit při vstupu</option>
-                        <option value="no-move">Neprůchodné</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2 border-l pl-4">
-                      <label className="block text-[10px] font-bold uppercase text-gray-400">Obranný bonus (kostky)</label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] w-12">Inf:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={t.diceModifierDefenseInfantry} onChange={e => updateTerrain({ ...t, diceModifierDefenseInfantry: parseInt(e.target.value) || 0 })} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] w-12">Tank:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={t.diceModifierDefenseTank} onChange={e => updateTerrain({ ...t, diceModifierDefenseTank: parseInt(e.target.value) || 0 })} />
-                      </div>
-                    </div>
-                    <div className="space-y-2 border-l pl-4">
-                      <label className="block text-[10px] font-bold uppercase text-gray-400">Postih k útoku (kostky)</label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] w-12">Inf:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={t.diceModifierAttackInfantry} onChange={e => updateTerrain({ ...t, diceModifierAttackInfantry: parseInt(e.target.value) || 0 })} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] w-12">Tank:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={t.diceModifierAttackTank} onChange={e => updateTerrain({ ...t, diceModifierAttackTank: parseInt(e.target.value) || 0 })} />
-                      </div>
-                    </div>
-                    <div className="space-y-2 border-l pl-4">
-                      <label className="block text-[10px] font-bold uppercase text-gray-400">Speciální</label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] w-12">Ign. vlajek:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={t.ignoreFlags || 0} onChange={e => updateTerrain({ ...t, ignoreFlags: parseInt(e.target.value) || 0 })} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs mb-4">
-                    <div className="border-l pl-4">
-                      <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Neprůchodné pro jednotky</label>
-                      <div className="flex flex-wrap gap-3">
-                        {([['infantry', 'Pěchota'], ['tank', 'Tank'], ['artillery', 'Dělostřelectvo']] as const).map(([cat, label]) => (
-                          <label key={cat} className="flex items-center gap-1">
-                            <input type="checkbox" checked={(t.impassableForCategories || []).includes(cat)} onChange={e => {
-                              const cats = t.impassableForCategories || [];
-                              const next = e.target.checked ? [...cats, cat] : cats.filter(c => c !== cat);
-                              updateTerrain({ ...t, impassableForCategories: next });
-                            }} />
-                            <span>{label}</span>
-                          </label>
-                        ))}
-                      </div>
-                      <label className="block text-[10px] font-bold uppercase text-gray-400 mt-3">Neprůchodné pro stranu</label>
-                      <select className="w-full border p-1 rounded mt-1" value={t.impassableForPlayer || ''} onChange={e => updateTerrain({ ...t, impassableForPlayer: (e.target.value || undefined) as any })}>
-                        <option value="">Žádnou</option>
-                        <option value="player1">Strana 1</option>
-                        <option value="player2">Strana 2</option>
-                      </select>
-                    </div>
-                    <div className="border-l pl-4 space-y-2">
-                      <label className="flex items-center gap-2">
-                        <input type="checkbox" checked={!!t.entryFromAdjacentOnly} onChange={e => updateTerrain({ ...t, entryFromAdjacentOnly: e.target.checked })} />
-                        <span className="text-[10px] font-bold uppercase text-gray-600">Vstup jen z vedlejšího pole</span>
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input type="checkbox" checked={!!t.exitToAdjacentOnly} onChange={e => updateTerrain({ ...t, exitToAdjacentOnly: e.target.checked })} />
-                        <span className="text-[10px] font-bold uppercase text-gray-600">Výstup jen na vedlejší pole</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold uppercase text-gray-400">Popis</label>
-                    <textarea className="w-full border p-2 rounded mt-1 text-xs" rows={2} value={t.description || ''} onChange={e => updateTerrain({ ...t, description: e.target.value })} />
-                  </div>
-
-                  <div className="mt-4 flex justify-end">
-                    <button onClick={() => deleteItem('terrains', setTerrains, terrains, t.id)} className="text-red-600 hover:text-red-800 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase"><Trash2 size={12} /> Smazat typ</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {activeTab === 'overlays' && (
-          <section className="animate-in fade-in duration-300">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold uppercase text-map-ink-blue">Typy překážek</h2>
-              <button onClick={addOverlay} className="bg-map-ink-green text-white px-4 py-2 rounded flex items-center gap-2 text-xs font-bold uppercase shadow-sm hover:scale-105 transition-transform"><Plus size={16} /> Přidat překážku</button>
-            </div>
-            <div className="space-y-4">
-              {overlays.map((o, idx) => (
-                <div key={o.id} className="p-4 border-2 border-tan-border rounded-[12px] bg-parchment-card shadow-sm">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                    <div className="md:col-span-2">
-                      <label className="text-[10px] font-bold uppercase text-gray-400">Název překážky</label>
-                      <input className="w-full border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-bold text-lg" value={o.name} onChange={e => updateOverlay({ ...o, name: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold uppercase text-gray-400">Barva (HEX)</label>
-                      <div className="flex gap-2 items-center">
-                        <div className="w-6 h-6 rounded border border-gray-300 shadow-inner" style={{ backgroundColor: o.color }}></div>
-                        <input className="flex-1 border-b-2 border-gray-100 focus:border-map-ink-blue outline-none py-1 font-mono text-xs" value={o.color} onChange={e => updateOverlay({ ...o, color: e.target.value })} />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold uppercase text-gray-400">Vzhled na mapě</label>
-                      <select className="w-full border p-1 rounded mt-1 text-xs" value={o.mapStyle || 'outline'} onChange={e => updateOverlay({ ...o, mapStyle: e.target.value as any })}>
-                        <option value="outline">Barevný obrys</option>
-                        <option value="x">Křížky (X) – zátaras</option>
-                        <option value="sandbags">Pytle s pískem (hnědé)</option>
-                        <option value="bunker">Pytle s pískem (šedé) – bunkr</option>
-                        <option value="wire">Ostnatý drát</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-2 pt-4">
-                      <input type="checkbox" id={`los-o-${o.id}`} checked={o.blocksLOS} onChange={e => updateOverlay({ ...o, blocksLOS: e.target.checked })} />
-                      <label htmlFor={`los-o-${o.id}`} className="text-[10px] font-bold uppercase text-gray-600">Blokuje viditelnost</label>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs mb-4">
-                    <div className="space-y-2">
-                      <div>
-                        <label className="block text-[10px] font-bold uppercase text-gray-400">Omezení pohybu</label>
-                        <select className="w-full border p-1 rounded mt-1" value={o.movementRestriction || 'none'} onChange={e => updateOverlay({ ...o, movementRestriction: e.target.value as any })}>
-                          <option value="none">Žádné</option>
-                          <option value="stop">Zastavit při vstupu</option>
-                          <option value="no-move">Neprůchodné</option>
-                        </select>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input type="checkbox" id={`attack-stop-${o.id}`} checked={!!o.allowAttackAfterStop} onChange={e => updateOverlay({ ...o, allowAttackAfterStop: e.target.checked })} />
-                        <label htmlFor={`attack-stop-${o.id}`} className="text-[10px] font-bold uppercase text-gray-600">Lze útočit po 'stop'</label>
-                      </div>
-                    </div>
-                    <div className="space-y-2 border-l pl-4">
-                      <label className="block text-[10px] font-bold uppercase text-gray-400">Obranný bonus (kostky)</label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] w-12">Všechny:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierDefense || 0} onChange={e => updateOverlay({ ...o, diceModifierDefense: parseInt(e.target.value) || 0 })} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] w-12">Pěchota:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierDefenseInfantry || 0} onChange={e => updateOverlay({ ...o, diceModifierDefenseInfantry: parseInt(e.target.value) || 0 })} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] w-12">Tank:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierDefenseTank || 0} onChange={e => updateOverlay({ ...o, diceModifierDefenseTank: parseInt(e.target.value) || 0 })} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] w-12">Děl:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierDefenseArtillery || 0} onChange={e => updateOverlay({ ...o, diceModifierDefenseArtillery: parseInt(e.target.value) || 0 })} />
-                      </div>
-                      <div className="flex items-center gap-2 pt-1 border-t">
-                        <span className="text-[10px] w-12">Ign. vlajek:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={o.ignoreFlags || 0} onChange={e => updateOverlay({ ...o, ignoreFlags: parseInt(e.target.value) || 0 })} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input type="checkbox" id={`owner-only-${o.id}`} checked={!!o.onlyBonusForOwner} onChange={e => updateOverlay({ ...o, onlyBonusForOwner: e.target.checked })} />
-                        <label htmlFor={`owner-only-${o.id}`} className="text-[10px] font-bold uppercase text-gray-600">Jen pro majitele</label>
-                      </div>
-                    </div>
-                    <div className="space-y-2 border-l pl-4">
-                      <label className="block text-[10px] font-bold uppercase text-gray-400">Postih k útoku (kostky)</label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] w-12">Inf:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierAttackInfantry || 0} onChange={e => updateOverlay({ ...o, diceModifierAttackInfantry: parseInt(e.target.value) || 0 })} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] w-12">Tank:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierAttackTank || 0} onChange={e => updateOverlay({ ...o, diceModifierAttackTank: parseInt(e.target.value) || 0 })} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] w-12">Děl:</span>
-                        <input type="number" className="w-full border p-1 rounded" value={o.diceModifierAttackArtillery || 0} onChange={e => updateOverlay({ ...o, diceModifierAttackArtillery: parseInt(e.target.value) || 0 })} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs mb-4">
-                    <div className="border-l pl-4 space-y-4">
-                      <div>
-                        <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Neprůchodné pro jednotky</label>
-                        <div className="flex flex-wrap gap-3">
-                          {([['infantry', 'Pěchota'], ['tank', 'Tank'], ['artillery', 'Dělostřelectvo']] as const).map(([cat, label]) => (
-                            <label key={cat} className="flex items-center gap-1">
-                              <input type="checkbox" checked={(o.impassableForCategories || []).includes(cat)} onChange={e => {
-                                const cats = o.impassableForCategories || [];
-                                const next = e.target.checked ? [...cats, cat] : cats.filter(c => c !== cat);
-                                updateOverlay({ ...o, impassableForCategories: next });
-                              }} />
-                              <span>{label}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Zákaz ústupu pro</label>
-                        <div className="flex flex-wrap gap-3">
-                          {([['infantry', 'Pěchota'], ['tank', 'Tank'], ['artillery', 'Dělostřelectvo']] as const).map(([cat, label]) => (
-                            <label key={cat} className="flex items-center gap-1">
-                              <input type="checkbox" checked={(o.noRetreatCategories || []).includes(cat)} onChange={e => {
-                                const cats = o.noRetreatCategories || [];
-                                const next = e.target.checked ? [...cats, cat] : cats.filter(c => c !== cat);
-                                updateOverlay({ ...o, noRetreatCategories: next });
-                              }} />
-                              <span>{label}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold uppercase text-gray-400 mb-1">Zákaz vyjití (uvěznění) pro</label>
-                        <div className="flex flex-wrap gap-3">
-                          {([['infantry', 'Pěchota'], ['tank', 'Tank'], ['artillery', 'Dělostřelectvo']] as const).map(([cat, label]) => (
-                            <label key={cat} className="flex items-center gap-1">
-                              <input type="checkbox" checked={(o.cannotLeaveCategories || []).includes(cat)} onChange={e => {
-                                const cats = o.cannotLeaveCategories || [];
-                                const next = e.target.checked ? [...cats, cat] : cats.filter(c => c !== cat);
-                                updateOverlay({ ...o, cannotLeaveCategories: next });
-                              }} />
-                              <span>{label}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                      <label className="block text-[10px] font-bold uppercase text-gray-400 mt-3">Neprůchodné pro stranu</label>
-                      <select className="w-full border p-1 rounded mt-1" value={o.impassableForPlayer || ''} onChange={e => updateOverlay({ ...o, impassableForPlayer: (e.target.value || undefined) as any })}>
-                        <option value="">Žádnou</option>
-                        <option value="player1">Strana 1</option>
-                        <option value="player2">Strana 2</option>
-                      </select>
-                    </div>
-                    <div className="border-l pl-4 space-y-2">
-                      <label className="flex items-center gap-2">
-                        <input type="checkbox" checked={!!o.entryFromAdjacentOnly} onChange={e => updateOverlay({ ...o, entryFromAdjacentOnly: e.target.checked })} />
-                        <span className="text-[10px] font-bold uppercase text-gray-600">Vstup jen z vedlejšího pole</span>
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input type="checkbox" checked={!!o.exitToAdjacentOnly} onChange={e => updateOverlay({ ...o, exitToAdjacentOnly: e.target.checked })} />
-                        <span className="text-[10px] font-bold uppercase text-gray-600">Výstup jen na vedlejší pole</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold uppercase text-gray-400">Popis</label>
-                    <textarea className="w-full border p-2 rounded mt-1 text-xs" rows={2} value={o.description || ''} onChange={e => updateOverlay({ ...o, description: e.target.value })} />
-                  </div>
-
-                  <div className="mt-4 flex justify-end">
-                    <button onClick={() => deleteItem('overlays', setOverlays, overlays, o.id)} className="text-red-600 hover:text-red-800 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase"><Trash2 size={12} /> Smazat typ</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {activeTab === 'countries' && (
-          <section className="animate-in fade-in duration-300">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold uppercase text-map-ink-blue">Země</h2>
-              <button onClick={addCountry} className="bg-map-ink-green text-white px-4 py-2 rounded flex items-center gap-2 text-xs font-bold uppercase shadow-sm hover:scale-105 transition-transform"><Plus size={16} /> Přidat zemi</button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {countries.map((c, idx) => (
-                <div key={c.id} className="flex gap-2 p-2 border-2 border-tan-border rounded-[11px] bg-parchment-card items-center shadow-sm">
-                  <input className="flex-1 font-bold outline-none border-b-2 border-transparent focus:border-map-ink-blue" value={c.name} onChange={e => updateCountry({ ...c, name: e.target.value })} />
-                  <button onClick={() => deleteItem('countries', setCountries, countries, c.id)} className="text-red-600 p-2"><Trash2 size={16} /></button>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {selectedUnitForSymbol && (
-          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => setSelectedUnitForSymbol(null)}>
-            <div className="bg-white rounded-xl shadow-2xl border-4 border-slate-800 w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
-              <div className="p-4 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50">
-                <h3 className="font-bold text-xl uppercase text-slate-800 tracking-tight">Katalog symbolů NATO</h3>
-                <button onClick={() => setSelectedUnitForSymbol(null)} className="text-slate-400 hover:text-slate-600 transition-colors p-1">
-                  <CloseIcon size={24} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-6">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                  {NATO_SYMBOLS.map(s => (
-                    <button
-                      key={s.id}
-                      onClick={() => {
-                        updateUnit({ ...selectedUnitForSymbol, natoSymbol: s.id });
-                        setSelectedUnitForSymbol(null);
-                      }}
-                      className={`flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all hover:scale-105 active:scale-95 ${selectedUnitForSymbol.natoSymbol === s.id ? 'border-map-ink-blue bg-blue-50' : 'border-gray-100 hover:border-map-ink-blue bg-white shadow-sm'}`}
-                    >
-                      <svg viewBox="-20 -15 40 30" className="w-12 h-10">
-                        <NatoSymbol type={s.id} owner="player1" />
-                      </svg>
-                      <span className="text-[10px] font-bold text-center uppercase leading-tight">{s.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'campaigns' && (
-          <section className="animate-in fade-in duration-300">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold uppercase text-map-ink-blue">Kampaně</h2>
-              <button onClick={addCampaign} className="bg-map-ink-green text-white px-4 py-2 rounded flex items-center gap-2 text-xs font-bold uppercase shadow-sm hover:scale-105 transition-transform"><Plus size={16} /> Přidat kampaň</button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {campaigns.map((c, idx) => (
-                <div key={c.id} className="flex gap-2 p-2 border-2 border-tan-border rounded-[11px] bg-parchment-card items-center shadow-sm">
-                  <input className="flex-1 font-bold outline-none border-b-2 border-transparent focus:border-map-ink-blue" value={c.name} onChange={e => updateCampaign({ ...c, name: e.target.value })} />
-                  <button onClick={() => deleteItem('campaigns', setCampaigns, campaigns, c.id)} className="text-red-600 p-2"><Trash2 size={16} /></button>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
       </div>
     </div>
   );
+
+  const renderSectionSouboj = (entity: string, item: any, up: (p: any) => void) => {
+    const rows: [string, string, string | null][] = entity === 'overlays'
+      ? [['Vše', 'diceModifierDefense', null], ['Pěchota', 'diceModifierDefenseInfantry', 'diceModifierAttackInfantry'], ['Tank', 'diceModifierDefenseTank', 'diceModifierAttackTank'], ['Dělostřelectvo', 'diceModifierDefenseArtillery', 'diceModifierAttackArtillery']]
+      : [['Pěchota', 'diceModifierDefenseInfantry', 'diceModifierAttackInfantry'], ['Tank', 'diceModifierDefenseTank', 'diceModifierAttackTank']];
+    return (
+      <div style={{ display: 'grid', gap: 12 }}>
+        <DiceMatrix rows={rows} item={item} up={up} />
+        <p style={{ margin: 0, font: '500 11px/1.4 Barlow,sans-serif', color: C.tanText }}>Kladné číslo = bonus (kostky navíc), záporné = postih. Nula = beze změny.</p>
+        <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <Field label="Ignoruje vlajky ústupu"><Stepper value={item.ignoreFlags || 0} onChange={v => up({ ignoreFlags: v })} min={0} /></Field>
+          {entity === 'overlays' && (
+            <div>
+              <Lbl>Rozsah bonusu</Lbl>
+              <ToggleField label="Jen pro majitele" on={!!item.onlyBonusForOwner} set={v => up({ onlyBonusForOwner: v })} />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderSectionPohyb = (entity: string, item: any, up: (p: any) => void) => (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <Field label="Omezení pohybu"><Segmented value={item.movementRestriction || 'none'} options={MOVE} set={v => up({ movementRestriction: v })} /></Field>
+        {entity === 'overlays' && item.movementRestriction === 'stop' && (
+          <div>
+            <Lbl>Po zastavení</Lbl>
+            <ToggleField label="Lze útočit" on={!!item.allowAttackAfterStop} set={v => up({ allowAttackAfterStop: v })} />
+          </div>
+        )}
+      </div>
+      <Field label="Neprůchodné pro jednotky"><Chips selected={item.impassableForCategories || []} set={v => up({ impassableForCategories: v })} /></Field>
+      <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <Field label="Neprůchodné pro stranu"><Segmented value={item.impassableForPlayer || ''} options={SIDE} set={v => up({ impassableForPlayer: v || undefined })} /></Field>
+      </div>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <ToggleField label="Vstup jen z vedlejšího pole" on={!!item.entryFromAdjacentOnly} set={v => up({ entryFromAdjacentOnly: v })} />
+        <ToggleField label="Výstup jen na vedlejší pole" on={!!item.exitToAdjacentOnly} set={v => up({ exitToAdjacentOnly: v })} />
+      </div>
+    </div>
+  );
+
+  const renderSectionUstup = (item: any, up: (p: any) => void) => (
+    <div style={{ display: 'grid', gap: 14 }}>
+      <Field label="Zákaz ústupu z pole pro"><Chips selected={item.noRetreatCategories || []} set={v => up({ noRetreatCategories: v })} /></Field>
+      <Field label="Zákaz vyjití (uvěznění) pro"><Chips selected={item.cannotLeaveCategories || []} set={v => up({ cannotLeaveCategories: v })} /></Field>
+    </div>
+  );
+
+  const renderUnitIdent = (item: any, up: (p: any) => void) => (
+    <div style={{ display: 'grid', gap: 14 }}>
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div>
+          <Lbl>Symbol NATO</Lbl>
+          <button type="button" onClick={() => setSymbolPickerId(item.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 14px', border: `1.5px solid ${C.tanBorder}`, borderRadius: 10, background: '#fff', cursor: 'pointer' }}>
+            <NatoPreview type={item.natoSymbol} size={52} />
+            <span style={{ font: '700 8.5px/1 Barlow,sans-serif', letterSpacing: '.05em', textTransform: 'uppercase', color: C.allySoft }}>Změnit</span>
+          </button>
+        </div>
+        <Field label="Název jednotky" style={{ flex: '1 1 180px' }}><TextInput value={item.name} set={v => up({ name: v })} big /></Field>
+      </div>
+      <Field label="Typ pro pravidla"><Segmented value={item.category || 'infantry'} options={CATS} set={v => up({ category: v })} /></Field>
+    </div>
+  );
+
+  const renderUnitMove = (item: any, up: (p: any) => void) => (
+    <div style={{ display: 'flex', gap: 26, flexWrap: 'wrap' }}>
+      <Field label="Pohyb (pole)"><Stepper value={item.movement || 0} onChange={v => up({ movement: v })} min={0} /></Field>
+      <Field label="Max. figurek"><Stepper value={item.maxFigures || 0} onChange={v => up({ maxFigures: v })} min={1} /></Field>
+      <Field label="Max. pohyb pro střelbu"><Stepper value={item.canShootAfterMovingMax || 0} onChange={v => up({ canShootAfterMovingMax: v })} min={0} /></Field>
+    </div>
+  );
+
+  const renderUnitShoot = (item: any, up: (p: any) => void) => {
+    const rng: number[] = item.shootingRange || [];
+    const setAt = (i: number, v: number) => { const n = rng.slice(); n[i] = Math.max(0, v); up({ shootingRange: n }); };
+    return (
+      <div style={{ display: 'grid', gap: 12 }}>
+        <p style={{ margin: 0, font: '500 11px/1.4 Barlow,sans-serif', color: C.tanText }}>Počet kostek podle vzdálenosti cíle (v polích).</p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          {rng.map((v, i) => (
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <span style={{ font: '700 10px/1 Barlow,sans-serif', letterSpacing: '.04em', textTransform: 'uppercase', color: C.tanText }}>{(i + 1) + '. pole'}</span>
+              <Stepper value={v} onChange={nv => setAt(i, nv)} min={0} w={30} />
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button type="button" onClick={() => up({ shootingRange: [...rng, 1] })} style={{ border: `1.5px solid ${C.army}`, color: C.army, background: '#fff', borderRadius: 8, width: 34, height: 34, fontSize: 18, cursor: 'pointer' }}>+</button>
+            {rng.length > 1 && (
+              <button type="button" onClick={() => up({ shootingRange: rng.slice(0, -1) })} style={{ border: `1.5px solid ${C.axis}`, color: C.axis, background: '#fff', borderRadius: 8, width: 34, height: 34, fontSize: 18, cursor: 'pointer' }}>−</button>
+            )}
+          </div>
+        </div>
+        <Field label="Popis" style={{ marginTop: 4 }}><TextArea value={item.description || ''} set={v => up({ description: v })} /></Field>
+      </div>
+    );
+  };
+
+  const sectionsFor = (entity: string, item: any, up: (p: any) => void) => {
+    if (entity === 'units') {
+      return [
+        { key: 'ident', title: 'Identita', accent: C.ally, node: renderUnitIdent(item, up) },
+        { key: 'move', title: 'Pohyb', accent: C.army, node: renderUnitMove(item, up) },
+        { key: 'shoot', title: 'Střelba', accent: C.axis, node: renderUnitShoot(item, up) },
+      ];
+    }
+    const s = [
+      { key: 'vzhled', title: 'Vzhled', accent: C.ally, node: renderSectionVzhled(entity, item, up) },
+      { key: 'souboj', title: 'Souboj — modifikátory kostek', accent: C.axis, node: renderSectionSouboj(entity, item, up) },
+      { key: 'pohyb', title: 'Pohyb a průchodnost', accent: C.army, node: renderSectionPohyb(entity, item, up) },
+    ];
+    if (entity === 'overlays') s.push({ key: 'ustup', title: 'Omezení ústupu', accent: C.amber, node: renderSectionUstup(item, up) });
+    s.push({ key: 'popis', title: 'Popis', accent: C.tanDeep, node: <TextArea value={item.description || ''} set={v => up({ description: v })} /> });
+    return s;
+  };
+
+  // Souhrnné štítky u sbalené položky
+  const summaryChips = (entity: string, item: any): { txt: string; col: string }[] => {
+    const out: { txt: string; col: string }[] = [];
+    if (entity === 'units') {
+      out.push({ txt: CATS.find(c => c[0] === item.category)?.[1] || '—', col: C.ally });
+      out.push({ txt: 'Pohyb ' + item.movement, col: C.army });
+      out.push({ txt: (item.shootingRange || []).join('·'), col: C.axis });
+      return out;
+    }
+    const def = entity === 'overlays' ? (item.diceModifierDefense || 0) : Math.max(item.diceModifierDefenseInfantry || 0, item.diceModifierDefenseTank || 0);
+    if (def) out.push({ txt: 'Obrana +' + def, col: C.army });
+    if (item.movementRestriction && item.movementRestriction !== 'none') out.push({ txt: MOVE.find(m => m[0] === item.movementRestriction)![1], col: C.amber });
+    if (item.blocksLOS) out.push({ txt: 'Blokuje výhled', col: C.ally });
+    if ((item.impassableForCategories || []).length) out.push({ txt: 'Neprůchodné', col: C.axis });
+    if (entity === 'overlays' && (item.noRetreatCategories || []).length) out.push({ txt: 'Bez ústupu', col: C.amber });
+    if (!out.length) out.push({ txt: 'Bez efektů', col: C.tanDeep });
+    return out;
+  };
+
+  const swatch = (entity: string, item: any) => {
+    if (entity === 'units') return <span style={{ flex: 'none' }}><NatoPreview type={item.natoSymbol} size={40} /></span>;
+    return <span style={{ width: 30, height: 30, borderRadius: 8, background: item.color, border: '1.5px solid rgba(0,0,0,.15)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,.2)', flex: 'none' }} />;
+  };
+
+  const entityLists: Record<string, [any[], any, (i: any) => void]> = {
+    terrains: [terrains, setTerrains, updateTerrain],
+    overlays: [overlays, setOverlays, updateOverlay],
+    units: [units, setUnits, updateUnit],
+  };
+
+  const renderAccordion = (entity: string) => {
+    const [items, , update] = entityLists[entity];
+    return (
+      <div style={{ display: 'grid', gap: 10 }}>
+        {items.map(item => {
+          const open = expandedId === item.id;
+          const up = (patch: any) => update({ ...item, ...patch });
+          return (
+            <div key={item.id} style={{ border: `1.5px solid ${open ? C.ally : C.tanBorderSoft}`, borderRadius: 13, background: open ? C.card2 : '#fff', overflow: 'hidden', transition: '.15s' }}>
+              <button type="button" onClick={() => toggleExpand(item.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 15px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+                {swatch(entity, item)}
+                <span style={{ font: '700 17px/1.1 "Barlow Condensed",sans-serif', letterSpacing: '.02em', textTransform: 'uppercase', color: C.ally, whiteSpace: 'nowrap' }}>{item.name}</span>
+                <span style={{ flex: 1, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {open ? null : summaryChips(entity, item).map((c, i) => (
+                    <span key={i} style={{ font: '600 9.5px/1 Barlow,sans-serif', letterSpacing: '.03em', textTransform: 'uppercase', color: c.col, border: `1px solid ${c.col}55`, borderRadius: 999, padding: '3px 8px', whiteSpace: 'nowrap' }}>{c.txt}</span>
+                  ))}
+                </span>
+                <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={C.tanDeep} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: '.15s', flex: 'none' }}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {open && (
+                <div style={{ padding: '2px 16px 16px', animation: 'fadeUp .25s ease' }}>
+                  {sectionsFor(entity, item, up).map(s => (
+                    <div key={s.key} style={{ marginTop: 16 }}>
+                      <SectionHead title={s.title} accent={s.accent} />
+                      {s.node}
+                    </div>
+                  ))}
+                  <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${C.tanLine}`, display: 'flex', justifyContent: 'flex-end' }}>
+                    <button type="button" onClick={() => deleteItem(entity, entityLists[entity][1], items, item.id)} style={{ border: `1.5px solid ${C.axis}`, color: C.axis, background: '#fff', cursor: 'pointer', padding: '6px 12px', borderRadius: 8, font: '700 10px/1 Barlow,sans-serif', letterSpacing: '.04em', textTransform: 'uppercase' }}>Smazat typ</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // -------------------------------------------------------------------------
+  // Jednoduché seznamy (Země, Kampaně) – sladěné do nového vizuálu
+  // -------------------------------------------------------------------------
+  const renderNameList = (entity: 'countries' | 'campaigns') => {
+    const [items, setter, update] = entity === 'countries'
+      ? [countries, setCountries, updateCountry] as const
+      : [campaigns, setCampaigns, updateCampaign] as const;
+    return (
+      <div style={{ display: 'grid', gap: 10 }}>
+        {items.map(item => (
+          <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, border: `1.5px solid ${C.tanBorderSoft}`, borderRadius: 11, background: '#fff', padding: '8px 12px' }}>
+            <input value={item.name} onChange={e => update({ ...item, name: e.target.value })} style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', font: '700 15px/1.2 "Barlow Condensed",sans-serif', letterSpacing: '.02em', textTransform: 'uppercase', color: C.ally }} />
+            <button type="button" onClick={() => deleteItem(entity, setter, items, item.id)} style={{ border: `1.5px solid ${C.axis}`, color: C.axis, background: '#fff', cursor: 'pointer', padding: '6px 12px', borderRadius: 8, font: '700 10px/1 Barlow,sans-serif', letterSpacing: '.04em', textTransform: 'uppercase' }}>Smazat</button>
+          </div>
+        ))}
+        {items.length === 0 && <p style={{ margin: 0, font: '500 13px/1.4 Barlow,sans-serif', color: C.tanText, textAlign: 'center', padding: '8px 0' }}>Zatím nic. Přidejte novou položku tlačítkem výše.</p>}
+      </div>
+    );
+  };
+
+  // -------------------------------------------------------------------------
+  // Scénáře – sladěná karta (zachovaná logika Upravit / Smazat)
+  // -------------------------------------------------------------------------
+  const renderScenarios = () => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 12 }}>
+      {scenarios.map(s => (
+        <div key={s.id} style={{ display: 'flex', flexDirection: 'column', border: `1.5px solid ${C.tanBorderSoft}`, borderRadius: 13, background: '#fff', padding: 14 }}>
+          <h3 style={{ margin: '0 0 4px', font: '700 18px/1.1 "Barlow Condensed",sans-serif', letterSpacing: '.02em', textTransform: 'uppercase', color: C.ally }}>{s.name}</h3>
+          <p style={{ margin: '0 0 10px', font: 'italic 500 12px/1.4 Barlow,sans-serif', color: C.tanText, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{s.description || 'Bez popisu.'}</p>
+          <div style={{ display: 'grid', gap: 4, font: '600 12px/1.3 Barlow,sans-serif', color: C.ink }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><span style={{ color: C.tanText }}>Rok:</span><span style={{ fontWeight: 700 }}>{s.year || '-'}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><span style={{ color: C.tanText }}>Země:</span><span style={{ fontWeight: 700, textAlign: 'right' }}>{getScenarioCountryNames(s, countries) || '-'}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><span style={{ color: C.tanText }}>Kampaň:</span><span style={{ fontWeight: 700 }}>{campaigns.find(c => c.id === s.campaignId)?.name || '-'}</span></div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.tanLine}` }}>
+            <button type="button" onClick={() => onEditScenario(s)} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: C.army, color: '#fff', border: 'none', cursor: 'pointer', padding: '8px 12px', borderRadius: 8, font: '800 11px/1 "Barlow Condensed",sans-serif', letterSpacing: '.05em', textTransform: 'uppercase', boxShadow: '0 2px 6px rgba(44,125,66,.3)' }}>Upravit</button>
+            {s.id !== 'default-1' && (
+              <button type="button" onClick={() => deleteItem('scenarios', setScenarios, scenarios, s.id)} style={{ border: `1.5px solid ${C.axis}`, color: C.axis, background: '#fff', cursor: 'pointer', padding: '8px 12px', borderRadius: 8, font: '700 10px/1 Barlow,sans-serif', letterSpacing: '.04em', textTransform: 'uppercase' }}>Smazat</button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // Počet položek a případné tlačítko Přidat pro aktuální záložku
+  const counts: Record<string, number> = { scenarios: scenarios.length, units: units.length, terrains: terrains.length, overlays: overlays.length, countries: countries.length, campaigns: campaigns.length };
+  const addHandlers: Record<string, () => void> = { units: addUnit, terrains: addTerrain, overlays: addOverlay, countries: addCountry, campaigns: addCampaign };
+  const n = counts[activeTab];
+
+  return (
+    <div className="custom-scrollbar" style={{ minHeight: '100vh', padding: '40px 24px 90px', display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto' }}>
+      {/* Hlavička */}
+      <div style={{ width: '100%', maxWidth: 760, margin: '0 auto 22px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, borderBottom: `2px solid ${C.ally}`, paddingBottom: 14 }}>
+          <span style={{ display: 'inline-flex', width: 38, height: 38, alignItems: 'center', justifyContent: 'center', background: C.ally, color: '#fff', borderRadius: 9, flex: 'none' }}>
+            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>
+          </span>
+          <h1 style={{ margin: 0, flex: 1, font: '800 30px/1 "Barlow Condensed",sans-serif', letterSpacing: '.02em', textTransform: 'uppercase', color: C.ally }}>Administrace</h1>
+          <button type="button" onClick={onBack} style={{ border: 'none', cursor: 'pointer', padding: '9px 18px', borderRadius: 9, font: '800 12.5px/1 "Barlow Condensed",sans-serif', letterSpacing: '.06em', textTransform: 'uppercase', color: '#fff', background: C.ally, boxShadow: '0 2px 6px rgba(28,63,107,.3)', flex: 'none' }}>Zpět</button>
+        </div>
+      </div>
+
+      {/* Panel */}
+      <div className="custom-scrollbar" style={{ width: '100%', maxWidth: 760, background: C.card, border: `2px solid ${C.tanBorder}`, borderRadius: 16, padding: 22, boxShadow: '0 10px 30px rgba(60,45,20,.13)' }}>
+        {/* Přepínač záložek */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          {TABS.map(([k, label]) => {
+            const active = activeTab === k;
+            return (
+              <button key={k} type="button" onClick={() => switchTab(k)} style={{ border: active ? 'none' : `1.5px solid ${C.ally}`, cursor: 'pointer', padding: '9px 16px', borderRadius: 9, font: '800 12.5px/1 "Barlow Condensed",sans-serif', letterSpacing: '.06em', textTransform: 'uppercase', color: active ? '#fff' : C.ally, background: active ? C.ally : 'rgba(255,255,255,.5)', boxShadow: active ? '0 2px 6px rgba(28,63,107,.3)' : 'none' }}>{label}</button>
+            );
+          })}
+        </div>
+
+        {/* Řádek s počtem + Přidat */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: `2px solid ${C.tanLine}` }}>
+          <span style={{ font: '700 13px/1 Barlow,sans-serif', letterSpacing: '.04em', textTransform: 'uppercase', color: C.tanText }}>{n + ' ' + plural(n, ENTITY_WORDS[activeTab])}</span>
+          {addHandlers[activeTab] && (
+            <button type="button" onClick={addHandlers[activeTab]} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: C.army, color: '#fff', border: 'none', cursor: 'pointer', padding: '8px 15px', borderRadius: 9, font: '800 12px/1 "Barlow Condensed",sans-serif', letterSpacing: '.05em', textTransform: 'uppercase', boxShadow: '0 2px 6px rgba(44,125,66,.3)' }}>
+              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><line x1={12} y1={5} x2={12} y2={19} /><line x1={5} y1={12} x2={19} y2={12} /></svg>
+              Přidat
+            </button>
+          )}
+        </div>
+
+        {/* Obsah záložky */}
+        {activeTab === 'scenarios' && renderScenarios()}
+        {(activeTab === 'units' || activeTab === 'terrains' || activeTab === 'overlays') && renderAccordion(activeTab)}
+        {activeTab === 'countries' && renderNameList('countries')}
+        {activeTab === 'campaigns' && renderNameList('campaigns')}
+      </div>
+
+      {/* Modál – katalog NATO symbolů */}
+      {symbolPickerId && (() => {
+        const unit = units.find(u => u.id === symbolPickerId);
+        if (!unit) return null;
+        const close = () => setSymbolPickerId(null);
+        return (
+          <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(22,32,46,.72)', backdropFilter: 'blur(3px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div onClick={e => e.stopPropagation()} className="custom-scrollbar" style={{ width: 'min(680px,94vw)', maxHeight: '80vh', overflow: 'auto', background: C.card, border: `2px solid ${C.tanBorder}`, borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,.4)', animation: 'fadeUp .2s ease' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: `2px solid ${C.tanLine}`, position: 'sticky', top: 0, background: C.card }}>
+                <h3 style={{ margin: 0, font: '800 20px/1 "Barlow Condensed",sans-serif', letterSpacing: '.03em', textTransform: 'uppercase', color: C.ally }}>Katalog symbolů NATO</h3>
+                <button type="button" onClick={close} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.tanText, fontSize: 24, lineHeight: 1 }}>×</button>
+              </div>
+              <div style={{ padding: 20, display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 12 }}>
+                {NATO_SYMBOLS.map(sym => {
+                  const a = unit.natoSymbol === sym.id;
+                  return (
+                    <button key={sym.id} type="button" onClick={() => { updateUnit({ ...unit, natoSymbol: sym.id }); close(); }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '12px 8px', border: `2px solid ${a ? C.ally : C.tanBorderSoft}`, background: a ? 'rgba(28,63,107,.08)' : '#fff', borderRadius: 11, cursor: 'pointer' }}>
+                      <NatoPreview type={sym.id} size={52} />
+                      <span style={{ font: '700 10px/1.2 Barlow,sans-serif', letterSpacing: '.03em', textTransform: 'uppercase', color: C.ink, textAlign: 'center' }}>{sym.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
 };
+
 export default Customization;
