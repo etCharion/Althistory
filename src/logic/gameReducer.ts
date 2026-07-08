@@ -347,12 +347,21 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       // skladu, aby šlo přerozdělit – obdoba návratu do sekce u ASSIGN_RESOURCE.
       if (isAtMax || (clickedUnitBody && isBoundaryUnit && unit.resources > 0) || (clickedUnitBody && !isBoundaryUnit && unit.resources > 0 && !canAdd)) {
         const origins = unit.resourceOrigins || [];
-        const back = origins.length || unit.resources;
         const newThru = { ...throughput[pid] } as any;
-        origins.forEach((o: SectionId) => { if (newThru[o] > 0) newThru[o]--; });
+        // Za každou kostku se vrací marginální cena, kterou stála: dokud je její
+        // sekce nad limitem (průtok > 4), stála ze skladu 2 – vrací se tedy 2,
+        // jinak 1. Kostky ubíráme po jedné a průběžně snižujeme průtok, takže
+        // se do skladu vrátí přesně to, co bylo za jejich rozdání zaplaceno.
+        let refund = 0;
+        origins.forEach((o: SectionId) => {
+          const t = newThru[o] ?? 0;
+          refund += logistics && t > 4 ? 2 : 1;
+          if (t > 0) newThru[o] = t - 1;
+        });
+        if (origins.length === 0) refund = unit.resources; // pojistka pro stav bez evidovaných sekcí
         return {
           ...state,
-          centralWarehouse: { ...state.centralWarehouse, [pid]: state.centralWarehouse[pid] + back },
+          centralWarehouse: { ...state.centralWarehouse, [pid]: state.centralWarehouse[pid] + refund },
           sectionThroughput: { ...throughput, [pid]: newThru },
           units: { ...state.units, [unitId]: { ...unit, resources: 0, resourceOrigins: [] } }
         };

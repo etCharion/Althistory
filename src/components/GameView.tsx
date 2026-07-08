@@ -328,6 +328,12 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   // samostatné velitele sekcí, zůstávají obě fáze jako dnes.
   const mergedActive = !!sc.mergedDistribution && canDistribute &&
     (['left', 'center', 'right'] as const).every(s => controlsSection(gameState, clientId, activeP, s));
+  // Sekce, které během sloučené distribuce překročily logistický limit (průtok
+  // > 4). Zdroje z nich se vykreslují oranžově a při vrácení vracejí do skladu 2.
+  const overLimitSections: ('left' | 'center' | 'right')[] =
+    (mergedActive && gameState.phase === 'distribution-sections' && sc.logisticsLimit)
+      ? (['left', 'center', 'right'] as const).filter(s => ((gameState.sectionThroughput?.[activeP]?.[s]) ?? 0) > 4)
+      : [];
   const canControlUnit = (uid: string) => {
     // Jednotky počítače člověk neovládá (vč. jeho ústupů a obsazování pozic).
     if (aiPlayerId && gameState.units[uid]?.ownerId === aiPlayerId) return false;
@@ -644,6 +650,7 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
               leftWidth={sc.sections.leftWidth} centerWidth={sc.sections.centerWidth} selectedUnitId={(aiReviewEntry || aiLastAction) ? (aiReviewEntry || aiLastAction).unitId : selected}
               highlightedHexes={highlightedHexes} hoveredHex={hovered} activePhase={gameState.phase}
               unitSections={currentUnitSections} onSectionSelect={(s) => (gameState.phase === 'distribution-sections' ? distributeToUnit(selected, s) : assignResourceToUnit(selected, s))}
+              overLimitSections={overLimitSections}
               labelMode={labelMode}
             />
           </div>
