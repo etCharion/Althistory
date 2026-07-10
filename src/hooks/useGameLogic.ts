@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { getNeighbors, getReachableHexes, getTargetableUnits, isImpassableForUnit } from '../logic/hexGrid';
+import { getNeighbors, getReachableHexes, getTargetableUnits, isImpassableForUnit, blocksRetreatInto } from '../logic/hexGrid';
 import { newDiceSeed } from '../logic/dice';
 import { chooseAiAction } from '../logic/ai';
 import { subscribeToGame, applyAction, createGameIfMissing } from '../logic/firebaseService';
@@ -208,9 +208,10 @@ export function useGameLogic(scenario, unitTypes, terrainTypes, overlayTypes, ga
     const valid = neighbors.filter(n => {
       const hex = gameState.grid[`${n.q},${n.r}`];
       if (!hex || hex.unitId) return false;
-      // Do neprůchodného terénu (řeka apod.) nelze ustoupit – stejná kontrola
-      // jako v reduceru (RESOLVE_RETREAT).
+      // Do neprůchodného terénu (řeka apod.) ani na pole se zákazem ústupu
+      // (moře) nelze ustoupit – stejná kontrola jako v reduceru (RESOLVE_RETREAT).
       if (isImpassableForUnit(hex, terrainTypes, overlayTypes, category, unit.ownerId)) return false;
+      if (blocksRetreatInto(hex, terrainTypes, overlayTypes)) return false;
       if (unit.ownerId === 'player1') return n.r > (fH as any).r;
       if (unit.ownerId === 'player2') return n.r < (fH as any).r;
       return false;

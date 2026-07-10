@@ -135,7 +135,7 @@ const SectionHead: React.FC<{ title: string; accent: string; right?: React.React
   </div>
 );
 
-const DiceMatrix: React.FC<{ rows: [string, string, string | null][]; item: any; up: (patch: any) => void }> = ({ rows, item, up }) => {
+const DiceMatrix: React.FC<{ rows: [string, string | null, string | null][]; item: any; up: (patch: any) => void }> = ({ rows, item, up }) => {
   const hcell = (t: string, c: string) => (
     <div style={{ font: '700 10px/1.2 Barlow,sans-serif', letterSpacing: '.05em', textTransform: 'uppercase', color: c, textAlign: 'center', paddingBottom: 2 }}>{t}</div>
   );
@@ -147,7 +147,9 @@ const DiceMatrix: React.FC<{ rows: [string, string, string | null][]; item: any;
       {rows.map(([label, dk, ak]) => (
         <div key={label} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 8, alignItems: 'center', padding: '4px 0' }}>
           <span style={{ font: '600 12.5px/1.2 Barlow,sans-serif', color: C.ink }}>{label}</span>
-          <div style={{ display: 'flex', justifyContent: 'center' }}><Stepper value={item[dk] || 0} onChange={v => up({ [dk]: v })} sign /></div>
+          {dk
+            ? <div style={{ display: 'flex', justifyContent: 'center' }}><Stepper value={item[dk] || 0} onChange={v => up({ [dk]: v })} sign /></div>
+            : <div style={{ textAlign: 'center', color: C.tanBorderSoft, fontSize: 13 }}>—</div>}
           {ak
             ? <div style={{ display: 'flex', justifyContent: 'center' }}><Stepper value={item[ak] || 0} onChange={v => up({ [ak]: v })} sign /></div>
             : <div style={{ textAlign: 'center', color: C.tanBorderSoft, fontSize: 13 }}>—</div>}
@@ -220,14 +222,14 @@ const Customization = ({ onBack, onEditScenario }) => {
   };
 
   const addTerrain = async () => {
-    const newTerrain = { id: `terrain-${Date.now()}`, name: 'Nový terén', color: '#cccccc', blocksLOS: false, movementRestriction: 'none', diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, ignoreFlags: 0, impassableForCategories: [], impassableForPlayer: undefined, entryFromAdjacentOnly: false, exitToAdjacentOnly: false, description: '' };
+    const newTerrain = { id: `terrain-${Date.now()}`, name: 'Nový terén', color: '#cccccc', blocksLOS: false, highGround: false, movementRestriction: 'none', allowAttackAfterStop: false, roadMovementBonus: 0, movementCap: 0, cannotAttackFrom: false, diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, diceModifierAttackArtillery: 0, ignoreFlags: 0, impassableForCategories: [], noRetreatCategories: [], cannotLeaveCategories: [], noRetreatInto: false, impassableForPlayer: undefined, entryFromAdjacentOnly: false, exitToAdjacentOnly: false, description: '' };
     await saveTerrainType(newTerrain);
     setTerrains(prev => [...prev, newTerrain]);
     setExpandedId(newTerrain.id);
   };
 
   const addOverlay = async () => {
-    const newOverlay = { id: `overlay-${Date.now()}`, name: 'Nová překážka', color: '#cccccc', mapStyle: 'outline', blocksLOS: false, movementRestriction: 'none', allowAttackAfterStop: false, diceModifierDefense: 0, diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierDefenseArtillery: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, diceModifierAttackArtillery: 0, ignoreFlags: 0, onlyBonusForOwner: false, impassableForCategories: [], noRetreatCategories: [], cannotLeaveCategories: [], impassableForPlayer: undefined, entryFromAdjacentOnly: false, exitToAdjacentOnly: false, description: '' };
+    const newOverlay = { id: `overlay-${Date.now()}`, name: 'Nová překážka', color: '#cccccc', mapStyle: 'outline', blocksLOS: false, movementRestriction: 'none', allowAttackAfterStop: false, roadMovementBonus: 0, movementCap: 0, cannotAttackFrom: false, diceModifierDefense: 0, diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierDefenseArtillery: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, diceModifierAttackArtillery: 0, ignoreFlags: 0, onlyBonusForOwner: false, impassableForCategories: [], noRetreatCategories: [], cannotLeaveCategories: [], noRetreatInto: false, impassableForPlayer: undefined, entryFromAdjacentOnly: false, exitToAdjacentOnly: false, description: '' };
     await saveOverlayType(newOverlay);
     setOverlays(prev => [...prev, newOverlay]);
     setExpandedId(newOverlay.id);
@@ -280,16 +282,24 @@ const Customization = ({ onBack, onEditScenario }) => {
         )}
         <div>
           <Lbl>Viditelnost</Lbl>
-          <ToggleField label="Blokuje výhled" on={!!item.blocksLOS} set={v => up({ blocksLOS: v })} />
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <ToggleField label="Blokuje výhled" on={!!item.blocksLOS} set={v => up({ blocksLOS: v })} />
+            {entity === 'terrains' && (
+              <ToggleField label="Vyvýšenina (hřeben)" on={item.highGround ?? item.id === 'hill'} set={v => up({ highGround: v })} />
+            )}
+          </div>
         </div>
       </div>
+      {entity === 'terrains' && (
+        <p style={{ margin: 0, font: '500 11px/1.4 Barlow,sans-serif', color: C.tanText }}>Vyvýšenina: jednotky na témže souvislém hřebenu tohoto terénu na sebe vidí a neuplatňují obranný postih (kopce, hory).</p>
+      )}
     </div>
   );
 
   const renderSectionSouboj = (entity: string, item: any, up: (p: any) => void) => {
-    const rows: [string, string, string | null][] = entity === 'overlays'
+    const rows: [string, string | null, string | null][] = entity === 'overlays'
       ? [['Vše', 'diceModifierDefense', null], ['Pěchota', 'diceModifierDefenseInfantry', 'diceModifierAttackInfantry'], ['Tank', 'diceModifierDefenseTank', 'diceModifierAttackTank'], ['Dělostřelectvo', 'diceModifierDefenseArtillery', 'diceModifierAttackArtillery']]
-      : [['Pěchota', 'diceModifierDefenseInfantry', 'diceModifierAttackInfantry'], ['Tank', 'diceModifierDefenseTank', 'diceModifierAttackTank']];
+      : [['Pěchota', 'diceModifierDefenseInfantry', 'diceModifierAttackInfantry'], ['Tank', 'diceModifierDefenseTank', 'diceModifierAttackTank'], ['Dělostřelectvo', null, 'diceModifierAttackArtillery']];
     return (
       <div style={{ display: 'grid', gap: 12 }}>
         <DiceMatrix rows={rows} item={item} up={up} />
@@ -302,6 +312,10 @@ const Customization = ({ onBack, onEditScenario }) => {
               <ToggleField label="Jen pro majitele" on={!!item.onlyBonusForOwner} set={v => up({ onlyBonusForOwner: v })} />
             </div>
           )}
+          <div>
+            <Lbl>Zákaz útoku</Lbl>
+            <ToggleField label="Z pole nelze útočit" on={!!item.cannotAttackFrom} set={v => up({ cannotAttackFrom: v })} />
+          </div>
         </div>
       </div>
     );
@@ -311,13 +325,18 @@ const Customization = ({ onBack, onEditScenario }) => {
     <div style={{ display: 'grid', gap: 16 }}>
       <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <Field label="Omezení pohybu"><Segmented value={item.movementRestriction || 'none'} options={MOVE} set={v => up({ movementRestriction: v })} /></Field>
-        {entity === 'overlays' && item.movementRestriction === 'stop' && (
+        {item.movementRestriction === 'stop' && (
           <div>
             <Lbl>Po zastavení</Lbl>
             <ToggleField label="Lze útočit" on={!!item.allowAttackAfterStop} set={v => up({ allowAttackAfterStop: v })} />
           </div>
         )}
       </div>
+      <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <Field label="Bonus pohybu po cestě"><Stepper value={item.roadMovementBonus || 0} onChange={v => up({ roadMovementBonus: v })} min={0} max={3} sign /></Field>
+        <Field label="Strop pohybu přes pole (0 = bez limitu)"><Stepper value={item.movementCap || 0} onChange={v => up({ movementCap: v })} min={0} max={9} /></Field>
+      </div>
+      <p style={{ margin: 0, font: '500 11px/1.4 Barlow,sans-serif', color: C.tanText }}>Bonus po cestě: jednotka, která na tomto typu pole začne, jede jen po něm a skončí na něm, má pohyb +N (síť cest). Strop pohybu: jakmile trasa vede přes toto pole, ujde jednotka celkem nejvýše N polí (např. pláž: 2).</p>
       <Field label="Neprůchodné pro jednotky"><Chips selected={item.impassableForCategories || []} set={v => up({ impassableForCategories: v })} /></Field>
       <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <Field label="Neprůchodné pro stranu"><Segmented value={item.impassableForPlayer || ''} options={SIDE} set={v => up({ impassableForPlayer: v || undefined })} /></Field>
@@ -333,6 +352,11 @@ const Customization = ({ onBack, onEditScenario }) => {
     <div style={{ display: 'grid', gap: 14 }}>
       <Field label="Zákaz ústupu z pole pro"><Chips selected={item.noRetreatCategories || []} set={v => up({ noRetreatCategories: v })} /></Field>
       <Field label="Zákaz vyjití (uvěznění) pro"><Chips selected={item.cannotLeaveCategories || []} set={v => up({ cannotLeaveCategories: v })} /></Field>
+      <div>
+        <Lbl>Cíl ústupu</Lbl>
+        <ToggleField label="Nelze sem ustoupit" on={!!item.noRetreatInto} set={v => up({ noRetreatInto: v })} />
+      </div>
+      <p style={{ margin: 0, font: '500 11px/1.4 Barlow,sans-serif', color: C.tanText }}>Zákaz ústupu z pole: vlajky se místo ústupu mění ve ztráty. Nelze sem ustoupit: pole nesmí být cílem ústupu, i když je jinak průchozí (např. moře).</p>
     </div>
   );
 
@@ -397,8 +421,8 @@ const Customization = ({ onBack, onEditScenario }) => {
       { key: 'vzhled', title: 'Vzhled', accent: C.ally, node: renderSectionVzhled(entity, item, up) },
       { key: 'souboj', title: 'Souboj — modifikátory kostek', accent: C.axis, node: renderSectionSouboj(entity, item, up) },
       { key: 'pohyb', title: 'Pohyb a průchodnost', accent: C.army, node: renderSectionPohyb(entity, item, up) },
+      { key: 'ustup', title: 'Omezení ústupu', accent: C.amber, node: renderSectionUstup(item, up) },
     ];
-    if (entity === 'overlays') s.push({ key: 'ustup', title: 'Omezení ústupu', accent: C.amber, node: renderSectionUstup(item, up) });
     s.push({ key: 'popis', title: 'Popis', accent: C.tanDeep, node: <TextArea value={item.description || ''} set={v => up({ description: v })} /> });
     return s;
   };
@@ -415,9 +439,12 @@ const Customization = ({ onBack, onEditScenario }) => {
     const def = entity === 'overlays' ? (item.diceModifierDefense || 0) : Math.max(item.diceModifierDefenseInfantry || 0, item.diceModifierDefenseTank || 0);
     if (def) out.push({ txt: 'Obrana +' + def, col: C.army });
     if (item.movementRestriction && item.movementRestriction !== 'none') out.push({ txt: MOVE.find(m => m[0] === item.movementRestriction)![1], col: C.amber });
+    if (item.roadMovementBonus > 0) out.push({ txt: 'Cesta +' + item.roadMovementBonus, col: C.army });
+    if (item.movementCap > 0) out.push({ txt: 'Pohyb max ' + item.movementCap, col: C.amber });
     if (item.blocksLOS) out.push({ txt: 'Blokuje výhled', col: C.ally });
     if ((item.impassableForCategories || []).length) out.push({ txt: 'Neprůchodné', col: C.axis });
-    if (entity === 'overlays' && (item.noRetreatCategories || []).length) out.push({ txt: 'Bez ústupu', col: C.amber });
+    if (item.cannotAttackFrom) out.push({ txt: 'Bez útoku', col: C.axis });
+    if ((item.noRetreatCategories || []).length) out.push({ txt: 'Bez ústupu', col: C.amber });
     if (!out.length) out.push({ txt: 'Bez efektů', col: C.tanDeep });
     return out;
   };

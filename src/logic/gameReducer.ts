@@ -1,4 +1,4 @@
-import { getDistance, getUnitSections, getNeighbors, getTargetableUnits, getDiceCount, getReachableDistances, isImpassableForUnit } from './hexGrid';
+import { getDistance, getUnitSections, getNeighbors, getTargetableUnits, getDiceCount, getReachableDistances, isImpassableForUnit, blocksRetreatInto } from './hexGrid';
 import { rollDice } from './dice';
 import type { GameState, PlayerId, SectionId, Seats, UndoSnapshot } from '../types/game';
 
@@ -524,7 +524,8 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       const targetOverlayId = targetHex?.overlayTypeId;
 
       let isStopTerrain = targetTerrain?.movementRestriction === 'stop' || targetOverlay?.movementRestriction === 'stop' || targetOverlayId === 'wire';
-      let allowAttackAfterStop = !!targetOverlay?.allowAttackAfterStop;
+      // Po zastavení lze útočit, pokud to dovolí terén (brod) nebo překážka.
+      let allowAttackAfterStop = !!(targetTerrain?.allowAttackAfterStop || targetOverlay?.allowAttackAfterStop);
       if (targetOverlayId === 'wire') {
         allowAttackAfterStop = true;
         if (utype.category === 'tank') targetHex.overlayTypeId = undefined;
@@ -626,7 +627,9 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
         nVP = updatedVP;
         if (dist === 1 && attCategory !== 'artillery') pendingTakeGround = { unitId: aid, hex: { q: (targetHex as any).q, r: (targetHex as any).r }, overrun: grantsOverrun };
       } else if (finalFlags > 0) {
-        const noRetreat = targetOverlay?.noRetreatCategories?.includes(targetCategory);
+        // Ústup zakazuje překážka (bunkr pro dělostřelectvo) i terén (moře).
+        const noRetreat = targetOverlay?.noRetreatCategories?.includes(targetCategory)
+          || targetTerrain?.noRetreatCategories?.includes(targetCategory);
         if (noRetreat) {
           // Instead of a pending retreat, resolve flags as hits (stay and fight/take damage).
           for (let i = 0; i < finalFlags; i++) {
@@ -752,9 +755,10 @@ export function reducer(state: GameState, action: Action, rules: Rules): GameSta
       if (getDistance(fH, { q: tq, r: tr }) !== 1 || state.grid[`${tq},${tr}`]?.unitId) return state;
       if (unit.ownerId === 'player1' ? tr <= (fH as any).r : tr >= (fH as any).r) return state;
       // Ústup do neprůchodného terénu (řeka, terén zakázaný pro danou kategorii
-      // jednotky či stranu) není povolen.
+      // jednotky či stranu) ani na pole se zákazem ústupu (moře) není povolen.
       const retreatType = unitTypes.find(ut => ut.id === unit.typeId);
       if (isImpassableForUnit(state.grid[`${tq},${tr}`], terrainTypes, overlayTypes, categoryOf(retreatType), unit.ownerId)) return state;
+      if (blocksRetreatInto(state.grid[`${tq},${tr}`], terrainTypes, overlayTypes)) return state;
 
       const nG = { ...state.grid } as any;
       const fromKey = `${(fH as any).q},${(fH as any).r}`;

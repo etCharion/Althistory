@@ -312,6 +312,32 @@ describe('MOVE (fáze C – pohyb)', () => {
     expect(inf.units.u1.hasAttacked).toBe(false); // po vstupu do drátu lze útočit
   });
 
+  it('brod zastaví pohyb, ale útok zůstane povolen (allowAttackAfterStop)', () => {
+    const s = buildState({
+      phase: 'movement',
+      hexes: [hexEntry(0, 0, 'grass', { unitId: 'u1' }), hexEntry(0, 1, 'ford')],
+      units: [unitEntry('u1', 'tank', 'player1', { resources: 2, figures: 3 })],
+    });
+    const after = reducer(s, local({ type: 'MOVE', unitId: 'u1', q: 0, r: 1 }), rules);
+    expect(after.grid['0,1'].unitId).toBe('u1');
+    expect(after.units.u1.movementUsed).toBe(3); // stop => veškerý pohyb spotřebován
+    expect(after.units.u1.hasAttacked).toBe(false); // z brodu se smí útočit
+  });
+
+  it('cesta: tank ujede po cestě 4 pole (pohyb 3 + bonus 1)', () => {
+    const road = Array.from({ length: 5 }, (_, r) => hexEntry(0, r, 'road'));
+    const s = buildState({
+      phase: 'movement',
+      hexes: [...road.slice(1), hexEntry(0, 0, 'road', { unitId: 'u1' })],
+      units: [unitEntry('u1', 'tank', 'player1', { resources: 2, figures: 3 })],
+    });
+    const after = reducer(s, local({ type: 'MOVE', unitId: 'u1', q: 0, r: 4 }), rules);
+    expect(after.grid['0,4'].unitId).toBe('u1');
+    expect(after.units.u1.movementUsed).toBe(4);
+    // Mimo cestu bonus neplatí: pole ve vzdálenosti 4 přes trávu je nedosažitelné.
+    expect(reducer(s, local({ type: 'MOVE', unitId: 'u1', q: 1, r: 3 }), rules)).toBe(s);
+  });
+
   it('obsazení okamžitého objektivu přidělí vítězný bod', () => {
     const s = buildState({
       phase: 'movement',
@@ -414,6 +440,24 @@ describe('ATTACK (fáze D – útok)', () => {
     expect(dug.pendingCombat?.dice).toHaveLength(2);
   });
 
+  it('moře: jednotka na moři nemůže útočit', () => {
+    const s = buildState({
+      phase: 'attack',
+      hexes: [hexEntry(0, 4, 'sea', { unitId: 'a1' }), hexEntry(0, 5, 'grass', { unitId: 'd1' })],
+      units: [unitEntry('a1', 'infantry', 'player1', { resources: 2 }), unitEntry('d1', 'infantry', 'player2')],
+    });
+    expect(reducer(s, local({ type: 'ATTACK', attackerId: 'a1', targetId: 'd1', seed: 1 }), rules)).toBe(s);
+  });
+
+  it('moře: obránce na moři nemůže ustoupit – vlajky se mění ve ztráty', () => {
+    const seed = findSeed(3, d => countFlags(d) === 1 && countHits(d, 'infantry') === 0);
+    const s = attackState({}, {});
+    (s.grid as any)['0,5'] = { ...(s.grid as any)['0,5'], terrainTypeId: 'sea' };
+    const after = reducer(s, local({ type: 'ATTACK', attackerId: 'a1', targetId: 'd1', seed }), rules);
+    expect(after.pendingRetreat).toBeNull();
+    expect(after.units.d1.figures).toBe(3); // vlajka = ztráta figurky
+  });
+
   it('dělostřelectvo nemůže útočit po pohybu', () => {
     const s = buildState({
       phase: 'attack',
@@ -457,6 +501,14 @@ describe('RESOLVE_RETREAT (ústup)', () => {
   it('odmítne ústup do neprůchodného terénu (řeka)', () => {
     const s = retreatState([hexEntry(0, 3, 'river')]);
     expect(reducer(deepFreeze(s), local({ type: 'RESOLVE_RETREAT', unitId: 'd1', q: 0, r: 3 }), rules)).toBe(s);
+  });
+
+  it('odmítne ústup na moře (noRetreatInto), i když je průchozí', () => {
+    const s = retreatState([hexEntry(0, 3, 'sea')]);
+    expect(reducer(deepFreeze(s), local({ type: 'RESOLVE_RETREAT', unitId: 'd1', q: 0, r: 3 }), rules)).toBe(s);
+    // Vedlejší pole na trávě ústup umožní – blokuje opravdu jen moře.
+    const ok = reducer(retreatState([hexEntry(0, 3, 'sea')]), local({ type: 'RESOLVE_RETREAT', unitId: 'd1', q: 1, r: 3 }), rules);
+    expect(ok.grid['1,3'].unitId).toBe('d1');
   });
 
   it('odmítne ústup špatným směrem (vpřed) a na obsazené pole', () => {

@@ -9,7 +9,7 @@
 // podle mezního výnosu v aiPlanner.ts. Před každým rozhodnutím se z bojové
 // situace vybere globální postoj a sekční postoje (aiPosture.ts) – heuristiky
 // pak pracují s vahami postoje jednotky.
-import { getNeighbors, getReachableDistances, getTargetableUnits, getUnitSections, isImpassableForUnit } from './hexGrid';
+import { getNeighbors, getReachableDistances, getTargetableUnits, getUnitSections, isImpassableForUnit, blocksRetreatInto } from './hexGrid';
 import { categoryOf } from './gameReducer';
 import { newDiceSeed } from './dice';
 import { postureFor, sectionStances, applyStance, stanceSummary } from './aiPosture';
@@ -195,6 +195,7 @@ function chooseRetreat(state: GameState, rules: Rules, ai: PlayerId, clientId: s
     const h = (state.grid as any)[key(n.q, n.r)];
     if (!h || h.unitId) return false;
     if (isImpassableForUnit(h, rules.terrainTypes, rules.overlayTypes, cat, u.ownerId)) return false;
+    if (blocksRetreatInto(h, rules.terrainTypes, rules.overlayTypes)) return false;
     return u.ownerId === 'player1' ? n.r > hex.r : n.r < hex.r;
   });
 

@@ -43,10 +43,29 @@ async function seedIfEmpty(collectionName: string, defaultData: any[]) {
   }
 }
 
+// Doplní do kolekce vestavěné dokumenty, které v ní chybí – nic existujícího
+// nepřepisuje (uživatelské úpravy zůstávají). Díky tomu se nové vestavěné
+// typy terénu objeví i v databázích osetých dříve, kdy seedIfEmpty už nic
+// nedělá. Pozor: smazaný vestavěný typ se při dalším startu obnoví.
+async function seedMissing(collectionName: string, defaultData: any[]) {
+  try {
+    for (const item of defaultData) {
+      const ref = doc(db, collectionName, item.id);
+      const snapshot = await getDoc(ref);
+      if (!snapshot.exists()) {
+        console.log(`Seeding missing ${collectionName}/${item.id}...`);
+        await setDoc(ref, item);
+      }
+    }
+  } catch (error) {
+    console.error(`Error seeding missing ${collectionName}:`, error);
+  }
+}
+
 export async function seedDatabase() {
   console.log("Starting database seed...");
   await seedIfEmpty("unitTypes", DEFAULT_UNIT_TYPES);
-  await seedIfEmpty("terrainTypes", DEFAULT_TERRAIN_TYPES);
+  await seedMissing("terrainTypes", DEFAULT_TERRAIN_TYPES);
   await seedIfEmpty("overlayTypes", DEFAULT_OVERLAY_TYPES);
   await seedIfEmpty("countries", DEFAULT_COUNTRIES);
   await seedIfEmpty("scenarios", [DEFAULT_SCENARIO]);
