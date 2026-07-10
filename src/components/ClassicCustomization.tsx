@@ -85,13 +85,13 @@ const Customization = ({ onBack, onEditScenario }) => {
   };
 
   const addTerrain = async () => {
-    const newTerrain = { id: `terrain-${Date.now()}`, name: 'Nový terén', blocksLOS: false, diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, ignoreFlags: 0, color: '#cccccc', description: '' };
+    const newTerrain = { id: `terrain-${Date.now()}`, name: 'Nový terén', blocksLOS: false, highGround: false, movementRestriction: 'none', allowAttackAfterStop: false, roadMovementBonus: 0, movementCap: 0, cannotAttackFrom: false, noRetreatInto: false, noRetreatCategories: [], diceModifierDefenseInfantry: 0, diceModifierDefenseTank: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, diceModifierAttackArtillery: 0, ignoreFlags: 0, color: '#cccccc', description: '' };
     await saveTerrainType(newTerrain);
     setTerrains([...terrains, newTerrain]);
   };
 
   const addOverlay = async () => {
-    const newOverlay = { id: `overlay-${Date.now()}`, name: 'Nová překážka', diceModifierDefense: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, diceModifierAttackArtillery: 0, ignoreFlags: 0, movementRestriction: 'none', blocksLOS: false, color: '#cccccc', description: '' };
+    const newOverlay = { id: `overlay-${Date.now()}`, name: 'Nová překážka', diceModifierDefense: 0, diceModifierAttackInfantry: 0, diceModifierAttackTank: 0, diceModifierAttackArtillery: 0, ignoreFlags: 0, movementRestriction: 'none', allowAttackAfterStop: false, roadMovementBonus: 0, movementCap: 0, cannotAttackFrom: false, noRetreatInto: false, blocksLOS: false, color: '#cccccc', description: '' };
     await saveOverlayType(newOverlay);
     setOverlays([...overlays, newOverlay]);
   };
@@ -290,12 +290,24 @@ const Customization = ({ onBack, onEditScenario }) => {
                         <span className="text-[10px] w-12">Tank:</span>
                         <input type="number" className="w-full border p-1 rounded" value={t.diceModifierAttackTank} onChange={e => updateTerrain({ ...t, diceModifierAttackTank: parseInt(e.target.value) || 0 })} />
                       </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] w-12">Děl:</span>
+                        <input type="number" className="w-full border p-1 rounded" value={t.diceModifierAttackArtillery || 0} onChange={e => updateTerrain({ ...t, diceModifierAttackArtillery: parseInt(e.target.value) || 0 })} />
+                      </div>
                     </div>
                     <div className="space-y-2 border-l pl-4">
                       <label className="block text-[10px] font-bold uppercase text-gray-400">Speciální</label>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] w-12">Ign. vlajek:</span>
                         <input type="number" className="w-full border p-1 rounded" value={t.ignoreFlags || 0} onChange={e => updateTerrain({ ...t, ignoreFlags: parseInt(e.target.value) || 0 })} />
+                      </div>
+                      <div className="flex items-center gap-2" title="Jednotka, která na tomto typu pole začne pohyb, jede jen po něm a skončí na něm, má pohyb +N (síť cest).">
+                        <span className="text-[10px] w-12">Cesta +:</span>
+                        <input type="number" className="w-full border p-1 rounded" value={t.roadMovementBonus || 0} onChange={e => updateTerrain({ ...t, roadMovementBonus: parseInt(e.target.value) || 0 })} />
+                      </div>
+                      <div className="flex items-center gap-2" title="Jakmile trasa jednotky vede přes toto pole, ujde celkem nejvýše N polí (0 = bez limitu). Např. pláž: 2.">
+                        <span className="text-[10px] w-12">Max pohyb:</span>
+                        <input type="number" className="w-full border p-1 rounded" value={t.movementCap || 0} onChange={e => updateTerrain({ ...t, movementCap: parseInt(e.target.value) || 0 })} />
                       </div>
                     </div>
                   </div>
@@ -321,6 +333,19 @@ const Customization = ({ onBack, onEditScenario }) => {
                         <option value="player1">Strana 1</option>
                         <option value="player2">Strana 2</option>
                       </select>
+                      <label className="block text-[10px] font-bold uppercase text-gray-400 mt-3">Zákaz ústupu z pole pro (vlajky = ztráty)</label>
+                      <div className="flex flex-wrap gap-3">
+                        {([['infantry', 'Pěchota'], ['tank', 'Tank'], ['artillery', 'Dělostřelectvo']] as const).map(([cat, label]) => (
+                          <label key={cat} className="flex items-center gap-1">
+                            <input type="checkbox" checked={(t.noRetreatCategories || []).includes(cat)} onChange={e => {
+                              const cats = t.noRetreatCategories || [];
+                              const next = e.target.checked ? [...cats, cat] : cats.filter(c => c !== cat);
+                              updateTerrain({ ...t, noRetreatCategories: next });
+                            }} />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
                     </div>
                     <div className="border-l pl-4 space-y-2">
                       <label className="flex items-center gap-2">
@@ -330,6 +355,24 @@ const Customization = ({ onBack, onEditScenario }) => {
                       <label className="flex items-center gap-2">
                         <input type="checkbox" checked={!!t.exitToAdjacentOnly} onChange={e => updateTerrain({ ...t, exitToAdjacentOnly: e.target.checked })} />
                         <span className="text-[10px] font-bold uppercase text-gray-600">Výstup jen na vedlejší pole</span>
+                      </label>
+                      {t.movementRestriction === 'stop' && (
+                        <label className="flex items-center gap-2">
+                          <input type="checkbox" checked={!!t.allowAttackAfterStop} onChange={e => updateTerrain({ ...t, allowAttackAfterStop: e.target.checked })} />
+                          <span className="text-[10px] font-bold uppercase text-gray-600">Po zastavení lze útočit</span>
+                        </label>
+                      )}
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={!!t.cannotAttackFrom} onChange={e => updateTerrain({ ...t, cannotAttackFrom: e.target.checked })} />
+                        <span className="text-[10px] font-bold uppercase text-gray-600">Z pole nelze útočit</span>
+                      </label>
+                      <label className="flex items-center gap-2" title="Pole nesmí být cílem ústupu, i když je jinak průchozí (např. moře).">
+                        <input type="checkbox" checked={!!t.noRetreatInto} onChange={e => updateTerrain({ ...t, noRetreatInto: e.target.checked })} />
+                        <span className="text-[10px] font-bold uppercase text-gray-600">Nelze sem ustoupit</span>
+                      </label>
+                      <label className="flex items-center gap-2" title="Jednotky na témže souvislém hřebenu tohoto terénu na sebe vidí a neuplatňují obranný postih (kopce, hory).">
+                        <input type="checkbox" checked={t.highGround ?? t.id === 'hill'} onChange={e => updateTerrain({ ...t, highGround: e.target.checked })} />
+                        <span className="text-[10px] font-bold uppercase text-gray-600">Vyvýšenina (hřeben)</span>
                       </label>
                     </div>
                   </div>
@@ -386,13 +429,27 @@ const Customization = ({ onBack, onEditScenario }) => {
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs mb-4">
-                    <div>
+                    <div className="space-y-2">
                       <label className="block text-[10px] font-bold uppercase text-gray-400">Omezení pohybu</label>
                       <select className="w-full border p-1 rounded mt-1" value={o.movementRestriction || 'none'} onChange={e => updateOverlay({ ...o, movementRestriction: e.target.value as any })}>
                         <option value="none">Žádné</option>
                         <option value="stop">Zastavit při vstupu</option>
                         <option value="no-move">Neprůchodné</option>
                       </select>
+                      {o.movementRestriction === 'stop' && (
+                        <label className="flex items-center gap-2">
+                          <input type="checkbox" checked={!!o.allowAttackAfterStop} onChange={e => updateOverlay({ ...o, allowAttackAfterStop: e.target.checked })} />
+                          <span className="text-[10px] font-bold uppercase text-gray-600">Po zastavení lze útočit</span>
+                        </label>
+                      )}
+                      <div className="flex items-center gap-2" title="Jednotka, která na tomto poli začne pohyb, jede jen po síti cest a skončí na ní, má pohyb +N.">
+                        <span className="text-[10px] w-12">Cesta +:</span>
+                        <input type="number" className="w-full border p-1 rounded" value={o.roadMovementBonus || 0} onChange={e => updateOverlay({ ...o, roadMovementBonus: parseInt(e.target.value) || 0 })} />
+                      </div>
+                      <div className="flex items-center gap-2" title="Jakmile trasa jednotky vede přes toto pole, ujde celkem nejvýše N polí (0 = bez limitu).">
+                        <span className="text-[10px] w-12">Max pohyb:</span>
+                        <input type="number" className="w-full border p-1 rounded" value={o.movementCap || 0} onChange={e => updateOverlay({ ...o, movementCap: parseInt(e.target.value) || 0 })} />
+                      </div>
                     </div>
                     <div className="space-y-2 border-l pl-4">
                       <label className="block text-[10px] font-bold uppercase text-gray-400">Obranný bonus (kostky)</label>
@@ -452,6 +509,14 @@ const Customization = ({ onBack, onEditScenario }) => {
                       <label className="flex items-center gap-2">
                         <input type="checkbox" checked={!!o.exitToAdjacentOnly} onChange={e => updateOverlay({ ...o, exitToAdjacentOnly: e.target.checked })} />
                         <span className="text-[10px] font-bold uppercase text-gray-600">Výstup jen na vedlejší pole</span>
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={!!o.cannotAttackFrom} onChange={e => updateOverlay({ ...o, cannotAttackFrom: e.target.checked })} />
+                        <span className="text-[10px] font-bold uppercase text-gray-600">Z pole nelze útočit</span>
+                      </label>
+                      <label className="flex items-center gap-2" title="Pole nesmí být cílem ústupu, i když je jinak průchozí.">
+                        <input type="checkbox" checked={!!o.noRetreatInto} onChange={e => updateOverlay({ ...o, noRetreatInto: e.target.checked })} />
+                        <span className="text-[10px] font-bold uppercase text-gray-600">Nelze sem ustoupit</span>
                       </label>
                     </div>
                   </div>

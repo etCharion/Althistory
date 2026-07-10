@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getDistance, getReachableDistances, getReachableHexes, checkLOS, getDiceCount, isImpassableForUnit, getUnitSections } from './hexGrid';
+import { getDistance, getReachableDistances, getReachableHexes, checkLOS, getDiceCount, isImpassableForUnit, getUnitSections, getTargetableUnits, blocksRetreatInto } from './hexGrid';
 import { rules, hexEntry, makeScenario } from './testUtils';
 import { createInitialGameState } from './gameReducer';
 
@@ -56,6 +56,61 @@ describe('getReachableDistances', () => {
     expect(inf['0,1']).toBe(1);
   });
 
+  it('cesta: start, jízda i cíl na cestě = pohyb +1; mimo cestu bonus neplatí', () => {
+    // Souvislá cesta (0,0)→(0,3); jednotka s pohybem 2 dojede po cestě až na
+    // (0,3) (vzdálenost 3), ale na pole mimo cestu ve vzdálenosti 3 nedosáhne.
+    const grid = makeGrid([hexEntry(0, 0, 'road'), hexEntry(0, 1, 'road'), hexEntry(0, 2, 'road'), hexEntry(0, 3, 'road')]);
+    const d = getReachableDistances(0, 0, 2, grid, terrainTypes, overlayTypes);
+    expect(d['0,3']).toBe(3); // po cestě s bonusem
+    expect(d['1,1']).toBe(2); // běžné pole v základním limitu
+    expect(d['1,2']).toBeUndefined(); // pole mimo cestu ve vzdálenosti 3 – bez bonusu
+  });
+
+  it('cesta: bez startu na cestě bonus neplatí', () => {
+    const grid = makeGrid([hexEntry(0, 1, 'road'), hexEntry(0, 2, 'road'), hexEntry(0, 3, 'road')]);
+    const d = getReachableDistances(0, 0, 2, grid, terrainTypes, overlayTypes);
+    expect(d['0,3']).toBeUndefined(); // start na trávě → jen 2 pole
+    expect(d['0,2']).toBe(2);
+  });
+
+  it('pláž: trasa přes pláž omezuje celkový pohyb na 2', () => {
+    // Pás pláže: jednotka s pohybem 4 se přes pláž dál než na 2 pole
+    // nedostane, ale delší cestou po trávě mimo pláž ano.
+    const grid = makeGrid([hexEntry(0, 1, 'beach'), hexEntry(0, 2, 'beach')]);
+    const d = getReachableDistances(0, 0, 4, grid, terrainTypes, overlayTypes);
+    expect(d['0,1']).toBe(1);
+    expect(d['0,2']).toBe(2);
+    expect(d['0,3']).toBe(4); // přes pláž by to byly 3 kroky (nad strop 2) – jen oklikou po trávě
+    // Celá deska z pláže: start na pláži počítá strop od začátku.
+    const beachGrid = makeGrid([hexEntry(0, 0, 'beach'), hexEntry(0, 1, 'beach'), hexEntry(0, 2, 'beach'), hexEntry(0, 3, 'beach'), hexEntry(1, 2, 'beach'), hexEntry(1, 1, 'beach'), hexEntry(2, 1, 'beach'), hexEntry(1, 0, 'beach'), hexEntry(2, 0, 'beach'), hexEntry(3, 0, 'beach')]);
+    const b = getReachableDistances(0, 0, 3, beachGrid, terrainTypes, overlayTypes);
+    expect(b['0,2']).toBe(2);
+    expect(b['0,3']).toBeUndefined(); // strop 2 platí od startu na pláži
+  });
+
+  it('moře: jednotka začínající na moři se pohne jen o 1 pole', () => {
+    const grid = makeGrid([hexEntry(0, 0, 'sea'), hexEntry(0, 1, 'sea'), hexEntry(0, 2, 'sea')]);
+    const d = getReachableDistances(0, 0, 3, grid, terrainTypes, overlayTypes);
+    expect(d['0,1']).toBe(1);
+    expect(d['0,2']).toBeUndefined();
+    expect(d['1,0']).toBe(1); // i na břeh, ale jen o jedno pole
+  });
+
+  it('brod: vstup zastaví pohyb (stop terén)', () => {
+    const grid = makeGrid([hexEntry(0, 1, 'ford')]);
+    const d = getReachableDistances(0, 0, 3, grid, terrainTypes, overlayTypes);
+    expect(d['0,1']).toBe(1);
+    expect(d['0,2']).toBeGreaterThan(2); // skrz brod projet nelze, jen oklikou
+  });
+
+  it('hory: neprůchodné pro tank a dělostřelectvo, pěchota vstoupí a zastaví', () => {
+    const grid = makeGrid([hexEntry(0, 1, 'mountain')]);
+    expect(getReachableDistances(0, 0, 2, grid, terrainTypes, overlayTypes, { unitCategory: 'tank' })['0,1']).toBeUndefined();
+    expect(getReachableDistances(0, 0, 2, grid, terrainTypes, overlayTypes, { unitCategory: 'artillery' })['0,1']).toBeUndefined();
+    const inf = getReachableDistances(0, 0, 3, grid, terrainTypes, overlayTypes, { unitCategory: 'infantry' });
+    expect(inf['0,1']).toBe(1);
+  });
+
   it('getReachableHexes vrací tytéž klíče', () => {
     const grid = makeGrid([hexEntry(0, 1, 'river')]);
     const d = getReachableDistances(0, 0, 2, grid, terrainTypes, overlayTypes);
@@ -92,6 +147,53 @@ describe('getDiceCount', () => {
   it('terén obránce snižuje počet kostek (les: pěchota -1)', () => {
     const grid = makeGrid([hexEntry(0, 1, 'forest')]);
     expect(getDiceCount(att, def, grid['0,0'], grid['0,1'], grid, terrainTypes, overlayTypes, infantry)).toBe(2);
+  });
+
+  it('brod: útok z brodu -1 kostka (pěchota, tank i dělostřelectvo)', () => {
+    const grid = makeGrid([hexEntry(0, 0, 'ford')]);
+    const tank = unitTypes.find(u => u.id === 'tank');
+    const artillery = unitTypes.find(u => u.id === 'artillery');
+    expect(getDiceCount(att, def, grid['0,0'], grid['0,1'], grid, terrainTypes, overlayTypes, infantry)).toBe(2);
+    expect(getDiceCount({ ...att, typeId: 'tank' }, def, grid['0,0'], grid['0,1'], grid, terrainTypes, overlayTypes, tank)).toBe(2);
+    expect(getDiceCount({ ...att, typeId: 'artillery' }, def, grid['0,0'], grid['0,1'], grid, terrainTypes, overlayTypes, artillery)).toBe(2);
+  });
+
+  it('hory: útok na jednotku v horách -2 kostky; na společném hřebenu postih neplatí', () => {
+    const up = makeGrid([hexEntry(0, 1, 'mountain')]);
+    expect(getDiceCount(att, def, up['0,0'], up['0,1'], up, terrainTypes, overlayTypes, infantry)).toBe(1);
+    const ridge = makeGrid([hexEntry(0, 0, 'mountain'), hexEntry(0, 1, 'mountain')]);
+    expect(getDiceCount(att, def, ridge['0,0'], ridge['0,1'], ridge, terrainTypes, overlayTypes, infantry)).toBe(3);
+  });
+
+  it('hory: souvislý hřeben si neblokuje výhled, oddělená hora ano', () => {
+    const ridge = makeGrid([hexEntry(0, 0, 'mountain'), hexEntry(0, 1, 'mountain'), hexEntry(0, 2, 'mountain')]);
+    expect(checkLOS({ q: 0, r: 0 }, { q: 0, r: 2 }, ridge, terrainTypes, overlayTypes)).toBe(true);
+    // Hora v linii mezi dvěma poli na trávě výhled blokuje.
+    const wall = makeGrid([hexEntry(0, 1, 'mountain')]);
+    expect(checkLOS({ q: 0, r: 0 }, { q: 0, r: 2 }, wall, terrainTypes, overlayTypes)).toBe(false);
+  });
+});
+
+describe('moře (sea)', () => {
+  it('z moře nelze útočit (getTargetableUnits je prázdné)', () => {
+    const infantry = unitTypes.find(u => u.id === 'infantry');
+    const state: any = {
+      grid: makeGrid([hexEntry(0, 0, 'sea', { unitId: 'a1' }), hexEntry(0, 1, 'grass', { unitId: 'd1' })]),
+      units: {
+        a1: { id: 'a1', typeId: 'infantry', ownerId: 'player1' },
+        d1: { id: 'd1', typeId: 'infantry', ownerId: 'player2' },
+      },
+    };
+    expect(getTargetableUnits(0, 0, infantry, state, terrainTypes, overlayTypes)).toEqual([]);
+    // Tatáž situace na trávě cíl nabídne – kontrola, že blokuje právě moře.
+    const landState = { ...state, grid: makeGrid([hexEntry(0, 0, 'grass', { unitId: 'a1' }), hexEntry(0, 1, 'grass', { unitId: 'd1' })]) };
+    expect(getTargetableUnits(0, 0, infantry, landState, terrainTypes, overlayTypes)).toEqual(['d1']);
+  });
+
+  it('na moře nelze ustoupit (blocksRetreatInto)', () => {
+    const grid = makeGrid([hexEntry(0, 1, 'sea')]);
+    expect(blocksRetreatInto(grid['0,1'], terrainTypes, overlayTypes)).toBe(true);
+    expect(blocksRetreatInto(grid['0,0'], terrainTypes, overlayTypes)).toBe(false);
   });
 });
 

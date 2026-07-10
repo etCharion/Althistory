@@ -94,58 +94,97 @@ export function isImpassableForUnit(hex, terrainTypes, overlayTypes = [], unitCa
   return false;
 }
 
+// Na pole nelze ustoupit, i když je jinak průchozí (např. moře). Doplňuje
+// isImpassableForUnit při validaci cílů ústupu.
+export function blocksRetreatInto(hex, terrainTypes, overlayTypes = []) {
+  const terrain = terrainTypes.find(t => t.id === hex?.terrainTypeId);
+  const overlay = overlayTypes.find(o => o.id === hex?.overlayTypeId);
+  return !!(terrain?.noRetreatInto || overlay?.noRetreatInto);
+}
+
 // BFS přes průchozí pole. Vrací mapu `"q,r" -> délka nejkratší legální cesty`
-// (bez výchozího pole). Respektuje neprůchodnost, obsazená pole, „stop" terén
-// i vstup/výstup pouze na vedlejší pole – reducer podle ní validuje pohyb a
-// účtuje skutečně ušlou vzdálenost, UI z ní zvýrazňuje dosažitelná pole.
+// (bez výchozího pole). Respektuje neprůchodnost, obsazená pole, „stop" terén,
+// vstup/výstup pouze na vedlejší pole, bonus pohybu po síti cest
+// (roadMovementBonus) i strop pohybu (movementCap, např. pláž) – reducer podle
+// ní validuje pohyb a účtuje skutečně ušlou vzdálenost, UI z ní zvýrazňuje
+// dosažitelná pole.
 export function getReachableDistances(q, r, movementLimit, grid, terrainTypes, overlayTypes = [], options = {}): Record<string, number> {
   const { unitCategory = undefined, ownerId = undefined } = options as any;
   const distances: Record<string, number> = {};
-  const queue = [{ q, r, dist: 0 }];
-  const visited = new Set();
-  visited.add(`${q},${r}`);
+
+  const terrainAt = (hex) => terrainTypes.find(t => t.id === hex?.terrainTypeId);
+  const overlayAt = (hex) => overlayTypes.find(o => o.id === hex?.overlayTypeId);
+  // Pole je součástí sítě cest, když jeho terén nebo překážka nese bonus.
+  const roadBonusAt = (hex) => Math.max(terrainAt(hex)?.roadMovementBonus || 0, overlayAt(hex)?.roadMovementBonus || 0);
+  // Strop celkového pohybu na poli – platí nejpřísnější z terénu a překážky.
+  const capAt = (hex) => {
+    const t = terrainAt(hex)?.movementCap;
+    const o = overlayAt(hex)?.movementCap;
+    const caps = [t, o].filter((c) => typeof c === 'number' && c > 0) as number[];
+    return caps.length ? Math.min(...caps) : Infinity;
+  };
 
   // Výchozí pole jednotky: pokud z něj lze vystoupit jen na vedlejší pole,
   // jednotka se po prvním kroku musí zastavit.
   const startHex = grid[`${q},${r}`];
-  const startTerrain = terrainTypes.find(t => t.id === startHex?.terrainTypeId);
-  const startOverlay = overlayTypes.find(o => o.id === startHex?.overlayTypeId);
+  const startTerrain = terrainAt(startHex);
+  const startOverlay = overlayAt(startHex);
   const exitAdjacentOnly = !!(startTerrain?.exitToAdjacentOnly || startOverlay?.exitToAdjacentOnly);
-  const startCannotLeave = unitCategory && startOverlay?.cannotLeaveCategories?.includes(unitCategory);
+  const startCannotLeave = unitCategory && (startTerrain?.cannotLeaveCategories?.includes(unitCategory) || startOverlay?.cannotLeaveCategories?.includes(unitCategory));
+  const startRoadBonus = roadBonusAt(startHex);
+
+  // Stav prohledávání nese kromě vzdálenosti i nejpřísnější strop pohybu na
+  // dosavadní cestě (movementCap, včetně výchozího pole) a příznak, že celá
+  // cesta zatím vede po síti cest. Limit stavu = movementLimit + bonus (jen
+  // dokud jednotka z cesty nesjede – pole nad základním limitem jsou tím
+  // pádem vždy pole cesty, takže „skončí na cestě" platí automaticky), shora
+  // omezený stropem. Totéž pole může být dosažitelné více cestami s různými
+  // limity, proto se stav rozšiřuje i při stejné vzdálenosti, pokud nová
+  // cesta nabízí větší zbývající rozpočet.
+  const limitOf = (s) => Math.min(movementLimit + (s.onRoad ? startRoadBonus : 0), s.cap);
+  const bestDist: Record<string, number> = {};
+  const bestBudget: Record<string, number> = {};
+
+  const start = { q, r, dist: 0, cap: capAt(startHex), onRoad: startRoadBonus > 0 };
+  bestDist[`${q},${r}`] = 0;
+  bestBudget[`${q},${r}`] = limitOf(start);
+  const queue = [start];
 
   while (queue.length > 0) {
-    const { q: cq, r: cr, dist: cd } = queue.shift();
-    if (cd >= movementLimit) continue;
+    const cur = queue.shift();
+    if (cur.dist >= limitOf(cur)) continue;
     // Po vystoupení z pole s omezeným výstupem už nelze pokračovat v pohybu.
-    if (cd > 0 && exitAdjacentOnly) continue;
-    // Nelze vyjít z určitých překážek (např. dělostřelectvo z bunkru).
-    if (cd === 0 && startCannotLeave) continue;
-    const currentHex = grid[`${cq},${cr}`];
-    const currentTerrain = terrainTypes.find(t => t.id === currentHex?.terrainTypeId);
-    const currentOverlay = overlayTypes.find(o => o.id === currentHex?.overlayTypeId);
+    if (cur.dist > 0 && exitAdjacentOnly) continue;
+    // Nelze vyjít z určitých polí (např. dělostřelectvo z bunkru).
+    if (cur.dist === 0 && startCannotLeave) continue;
+    const currentHex = grid[`${cur.q},${cur.r}`];
+    const isStopHex = terrainAt(currentHex)?.movementRestriction === 'stop' || overlayAt(currentHex)?.movementRestriction === 'stop';
+    if (cur.dist > 0 && isStopHex) continue;
 
-    const isStopHex = currentTerrain?.movementRestriction === 'stop' || currentOverlay?.movementRestriction === 'stop';
-
-    if (cd > 0 && isStopHex) continue;
-
-    const neighbors = getNeighbors(cq, cr);
+    const neighbors = getNeighbors(cur.q, cur.r);
     for (const n of neighbors) {
       const key = `${n.q},${n.r}`;
       const hex = grid[key];
-      if (!hex || visited.has(key) || hex.unitId) continue;
+      if (!hex || hex.unitId) continue;
 
       if (isImpassableForUnit(hex, terrainTypes, overlayTypes, unitCategory, ownerId)) continue;
 
       // Na pole se vstupem jen z vedlejšího pole lze vstoupit pouze přímo
-      // z výchozí pozice jednotky (cd === 0), ne průchodem přes jiná pole.
-      const terrain = terrainTypes.find(t => t.id === hex.terrainTypeId);
-      const overlay = overlayTypes.find(o => o.id === hex.overlayTypeId);
-      const entryAdjacentOnly = terrain?.entryFromAdjacentOnly || overlay?.entryFromAdjacentOnly;
-      if (entryAdjacentOnly && cd !== 0) continue;
+      // z výchozí pozice jednotky (dist === 0), ne průchodem přes jiná pole.
+      const entryAdjacentOnly = terrainAt(hex)?.entryFromAdjacentOnly || overlayAt(hex)?.entryFromAdjacentOnly;
+      if (entryAdjacentOnly && cur.dist !== 0) continue;
 
-      visited.add(key);
-      distances[key] = cd + 1;
-      queue.push({ q: n.q, r: n.r, dist: cd + 1 });
+      const next = { q: n.q, r: n.r, dist: cur.dist + 1, cap: Math.min(cur.cap, capAt(hex)), onRoad: cur.onRoad && roadBonusAt(hex) > 0 };
+      const limit = limitOf(next);
+      if (next.dist > limit) continue;
+      const budget = limit - next.dist;
+      const betterDist = bestDist[key] === undefined || next.dist < bestDist[key];
+      const betterBudget = budget > (bestBudget[key] ?? -1);
+      if (!betterDist && !betterBudget) continue;
+      if (betterDist) bestDist[key] = next.dist;
+      if (betterBudget) bestBudget[key] = budget;
+      distances[key] = bestDist[key];
+      queue.push(next);
     }
   }
   return distances;
@@ -168,8 +207,19 @@ export function isBlocking(q, r, grid, terrainTypes, overlayTypes = []) {
   return false;
 }
 
-export function areOnSameRidge(a, b, grid) {
-  if (grid[`${a.q},${a.r}`]?.terrainTypeId !== 'hill' || grid[`${b.q},${b.r}`]?.terrainTypeId !== 'hill') return false;
+// Vyvýšený terén (hřeben): terén s příznakem `highGround`; vestavěný kopec
+// ('hill') se tak chová i bez nastaveného příznaku (zpětná kompatibilita).
+function isHighGroundId(id, terrainTypes = []) {
+  const t = (terrainTypes as any[]).find(tt => tt.id === id);
+  return t ? (t.highGround ?? t.id === 'hill') : id === 'hill';
+}
+
+// Obě pole leží na témže souvislém hřebenu vyvýšeného terénu (stejný typ,
+// propojený přes sousední pole téhož typu) – kopce i hory.
+export function areOnSameRidge(a, b, grid, terrainTypes = []) {
+  const ridgeId = grid[`${a.q},${a.r}`]?.terrainTypeId;
+  if (!ridgeId || grid[`${b.q},${b.r}`]?.terrainTypeId !== ridgeId) return false;
+  if (!isHighGroundId(ridgeId, terrainTypes)) return false;
   const visited = new Set();
   const queue = [{ q: a.q, r: a.r }];
   visited.add(`${a.q},${a.r}`);
@@ -178,7 +228,7 @@ export function areOnSameRidge(a, b, grid) {
     if (curr.q === b.q && curr.r === b.r) return true;
     for (const n of getNeighbors(curr.q, curr.r)) {
       const key = `${n.q},${n.r}`;
-      if (!visited.has(key) && grid[key]?.terrainTypeId === 'hill') {
+      if (!visited.has(key) && grid[key]?.terrainTypeId === ridgeId) {
         visited.add(key);
         queue.push(n);
       }
@@ -193,7 +243,9 @@ export function checkLOS(from, to, grid, terrainTypes, overlayTypes = []) {
 
   const fromCube = { q: from.q, r: from.r, s: -from.q - from.r };
   const toCube = { q: to.q, r: to.r, s: -to.q - to.r };
-  const onSameRidge = areOnSameRidge(from, to, grid);
+  const onSameRidge = areOnSameRidge(from, to, grid, terrainTypes);
+  // Pole hřebenu, na němž stojí obě jednotky, výhled mezi nimi neblokují.
+  const ridgeId = onSameRidge ? grid[`${from.q},${from.r}`]?.terrainTypeId : null;
 
   // Sample the line to catch transitions. A point blocks ONLY IF all hexes it touches block.
   // This implements the "half-blocked" rule where sight along an edge is clear.
@@ -215,7 +267,7 @@ export function checkLOS(from, to, grid, terrainTypes, overlayTypes = []) {
       let blocks = !!hex.unitId;
       if (!blocks) {
         const terrain = terrainTypes.find(tt => tt.id === hex.terrainTypeId);
-        if (terrain?.blocksLOS && !(terrain.id === 'hill' && onSameRidge)) blocks = true;
+        if (terrain?.blocksLOS && terrain.id !== ridgeId) blocks = true;
         if (!blocks && hex.overlayTypeId) {
           const overlay = overlayTypes.find(o => o.id === hex.overlayTypeId);
           if (overlay?.blocksLOS) blocks = true;
@@ -244,9 +296,10 @@ export function getDiceCount(attackerUnit, targetUnit, attackerHex, targetHex, g
 
   let diceModifierDefense = 0;
   if (!isArtillery) {
-    const onSameRidge = areOnSameRidge(attackerHex, targetHex, grid);
+    const onSameRidge = areOnSameRidge(attackerHex, targetHex, grid, terrainTypes);
     let terrainDef = 0;
-    if (!(tarTerrain.id === 'hill' && onSameRidge)) {
+    // Jednotky na témže hřebenu (kopce, hory) obranný postih neuplatňují.
+    if (!onSameRidge) {
       if (isTank) terrainDef = tarTerrain.diceModifierDefenseTank ?? 0;
       else if (isInfantry) terrainDef = tarTerrain.diceModifierDefenseInfantry ?? 0;
       else if (isArtillery) terrainDef = tarTerrain.diceModifierDefenseArtillery ?? 0;
@@ -269,6 +322,7 @@ export function getDiceCount(attackerUnit, targetUnit, attackerHex, targetHex, g
   let terrainAtt = 0;
   if (isTank) terrainAtt = attTerrain.diceModifierAttackTank ?? 0;
   else if (isInfantry) terrainAtt = attTerrain.diceModifierAttackInfantry ?? 0;
+  else if (isArtillery) terrainAtt = attTerrain.diceModifierAttackArtillery ?? 0;
 
   let overlayAtt = 0;
   if (isTank) overlayAtt = attOverlay?.diceModifierAttackTank ?? 0;
@@ -284,6 +338,10 @@ export function getDiceCount(attackerUnit, targetUnit, attackerHex, targetHex, g
 export function getTargetableUnits(attackerQ, attackerR, unitType, gameState, terrainTypes, overlayTypes = []) {
   const attacker = gameState.grid[`${attackerQ},${attackerR}`];
   if (!attacker?.unitId) return [];
+  // Z některých polí nelze útočit vůbec (např. moře).
+  const attackerTerrain = terrainTypes.find(t => t.id === attacker.terrainTypeId);
+  const attackerOverlay = overlayTypes.find(o => o.id === attacker.overlayTypeId);
+  if (attackerTerrain?.cannotAttackFrom || attackerOverlay?.cannotAttackFrom) return [];
   const attackerUnit = gameState.units[attacker.unitId];
   const neighbors = getNeighbors(attackerQ, attackerR);
   const adjacentEnemies = [];

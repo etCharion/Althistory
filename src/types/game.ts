@@ -46,10 +46,32 @@ export type TerrainType = {
   // Z pole lze vystoupit pouze na vedlejší pole; po vystoupení už nelze
   // pokračovat v pohybu.
   exitToAdjacentOnly?: boolean;
+  // Síť cest: jednotka, která začne pohyb na poli s bonusem, jede jen po
+  // polích s bonusem a na takovém poli i skončí, má pohyb +N (hodnota
+  // z výchozího pole).
+  roadMovementBonus?: number;
+  // Strop celkového pohybu: jakmile cesta jednotky vede přes toto pole
+  // (včetně startu), smí jednotka ujít nejvýše N polí (např. pláž: 2).
+  movementCap?: number;
+  // U „stop" terénu: jednotka po zastavení smí ještě útočit (např. brod).
+  allowAttackAfterStop?: boolean;
+  // Z pole nelze útočit (např. moře).
+  cannotAttackFrom?: boolean;
+  // Jednotka na tomto poli nesmí ustoupit – vlajky se mění ve ztráty.
+  noRetreatCategories?: UnitCategory[];
+  // Jednotka na tomto poli nesmí pole opustit.
+  cannotLeaveCategories?: UnitCategory[];
+  // Na pole nelze ustoupit, i když je jinak průchozí (např. moře).
+  noRetreatInto?: boolean;
+  // Vyvýšenina: souvislý hřeben téhož terénu si navzájem neblokuje výhled
+  // a neuplatňuje obranný postih (kopce, hory). Vestavěný 'hill' se tak
+  // chová i bez nastaveného příznaku.
+  highGround?: boolean;
   diceModifierDefenseInfantry: number;
   diceModifierDefenseTank: number;
   diceModifierAttackInfantry: number;
   diceModifierAttackTank: number;
+  diceModifierAttackArtillery?: number;
   ignoreFlags?: number;
   color?: string;
   description?: string;
@@ -75,6 +97,12 @@ export type OverlayType = {
   allowAttackAfterStop?: boolean;
   entryFromAdjacentOnly?: boolean;
   exitToAdjacentOnly?: boolean;
+  // Stejná sémantika jako u TerrainType (síť cest / strop pohybu / zákaz
+  // útoku z pole / zákaz ústupu na pole).
+  roadMovementBonus?: number;
+  movementCap?: number;
+  cannotAttackFrom?: boolean;
+  noRetreatInto?: boolean;
   blocksLOS?: boolean;
   color?: string;
   // Jak se překážka vykreslí na mapě. Když není vyplněno, odvodí se z id
