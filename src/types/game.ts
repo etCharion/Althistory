@@ -256,4 +256,6 @@ export type GameState = {
   // Reversible actions within the current (unclosed) phase. Cleared on every
   // phase change / end of turn.
   undoStack?: UndoSnapshot[];
+  // WhatsApp kontakt uložený hráčem pro ruční upozornění soupeře na jeho tah.
+  contacts?: Partial<Record<PlayerId, string | null>>;
 };
