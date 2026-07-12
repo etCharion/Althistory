@@ -175,6 +175,11 @@ export async function claimSeat(gameId: string, team: PlayerId, role: Role, clie
   return ok;
 }
 
+// Uloží/aktualizuje WhatsApp kontakt hráče do herního dokumentu.
+export async function saveContact(gameId: string, team: PlayerId, phone: string | null) {
+  await setDoc(doc(db, "games", gameId), { contacts: { [team]: phone } }, { merge: true });
+}
+
 export async function releaseSeat(gameId: string, clientId: string) {
   const ref = doc(db, "games", gameId);
   await runTransaction(db, async (tx) => {

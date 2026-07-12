@@ -1,10 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react'; import { useGameLogic } from '../hooks/useGameLogic'; import HexGrid from './ClassicHexGrid'; import DiceAnimation from './ClassicDiceAnimation'; import { getAllTerrainTypes, getAllUnitTypes, getAllOverlayTypes } from '../data/typeUtils'; import { getUnitSections, axialToOffset, getSection } from '../logic/hexGrid';
 import NatoSymbol from './NatoSymbol';
-import { Menu, Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check, Crown, Shield, Eye, EyeOff, QrCode, Undo2, Bot, Play, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Menu, Info, Star, Trophy, Target, TrendingUp, Move, Skull, X as CloseIcon, Copy, Check, Crown, Shield, Eye, EyeOff, QrCode, Undo2, Bot, Play, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Bell, BellOff, MessageCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { getGameState } from '../logic/firebaseService';
+import { getGameState, saveContact } from '../logic/firebaseService';
 import { controlsSection, isGeneral } from '../logic/gameReducer';
 import { getAiPosture } from '../logic/ai';
+import { useTurnNotifications } from '../hooks/useTurnNotifications';
+import { normalizePhoneForWhatsApp, buildWhatsAppUrl, buildTurnMessage } from '../logic/notifications';
 
 const ROLE_LABELS: Record<string, string> = { general: 'Generál', left: 'Levá sekce', center: 'Střed', right: 'Pravá sekce' };
 
@@ -171,6 +173,9 @@ const PHASE_DESCRIPTIONS = {
 const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clientId = 'local', seat = null, onChangeSeat = null, aiPlayerId = null, resume = false }) => {
   const online = !!gameId;
   const spectator = !!seat?.spectator;
+  // Vypočteno hned (nezávisí na načtení stavu hry), aby ho mohl použít hook
+  // pro upozornění na tah, který se musí volat před případným early returnem.
+  const myTeam: 'player1' | 'player2' | null = online && !spectator ? (seat?.team ?? null) : null;
   const [uTypes, setUTypes] = useState([]);
   const [tTypes, setTTypes] = useState([]);
   const [oTypes, setOTypes] = useState([]);
@@ -178,6 +183,9 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const [scenario, setScenario] = useState(initialScenario);
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [showWhatsApp, setShowWhatsApp] = useState(false);
+  const [phoneInput, setPhoneInput] = useState('');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -213,6 +221,8 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const pickAiSpeed = (id) => { setAiSpeedId(id); localStorage.setItem('ai-speed', id); };
 
   const { gameState, combatResult, retreatingUnitId, dismissCombat, takeGroundOption, cancelTakeGround, takeGround, destroyOverlay, distributeResource, distributeToUnit, nextPhase, endTurn, assignResourceToUnit, moveUnit, attackUnit, retreatUnit, undoLastAction, canUndo, getSelectedReachable, getSelectedTargetable, getRetreatHexes, getUnitHex, hasAvailableActions, getUnusedActions, aiLastAction, clearAiHighlight, aiLog } = useGameLogic(scenario, uTypes, tTypes, oTypes, gameId, clientId, aiPlayerId, aiRun, aiSpeed, resume);
+
+  const turnNotifications = useTurnNotifications({ gameState, online, myTeam, spectator, gameId });
 
   // Zpětné (čistě vizuální) prohlížení tahu počítače – nemění stav hry.
   const [aiReviewIdx, setAiReviewIdx] = useState<number | null>(null);
@@ -302,7 +312,6 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
   const isAiTurn = !!aiPlayerId && activeP === aiPlayerId;
   // Aktuální postoj AI pro odznak v liště tahu počítače (část II doktríny).
   const aiPosture = isAiTurn ? getAiPosture(gameState, { unitTypes: uTypes, terrainTypes: tTypes, overlayTypes: oTypes }, aiPlayerId) : null;
-  const myTeam: 'player1' | 'player2' | null = online && !spectator ? seat?.team : null;
   const isMyTurn = (!online || (!spectator && myTeam === activeP)) && !isAiTurn;
   const iAmGeneral = !online || (!spectator && isGeneral(gameState, clientId, activeP));
   const canDistribute = isMyTurn && iAmGeneral;
@@ -332,6 +341,27 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
     return secs.some((s: any) => controlsSection(gameState, clientId, unit.ownerId, s));
   };
   const myRoleLabel = spectator ? 'Divák' : seat?.role ? ROLE_LABELS[seat.role] : null;
+  // WhatsApp kontakty (online && !spectator): moje uložené číslo a číslo soupeře.
+  const oppTeam: 'player1' | 'player2' | null = myTeam ? (myTeam === 'player1' ? 'player2' : 'player1') : null;
+  const myPhone = myTeam ? gameState.contacts?.[myTeam] ?? null : null;
+  const oppPhone = oppTeam ? gameState.contacts?.[oppTeam] ?? null : null;
+  const savePhone = async () => {
+    const trimmed = phoneInput.trim();
+    if (!trimmed) {
+      setPhoneError(null);
+      await saveContact(gameId, myTeam!, null);
+      setShowWhatsApp(false);
+      return;
+    }
+    const normalized = normalizePhoneForWhatsApp(trimmed);
+    if (!normalized) {
+      setPhoneError('Neplatné číslo. Použijte mezinárodní formát, např. +420 606 123 456.');
+      return;
+    }
+    setPhoneError(null);
+    await saveContact(gameId, myTeam!, normalized);
+    setShowWhatsApp(false);
+  };
 
   const handleHexClick = (q, r) => {
     if (retreatingUnitId) { if (canControlUnit(retreatingUnitId.unitId)) retreatUnit(retreatingUnitId.unitId, q, r); return; }
@@ -636,6 +666,41 @@ const GameView = ({ scenario: initialScenario, gameId = undefined, onExit, clien
               >
                 {labelMode === 'hidden' ? <EyeOff size={20} className="text-white" /> : <Eye size={20} className={labelMode === 'above' ? 'text-amber-300' : 'text-white'} />}
               </button>
+              {online && !spectator && (
+                <button onClick={turnNotifications.toggle} disabled={!turnNotifications.supported}
+                  title={turnNotifications.permission === 'denied' ? 'Notifikace jsou v prohlížeči zablokované' : turnNotifications.enabled ? 'Notifikace při tahu: zapnuto' : 'Upozornit mě, až budu na tahu (notifikace prohlížeče)'}
+                  className={`p-2 bg-slate-800 border-2 border-slate-800 rounded-lg shadow-lg hover:bg-slate-700 transition-colors ${turnNotifications.permission === 'denied' ? 'opacity-50' : ''}`}>
+                  {turnNotifications.enabled ? <Bell size={20} className="text-amber-300" /> : <BellOff size={20} className="text-white" />}
+                </button>
+              )}
+              {online && !spectator && (
+                <div className="relative">
+                  <button onClick={() => { setPhoneInput(myPhone || ''); setPhoneError(null); setShowWhatsApp(v => !v); }}
+                    title="WhatsApp upozornění" className="p-2 bg-slate-800 border-2 border-slate-800 rounded-lg shadow-lg hover:bg-slate-700 transition-colors">
+                    <MessageCircle size={20} className="text-white" />
+                  </button>
+                  {showWhatsApp && (
+                    <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border-2 border-slate-800 p-4 shadow-2xl rounded-lg z-50">
+                      <h4 className="font-bold font-handwriting text-lg border-b border-slate-800 pb-1 mb-2">WhatsApp upozornění</h4>
+                      <input value={phoneInput} onChange={e => setPhoneInput(e.target.value)} placeholder="+420 606 123 456"
+                        className="w-full px-2 py-1.5 rounded border-2 border-slate-300 text-sm" />
+                      {phoneError && <p className="text-[11px] text-red-600 font-bold mt-1">{phoneError}</p>}
+                      <p className="text-[10px] text-gray-500 mt-1.5 normal-case">Uložte své číslo, aby vás soupeř mohl upozornit na tah.</p>
+                      <div className="flex justify-end gap-2 mt-3">
+                        <button onClick={() => setShowWhatsApp(false)} className="px-3 py-1 rounded text-[11px] font-bold uppercase text-slate-700 hover:bg-slate-100 transition-colors">Zrušit</button>
+                        <button onClick={savePhone} className="px-3 py-1 rounded bg-green-600 text-white text-[11px] font-bold uppercase hover:bg-green-700 transition-colors">Uložit</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {online && !spectator && !isMyTurn && !gameState.winner && oppPhone && (
+                <button onClick={() => window.open(buildWhatsAppUrl(oppPhone, buildTurnMessage(sc?.name || 'Althistory', window.location.href)), '_blank', 'noopener')}
+                  title="Poslat soupeři WhatsApp zprávu, že je na tahu"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg shadow-lg font-bold uppercase text-sm transition-colors border-2 bg-green-600 border-green-800 text-white hover:bg-green-700">
+                  <MessageCircle size={16} /> Upozornit soupeře
+                </button>
+              )}
               {gameState.winner && (
                 <button onClick={() => setShowStats(true)} title="Statistiky" className="p-2 bg-slate-800 border-2 border-slate-800 rounded-lg shadow-lg hover:bg-slate-700 transition-colors">
                   <Trophy size={20} className="text-white" />
